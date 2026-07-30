@@ -189,27 +189,48 @@ jobs:
           ./node_modules/.bin/supabase migration up --include-all \
             --db-url "postgresql://postgres:pruebas@localhost:55432/biblionexo?sslmode=disable"
 
+      - name: Crear cuenta de administrador para las comprobaciones
+        # Las funciones de autodiagnóstico exigen rol admin desde que se cerró la
+        # fuga por la que cualquiera podía consultar el estado de la protección
+        # de la base de datos. El superusuario `postgres` no sirve: no tiene
+        # auth.uid(), así que es_admin() da falso. Hay que simular una sesión.
+        run: |
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -v ON_ERROR_STOP=1 <<'SQL'
+          insert into auth.users (id, email)
+            values ('00000000-0000-0000-0000-0000000000c1', 'ci@biblionexo.test')
+            on conflict (id) do nothing;
+          insert into public.usuarios (id, email, rol)
+            values ('00000000-0000-0000-0000-0000000000c1', 'ci@biblionexo.test', 'admin')
+            on conflict (id) do update set rol = 'admin';
+          SQL
+
       - name: Comprobar que no quedó ninguna función fuera de norma
         run: |
-          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
-            -c "select count(*) from public.verificar_definiciones() where estado <> 'Correcto';" \
-            | tee /tmp/derivas.txt
-          if [ "$(cat /tmp/derivas.txt | tr -d '[:space:]')" != "0" ]; then
+          cat > /tmp/chequeo.sql <<'SQL'
+          set role authenticated;
+          select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false);
+          select count(*) from public.verificar_definiciones() where estado <> 'Correcto';
+          SQL
+          N=$(PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A -f /tmp/chequeo.sql | tail -1)
+          echo "funciones fuera de norma: $N"
+          if [ "$N" != "0" ]; then
             echo "::error::Hay funciones fuera de norma tras aplicar las migraciones"
-            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
-              -c "select * from public.verificar_definiciones() where estado <> 'Correcto';"
+            sed -i 's/count(\*) from/* from/;s/ where estado.*$/ where estado <> '"'"'Correcto'"'"';/' /tmp/chequeo.sql
+            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -f /tmp/chequeo.sql
             exit 1
           fi
 
       - name: Comprobar que RLS está activo en todas las tablas
         run: |
-          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
-            -c "select count(*) from public.verificar_rls() where diagnostico <> 'Correcto';" \
-            | tee /tmp/rls.txt
-          if [ "$(cat /tmp/rls.txt | tr -d '[:space:]')" != "0" ]; then
+          cat > /tmp/rls.sql <<'SQL'
+          set role authenticated;
+          select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false);
+          select count(*) from public.verificar_rls() where diagnostico <> 'Correcto';
+          SQL
+          N=$(PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A -f /tmp/rls.sql | tail -1)
+          echo "tablas sin protección: $N"
+          if [ "$N" != "0" ]; then
             echo "::error::Hay tablas sin protección de acceso por fila"
-            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
-              -c "select * from public.verificar_rls();"
             exit 1
           fi
 
@@ -218,13 +239,15 @@ jobs:
         # UPDATE bloqueado por RLS afecta cero filas SIN dar error: la pantalla
         # dice que se guardó y la base de datos no cambia.
         run: |
-          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
-            -c "select count(*) from public.verificar_circulacion() where not es_definer;" \
-            | tee /tmp/circ.txt
-          if [ "$(cat /tmp/circ.txt | tr -d '[:space:]')" != "0" ]; then
+          cat > /tmp/circ.sql <<'SQL'
+          set role authenticated;
+          select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false);
+          select count(*) from public.verificar_circulacion() where not es_definer;
+          SQL
+          N=$(PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A -f /tmp/circ.sql | tail -1)
+          echo "funciones que corren como invocador: $N"
+          if [ "$N" != "0" ]; then
             echo "::error::Hay funciones de circulación que corren como invocador: el librero no podrá operar"
-            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
-              -c "select * from public.verificar_circulacion() where not es_definer;"
             exit 1
           fi
 

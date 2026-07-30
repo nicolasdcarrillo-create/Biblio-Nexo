@@ -1,36 +1,43 @@
 # Configuración del CLI de Supabase para BiblioNexo.
 #
 # Este archivo permite reemplazar el copiar-y-pegar de SQL en el editor web por
-# un comando: `supabase db push`. La diferencia práctica es que el CLI lleva un
+# un comando: `supabase db push`. La diferencia práctica es que el CLI lleva
 # registro de qué migraciones se aplicaron, en la tabla
 # `supabase_migrations.schema_migrations`. Sin ese registro, la única forma de
-# saber en qué estado está la base de datos es acordarse — y es así como la
-# migración 007 revirtió sin querer una corrección de la 001, dejando al librero
-# sin poder prestar libros.
+# saber en qué estado está la base de datos es acordarse — y así fue como la
+# migración 007 revirtió sin querer una corrección de la 001, dejando al rol
+# librero sin poder prestar libros.
+#
+# Se mantiene deliberadamente mínimo. Cada clave que se agregue aquí es una
+# clave que puede quedar obsoleta y romper la integración continua. De hecho ya
+# pasó: una versión anterior declaraba `[db] major_version = 16`, que el CLI
+# rechaza — su stack local ofrece 15 y 17, pero no 16.
 #
 # El identificador debe coincidir con el de tu proyecto en Supabase.
 # Lo encuentras en Settings → General → Reference ID.
 project_id = "biblionexo"
 
-[db]
-# Puerto del PostgreSQL local que levanta `supabase start`, para probar cambios
-# sin tocar la base real. No tiene relación con el puerto del proyecto en la nube.
-port = 54322
-# Debe coincidir con la versión del proyecto en Supabase (Settings → Infrastructure).
-major_version = 16
-
-[db.migrations]
-# Los archivos conservan los prefijos 001, 002, ... en vez del formato de fecha
-# que genera `supabase migration new`. Está comprobado que el CLI los acepta y
-# los ordena correctamente: la versión es el número inicial.
+# NOTA SOBRE LAS VERSIONES DE POSTGRES
+#
+# No se declara `[db] major_version` a propósito. Esa clave solo controla la
+# versión del PostgreSQL local que levanta `supabase start`, no la del proyecto
+# en la nube, y este proyecto no usa el stack local: las migraciones se aplican
+# con `supabase db push --linked` contra Supabase, y las pruebas usan su propio
+# PostgreSQL (ver pruebas/probar_librero.py).
+#
+# Si algún día quieres usar `supabase start`, revisa primero qué versión corre
+# tu proyecto real en Settings → Infrastructure, y declara una que el CLI
+# acepte. Comprueba cuál con: supabase migration list --local
+#
+# NOTA SOBRE LOS NOMBRES DE ARCHIVO
+#
+# Las migraciones conservan los prefijos 001, 002, ... en vez del formato de
+# fecha que genera `supabase migration new`. Está comprobado que el CLI los
+# acepta y los ordena correctamente: la versión es el número inicial.
 #
 # Se mantienen así a propósito. Renombrarlos obligaría a rehacer el historial de
 # una base de datos que ya está en uso, y el orden numérico se lee mejor que una
 # marca de tiempo de catorce dígitos.
 #
-# Para agregar una migración nueva, el nombre se escribe a mano siguiendo la
-# serie: 011_lo_que_sea.sql
-schema_paths = []
-
-[local_db]
-enabled = false
+# Para agregar una migración, escribe el nombre a mano siguiendo la serie:
+# 011_lo_que_sea.sql

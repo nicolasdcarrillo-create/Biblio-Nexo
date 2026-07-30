@@ -1,0 +1,447 @@
+/**
+ * Estilos Personalizados - BiblioNexo
+ * Identidad Patrimonial de Futrono: archivo histórico, madera de Raulí,
+ * Lago Ranco y bosque nativo. Tipografía: Newsreader (serif) + Plus Jakarta Sans.
+ */
+
+/* Variables CSS — espejo de los tokens de Tailwind, para usarlas en
+   pseudo-elementos y detalles que Tailwind no puede tocar directamente */
+:root {
+    --patrimonio-base: #F7F4EB;
+    --patrimonio-card: #FFFFFF;
+    --patrimonio-madera: #7A431D;
+    --patrimonio-madera-hover: #633414;
+    --patrimonio-lago: #1B3B48;
+    --patrimonio-bosque: #2C4A3E;
+    --patrimonio-madera-veta: #4E2A0F;
+}
+
+body {
+    line-height: 1.6;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Aplicar animaciones a elementos */
+#views-container > * {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+#nav-menu button {
+    animation: slideIn 0.3s ease-in-out;
+}
+
+/* Botones e inputs: transición suave, consistente con el resto del sistema */
+button {
+    transition: all 0.2s ease;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* Tablas */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+td {
+    padding: 1rem;
+    border-bottom: 1px solid #e7e2d3;
+}
+
+tbody tr:hover {
+    background-color: #FBF9F2;
+}
+
+/* ==========================================
+   Sistema visual — Ficha de Catálogo
+   Inspirado en las fichas de catálogo de biblioteca de archivo:
+   pestaña superior de madera, tipografía serif para lo institucional,
+   y el sello de tinta como acento de estado.
+   ========================================== */
+
+/* Pestaña superior en tarjetas, como el borde reforzado de una ficha de archivo */
+.catalog-card {
+    position: relative;
+    border-top: 3px solid var(--patrimonio-lago);
+    border-radius: 1rem 1rem 1rem 1rem;
+}
+
+.catalog-card::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 1.25rem;
+    width: 2.5rem;
+    height: 3px;
+    background: var(--patrimonio-madera);
+}
+
+/* Cabecera de tarjeta con título — para tablas e historiales */
+.catalog-card-header {
+    background-color: #FAF8F1; /* stone-50 cálido */
+    border-bottom: 1px solid #d6d3c7; /* stone-300 */
+    padding: 1rem;
+}
+
+/* Riel activo del menú lateral — se "enciende" con el color madera al estar activa */
+#nav-menu .nav-btn {
+    position: relative;
+    border-left: 3px solid transparent;
+}
+
+#nav-menu .nav-btn.bg-patrimonio-madera {
+    border-left: 3px solid #fff;
+}
+
+/* Pestaña de esquina reutilizable — logotipo institucional en tarjetas
+   y paneles clave (login, sidebar) */
+.tab-corner {
+    position: relative;
+}
+
+.tab-corner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 1.5rem;
+    width: 2rem;
+    height: 0.65rem;
+    background: var(--patrimonio-madera);
+    border-radius: 0 0 0.2rem 0.2rem;
+}
+
+/* Oculta la barra de scroll en la navegación horizontal (móvil) sin
+   perder la funcionalidad de desplazamiento */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Sello de tinta — para estados como "Vencido" o roles, como el timbre
+   de una ficha de préstamo antigua */
+.stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border: 2px solid currentColor;
+    border-radius: 0.35rem;
+    transform: rotate(-2deg);
+}
+
+.stamp-danger { color: #be123c; } /* rose-700 */
+.stamp-info { color: var(--patrimonio-lago); }
+.stamp-success { color: var(--patrimonio-bosque); }
+
+/* Sello sobre fondo oscuro (sidebar) — variante clara sin relleno */
+.stamp-onDark {
+    display: inline-flex;
+    align-items: center;
+    font-weight: 700;
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 0.3rem;
+    color: #D6D0BE; /* stone cálido claro */
+}
+
+/* Loading Spinner */
+.spinner {
+    border: 3px solid #e7e2d3;
+    border-top: 3px solid var(--patrimonio-lago);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 82%;
+        max-width: 300px;
+        height: 100%;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    #sidebar.active {
+        transform: translateX(0);
+    }
+
+    table {
+        font-size: 0.875rem;
+    }
+
+    th, td {
+        padding: 0.75rem 0.5rem;
+    }
+}
+
+/* ==========================================
+   Accesibilidad — Decreto N° 1/2015 (norma técnica de sitios del Estado)
+   ========================================== */
+
+/* Texto solo para lectores de pantalla: invisible pero presente en el árbol
+   de accesibilidad. Se usa para dar contexto que el diseño no muestra. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Foco visible en todo elemento interactivo. Sin esto, quien navega con
+   teclado no sabe dónde está. El contorno usa el color del lago, que contrasta
+   tanto sobre el papel como sobre las tarjetas blancas. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 3px solid var(--patrimonio-lago);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Sobre los paneles oscuros el contorno oscuro no se vería */
+#sidebar a:focus-visible,
+#sidebar button:focus-visible,
+.glass-panel button:focus-visible,
+.glass-panel input:focus-visible {
+    outline-color: #F6B26B;
+}
+
+/* Enlace para saltar directo al contenido, primer elemento tabulable */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 1rem;
+    z-index: 10001;
+    background: var(--patrimonio-lago);
+    color: #fff;
+    padding: 0.6rem 1rem;
+    border-radius: 0 0 0.5rem 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: top 0.15s ease;
+}
+.skip-link:focus {
+    top: 0;
+}
+
+/* Print Styles — pensados para que la vista Reportes salga presentable en PDF */
+@media print {
+    @page {
+        margin: 1.5cm;
+    }
+
+    aside,
+    header,
+    #sidebar,
+    #sidebar-overlay,
+    .franja-titulo,
+    #toast-container,
+    .no-print {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+    }
+
+    /* El área de trabajo deja de tener scroll propio para que se imprima entera */
+    #views-container {
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+
+    /* Las tarjetas no deben partirse entre dos páginas */
+    .catalog-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none !important;
+        border-color: #d6d3c7 !important;
+    }
+
+    table {
+        border: 1px solid #000;
+    }
+}
+
+/* ==========================================
+   Escena viva del Lago Ranco — pantalla de login
+   El cielo, el sol/luna y el reflejo del agua cambian según la hora real
+   del dispositivo. Todo es SVG/CSS procedural: cero peso de imágenes,
+   se ve igual de rápido con buena o mala conexión.
+   ========================================== */
+
+#login-scene {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    transition: background 1.2s ease;
+}
+
+/* Amanecer: 5:00–8:59 */
+#login-scene.momento-amanecer { background: linear-gradient(180deg, #6B8CA0 0%, #E8B27C 55%, #F3C89A 100%); }
+/* Día: 9:00–17:59 */
+#login-scene.momento-dia { background: linear-gradient(180deg, #3E7188 0%, #7FAFBE 55%, #A8CDD9 100%); }
+/* Atardecer: 18:00–19:59 */
+#login-scene.momento-atardecer { background: linear-gradient(180deg, #2C2140 0%, #7A3F4D 55%, #E8A15C 100%); }
+/* Noche: 20:00–4:59 */
+#login-scene.momento-noche { background: linear-gradient(180deg, #05090B 0%, #0F2129 60%, #163540 100%); }
+
+#login-scene .astro {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(0.5px);
+    transition: opacity 1.2s ease;
+}
+.momento-amanecer .astro { top: 14%; right: 18%; width: 64px; height: 64px; background: #FCE3B8; box-shadow: 0 0 60px 20px rgba(252,227,184,0.55); }
+.momento-dia .astro { top: 8%; right: 22%; width: 46px; height: 46px; background: #FFFDF2; box-shadow: 0 0 40px 14px rgba(255,253,242,0.5); }
+.momento-atardecer .astro { top: 20%; right: 16%; width: 70px; height: 70px; background: #F6B26B; box-shadow: 0 0 70px 24px rgba(246,178,107,0.45); }
+.momento-noche .astro { top: 10%; right: 20%; width: 34px; height: 34px; background: #E8E9E4; box-shadow: 0 0 30px 8px rgba(232,233,228,0.3); }
+
+/* Estrellas: solo visibles de noche */
+#login-scene .estrellas { position: absolute; inset: 0 0 45% 0; opacity: 0; transition: opacity 1.2s ease; }
+.momento-noche .estrellas { opacity: 1; }
+
+/* ==========================================
+   Vidrio esmerilado — panel de ingreso
+   Flota sobre la escena en vez de cortarla con un bloque blanco opaco.
+   ========================================== */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* Contraste de placeholders: legible sobre el panel de vidrio en cualquier momento del día */
+.glass-panel input::placeholder {
+    color: #78716c; /* stone-500 */
+    opacity: 1;
+}
+
+/* ==========================================
+   Botones con veta de madera nativa (maqui/manzano)
+   Patrón sutil vía SVG turbulence, mezclado a baja opacidad sobre el
+   color sólido — calidez rústica sin perder legibilidad ni contraste.
+   ========================================== */
+.btn-madera {
+    position: relative;
+    background-color: var(--patrimonio-madera);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.15' numOctaves='2' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+    background-blend-mode: overlay;
+    background-size: 120px 120px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.btn-madera:hover {
+    background-color: var(--patrimonio-madera-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -8px rgba(74, 40, 15, 0.55);
+}
+.btn-madera:active {
+    transform: translateY(0);
+}
+
+/* Microinteracción consistente para el botón secundario (Google, etc.) */
+.btn-secundario {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.btn-secundario:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -10px rgba(27, 59, 72, 0.35);
+}
+
+/* ==========================================
+   La escena, dentro del panel de trabajo
+   El menú lateral toma el color del cielo de la hora actual y cierra con la
+   silueta de la cordillera. El área central se mantiene en papel neutro a
+   propósito: las tablas y cifras necesitan fondo tranquilo para leerse bien.
+   ========================================== */
+
+#sidebar {
+    position: relative;
+    background-color: var(--patrimonio-lago); /* respaldo si el degradado no aplica */
+}
+
+#sidebar.momento-amanecer { background-image: linear-gradient(180deg, #24485A 0%, #1B3B48 45%, #14303C 100%); }
+#sidebar.momento-dia      { background-image: linear-gradient(180deg, #2A5567 0%, #1B3B48 45%, #14303C 100%); }
+#sidebar.momento-atardecer{ background-image: linear-gradient(180deg, #3A2A44 0%, #24333F 45%, #14303C 100%); }
+#sidebar.momento-noche    { background-image: linear-gradient(180deg, #0A171D 0%, #12292F 45%, #0F2229 100%); }
+
+/* Silueta de cordillera al pie del menú lateral */
+#sidebar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 86px;
+    pointer-events: none;
+    opacity: 0.4;
+    background-repeat: no-repeat;
+    background-position: bottom;
+    background-size: 100% 100%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120' preserveAspectRatio='none'%3E%3Cpath d='M0,70 L60,30 L110,62 L170,18 L230,58 L290,26 L340,56 L400,38 L400,120 L0,120 Z' fill='%23000' opacity='0.45'/%3E%3Cpath d='M0,92 Q100,78 200,92 T400,86 L400,120 L0,120 Z' fill='%23000' opacity='0.35'/%3E%3C/svg%3E");
+}
+
+/* La ficha de usuario y el menú van sobre la silueta */
+#sidebar > * { position: relative; z-index: 1; }
+
+/* Acento cálido de madera en la franja de título del área de trabajo */
+.franja-titulo {
+    background-image: linear-gradient(90deg, rgba(122, 67, 29, 0.05) 0%, transparent 40%);
+}
+
+/* Lomo de respaldo cuando un libro no tiene portada disponible.
+   Imita un libro visto de canto, con la banda más oscura del lomo. */
+.portada-respaldo {
+    background-image: linear-gradient(90deg, var(--patrimonio-madera-veta) 0%, var(--patrimonio-madera-veta) 14%, var(--patrimonio-madera) 14%, #8B5228 100%);
+}
+
+/* Respeta la preferencia del sistema de reducir animaciones */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    .btn-madera:hover, .btn-secundario:hover { transform: none; }
+}

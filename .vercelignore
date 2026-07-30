@@ -1,0 +1,40 @@
+# Qué NO se publica en el sitio.
+#
+# En un despliegue estático Vercel sirve todos los archivos que le llegan. Sin
+# este archivo, cualquiera podría abrir
+#
+#   https://tu-sitio.vercel.app/supabase/migrations/010_consolidacion.sql
+#
+# y leer el esquema completo de la base de datos: cada función, su firma, sus
+# comprobaciones de acceso y las políticas RLS. La seguridad no depende de que
+# eso esté oculto —la barrera real es RLS, del lado del servidor— pero es
+# información de reconocimiento que se regala sin necesidad. Le dice a quien
+# quiera atacar exactamente qué existe y por dónde probar.
+#
+# Estos archivos SÍ siguen en el repositorio de GitHub. Solo no se publican en
+# el sitio, que es una cosa distinta.
+
+# Base de datos: el esquema completo y las funciones
+supabase/
+
+# Pruebas: revelan los casos límite y cómo se validan los permisos
+pruebas/
+
+# Integración continua
+.github/
+
+# Configuración de otros servidores. .htaccess servido como texto plano
+# muestra la configuración de seguridad del servidor de la Municipalidad.
+.htaccess
+_headers
+nginx.conf.ejemplo
+
+# Documentación interna
+MIGRACIONES.md
+CUMPLIMIENTO-LEGAL.md
+SUPABASE-PASO-A-PASO.md
+LEEME.md
+
+# Basura del sistema operativo
+.DS_Store
+__pycache__/

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiblioNexo — Biblioteca Municipal de Futrono</title>
+
+    <!--
+      Política de Seguridad de Contenido.
+
+      Todo se sirve desde este mismo origen ('self'), salvo dos excepciones
+      declaradas: la API de Supabase y las portadas de Open Library. Cualquier
+      otro origen queda bloqueado por el navegador.
+
+      Esto cierra el riesgo de cadena de suministro: antes se cargaban Tailwind,
+      Supabase, Chart.js y FontAwesome desde CDN de terceros, así que si alguno
+      de ellos era comprometido, se ejecutaba código arbitrario en un sistema
+      municipal con datos personales de vecinos.
+
+      IMPORTANTE: lo ideal es enviar esta política como CABECERA HTTP, no como
+      meta. La cabecera permite además frame-ancestors y es más difícil de
+      manipular. Ver LEEME.md, sección de publicación.
+
+      script-src ya NO permite 'unsafe-inline'. Los manejadores onclick/onerror
+      que quedaban se reemplazaron por addEventListener, y el guardia de
+      arranque se movió a js/arranque.js. Eso significa que, aunque alguien
+      lograra inyectar una etiqueta <script> o un atributo onclick en la página,
+      el navegador se negaría a ejecutarlo.
+
+      style-src sí conserva 'unsafe-inline', porque hay atributos style con
+      valores calculados (los colores de las leyendas de los gráficos). Es un
+      riesgo bastante menor: con CSS no se ejecuta código.
+
+      OJO CON LO QUE NO ESTÁ AQUÍ: falta frame-ancestors a propósito.
+
+      Algunas directivas solo funcionan como cabecera HTTP y el navegador las
+      ignora cuando llegan por <meta>: frame-ancestors, sandbox, report-uri y
+      report-to. Tenerlas escritas aquí es peor que no tenerlas, porque dan la
+      impresión de una protección que no existe — y además el navegador lo
+      reclama en la consola.
+
+      La protección contra clickjacking se envía por cabecera, en los archivos
+      de configuración del servidor que van en la raíz del proyecto:
+
+        _headers      → Netlify
+        vercel.json   → Vercel
+        .htaccess     → Apache
+        nginx.conf.ejemplo → Nginx
+
+      GitHub Pages no permite definir cabeceras. Para ese caso hay un respaldo
+      en JavaScript dentro de js/arranque.js, que detecta si la página quedó
+      dentro de un marco ajeno. Es menos sólido que la cabecera, pero es lo
+      único disponible ahí.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline';
+      font-src 'self';
+      img-src 'self' data: https://covers.openlibrary.org;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+      base-uri 'self';
+      form-action 'self';
+      object-src 'none'">
+
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="description" content="Sistema de gestión de préstamos de la Biblioteca Pública Municipal de Futrono.">
+
+    <link rel="icon" href="icono-192x192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="icono-192x192.png">
+
+    <!-- Todo autoalojado: sin CDN externos ni filtración de IP a terceros -->
+    <link rel="stylesheet" href="vendor/css/tailwind.css">
+    <link rel="stylesheet" href="vendor/css/fonts.css">
+    <link rel="stylesheet" href="vendor/css/fontawesome.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+
+    <script src="js/arranque.js"></script>
+</head>
+<body class="bg-patrimonio-base font-sans text-stone-800">
+
+    <main id="views-container" tabindex="-1" aria-label="Contenido principal" class="h-screen w-full bg-patrimonio-lago flex items-center justify-center">
+        <i aria-hidden="true" class="fas fa-spinner fa-spin text-4xl text-patrimonio-madera"></i>
+        <span class="sr-only">Cargando el sistema…</span>
+    </main>
+
+    <!-- Contenedor Global de Notificaciones -->
+    <div id="toast-container" role="status" aria-live="polite" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Librerías autoalojadas. Sin integrity porque ya no hay tercero que verificar:
+         los archivos se sirven desde el mismo origen que la aplicación. -->
+    <!-- html5-qrcode ya no se carga aquí: pesa 368 KB y solo hace falta en el
+         Mesón. Se pide al encender la cámara (ver js/modules/scanner.js). -->
+    <script id="script-supabase" src="vendor/js/supabase.js"></script>
+
+    <!-- Módulo Principal -->
+    <script id="script-app" type="module" src="js/main.js"></script>
+</body>
+</html>

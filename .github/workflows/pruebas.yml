@@ -1,0 +1,259 @@
+name: Pruebas
+
+# Corre en cada envío y en cada propuesta de cambio.
+#
+# Existe porque las pruebas que dependen de que alguien se acuerde de
+# ejecutarlas, no existen. El fallo que dejó al librero sin poder prestar ni
+# devolver libros habría sido detectado por la comprobación de consolidación en
+# el momento de escribirlo, no meses después.
+#
+# Tres trabajos, del más rápido al más lento, para tener respuesta pronto:
+#
+#   1. consolidacion  — lee archivos, tarda segundos
+#   2. interfaz       — DOM simulado, tarda menos de un minuto
+#   3. base-de-datos  — PostgreSQL real, un par de minutos
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Si se envían dos cambios seguidos, se cancela la ejecución anterior.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ==========================================================================
+  # 1. La regla de la consolidación
+  # ==========================================================================
+  # Desde la migración 010 hay una sola definición viva de cada función. Esta
+  # comprobación lee los archivos SQL y falla si alguien vuelve a la costumbre
+  # de redefinirlas en un archivo nuevo, que es lo que produjo el fallo.
+  consolidacion:
+    name: Consolidación de funciones
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verificar que la consolidación esté intacta
+        run: python3 pruebas/verificar_consolidacion.py
+
+  # ==========================================================================
+  # 2. Interfaz sobre DOM simulado
+  # ==========================================================================
+  interfaz:
+    name: Interfaz (jsdom)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar jsdom
+        run: npm install jsdom --no-save
+
+      - name: Probar la interfaz
+        run: node pruebas/probar-interfaz.mjs
+
+  # ==========================================================================
+  # 3. Base de datos real
+  # ==========================================================================
+  # Aplica las diez migraciones sobre un PostgreSQL de verdad y comprueba el
+  # sistema con dos identidades (admin y librero). Incluye la reproducción del
+  # fallo original: primero reinstala las funciones como estaban antes de la
+  # 008, demuestra que la devolución fallaba en silencio, y recién entonces
+  # verifica la corrección.
+  base-de-datos:
+    name: Base de datos (PostgreSQL 16)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pruebas
+          POSTGRES_DB: biblionexo
+        ports: ['55432:5432']
+        # Sin esto, los pasos pueden empezar antes de que la base acepte conexiones
+        options: >-
+          --health-cmd "pg_isready -U postgres -d biblionexo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:pruebas@localhost:55432/biblionexo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Comprobar que la base responde
+        # Si algo falla más adelante, conviene saber primero si el problema es
+        # la conexión. Este paso lo deja claro en el registro.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          echo "Esperando a PostgreSQL..."
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 55432 -U postgres -d biblionexo -q; then
+              echo "Responde tras $i intento(s)"
+              break
+            fi
+            sleep 2
+          done
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+            -c "select version();" -c "select current_database(), current_user;"
+
+      - name: Instalar el cliente de Python
+        run: pip install "psycopg[binary]"
+
+      - name: Aplicar migraciones y probar el rol librero
+        run: python3 pruebas/probar_librero.py
+
+      - name: Diagnóstico si algo falló
+        if: failure()
+        run: |
+          echo "=== Roles existentes ==="
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+            -c "select rolname from pg_roles where rolname in ('anon','authenticated');" || true
+          echo "=== Tablas creadas ==="
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+            -c "\\dt public.*" || true
+          echo "=== Funciones creadas ==="
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+            -t -A -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public';" || true
+
+  # ==========================================================================
+  # 4. Reconstrucción completa con el CLI de Supabase
+  # ==========================================================================
+  # La prueba más valiosa del proyecto: rehacer la base entera desde los
+  # archivos de migración, usando la misma herramienta que se usa en producción.
+  # Si esto pasa, los archivos son coherentes entre sí. Si falla, hay un problema
+  # que en producción habría aparecido meses después y sin explicación.
+  reconstruccion:
+    name: Reconstrucción desde cero (CLI)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pruebas
+          POSTGRES_DB: biblionexo
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d biblionexo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SUPABASE_NO_TELEMETRY: '1'
+      DO_NOT_TRACK: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar el CLI de Supabase
+        run: npm install supabase --no-save
+
+      - name: Preparar el esquema base
+        # Reproduce lo que Supabase da de fábrica: esquema auth, roles y tablas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+            -v ON_ERROR_STOP=1 -f pruebas/00_base_supabase.sql
+
+      - name: Aplicar todas las migraciones con el CLI
+        # sslmode=disable porque el PostgreSQL de servicio no tiene certificado.
+        # Contra Supabase se usa --linked y no hace falta.
+        run: |
+          ./node_modules/.bin/supabase migration up --include-all \
+            --db-url "postgresql://postgres:pruebas@localhost:55432/biblionexo?sslmode=disable"
+
+      - name: Comprobar que no quedó ninguna función fuera de norma
+        run: |
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
+            -c "select count(*) from public.verificar_definiciones() where estado <> 'Correcto';" \
+            | tee /tmp/derivas.txt
+          if [ "$(cat /tmp/derivas.txt | tr -d '[:space:]')" != "0" ]; then
+            echo "::error::Hay funciones fuera de norma tras aplicar las migraciones"
+            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+              -c "select * from public.verificar_definiciones() where estado <> 'Correcto';"
+            exit 1
+          fi
+
+      - name: Comprobar que RLS está activo en todas las tablas
+        run: |
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
+            -c "select count(*) from public.verificar_rls() where diagnostico <> 'Correcto';" \
+            | tee /tmp/rls.txt
+          if [ "$(cat /tmp/rls.txt | tr -d '[:space:]')" != "0" ]; then
+            echo "::error::Hay tablas sin protección de acceso por fila"
+            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+              -c "select * from public.verificar_rls();"
+            exit 1
+          fi
+
+      - name: Comprobar que las funciones de circulación son SECURITY DEFINER
+        # Es la comprobación que atajaría el fallo del librero. Sin definer, un
+        # UPDATE bloqueado por RLS afecta cero filas SIN dar error: la pantalla
+        # dice que se guardó y la base de datos no cambia.
+        run: |
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
+            -c "select count(*) from public.verificar_circulacion() where not es_definer;" \
+            | tee /tmp/circ.txt
+          if [ "$(cat /tmp/circ.txt | tr -d '[:space:]')" != "0" ]; then
+            echo "::error::Hay funciones de circulación que corren como invocador: el librero no podrá operar"
+            PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+              -c "select * from public.verificar_circulacion() where not es_definer;"
+            exit 1
+          fi
+
+      - name: Comprobar que la llave anónima no alcanza datos personales
+        # La llave anon de Supabase es pública: va en config.js, servido al
+        # navegador. Las funciones SECURITY DEFINER esquivan RLS, así que su
+        # guarda interna es la única barrera. En la versión 13 se descubrió que
+        # estado_lector y consultar_libro no la tenían: cualquiera podía probar
+        # RUT uno por uno y recolectar nombre, correo y teléfono de los lectores.
+        run: |
+          FUGAS=0
+          for f in "estado_lector('11111111-1')" "consultar_libro('999')" \
+                   "verificar_rls()" "verificar_circulacion()" "verificar_definiciones()" \
+                   "listar_personal()" "listar_errores(5,false)" \
+                   "exportar_datos_lector('11111111-1')"; do
+            if PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo -t -A \
+                 -c "set role anon; select * from public.$f;" > /dev/null 2>&1; then
+              echo "::error::La llave anónima puede ejecutar $f"
+              FUGAS=$((FUGAS+1))
+            else
+              echo "  bloqueado: $f"
+            fi
+          done
+          if [ "$FUGAS" != "0" ]; then
+            echo "::error::$FUGAS función(es) alcanzable(s) sin iniciar sesión"
+            exit 1
+          fi
+
+      - name: Confirmar que el historial quedó registrado
+        run: |
+          PGPASSWORD=pruebas psql -h localhost -p 55432 -U postgres -d biblionexo \
+            -c "select version, name from supabase_migrations.schema_migrations order by version;"

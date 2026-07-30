@@ -1,0 +1,28 @@
+# Basura de los sistemas operativos
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Restos de ejecutar las pruebas
+__pycache__/
+*.pyc
+node_modules/
+package-lock.json
+
+# PostgreSQL local que levanta pgserver al probar
+/tmp-pruebas/
+*.pgdata/
+
+# Estado local del CLI de Supabase.
+# OJO: supabase/config.toml y supabase/migrations/ SÍ deben subirse.
+supabase/.temp/
+supabase/.branches/
+
+# Nunca subir secretos.
+# La llave anon de js/config.js SÍ va al repositorio: es pública por diseño y
+# el navegador la necesita. Lo que jamás debe subirse es la llave service_role
+# ni la contraseña de la base de datos, que dan acceso total saltándose RLS.
+.env
+.env.*
+*.service_role
+secretos.*

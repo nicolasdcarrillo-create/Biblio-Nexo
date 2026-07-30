@@ -1,0 +1,24 @@
+# Cabeceras HTTP para Netlify.
+#
+# La Política de Seguridad de Contenido está también en el <meta> de index.html,
+# pero enviarla por cabecera es mejor por dos razones: se aplica antes de que el
+# navegador empiece a interpretar el documento, y admite directivas que por
+# <meta> se ignoran — en particular frame-ancestors, que es la que impide que
+# alguien monte el sistema dentro de un marco en otro sitio para engañar al
+# personal (clickjacking).
+#
+# Si esta cabecera está activa, la del <meta> queda como respaldo. Las dos
+# conviven sin problema: el navegador aplica la más restrictiva de cada
+# directiva.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://covers.openlibrary.org; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Cross-Origin-Opener-Policy: same-origin
+
+# La cámara del Mesón necesita permiso explícito: sin camera=(self) en
+# Permissions-Policy, el navegador la bloquea aunque la persona acepte.

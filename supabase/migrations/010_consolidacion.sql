@@ -646,6 +646,12 @@ begin
          motivo_bloqueo   = case when p_bloquear then p_motivo else null end,
          bloqueado_en     = case when p_bloquear then now() else null end
    where id = p_lector_id;
+
+  -- Sin esto, bloquear un lector que ya no existe "tenía éxito" en pantalla
+  -- sin cambiar nada: el mismo patrón traicionero de devolver_prestamo.
+  if not found then
+    raise exception 'Lector no encontrado.' using errcode = 'P0001';
+  end if;
 end;
 $$;
 grant execute on function public.bloquear_lector(bigint, boolean, text) to authenticated;
@@ -682,6 +688,14 @@ begin
   insert into public.usuarios (id, email, rol)
   select p_usuario_id, u.email, p_rol from auth.users u where u.id = p_usuario_id
   on conflict (id) do update set rol = p_rol;
+
+  -- Si auth.users no tiene esa fila, el select de arriba no aporta ninguna
+  -- fila y el insert no inserta nada: "éxito" en pantalla sin haber asignado
+  -- el rol. Pasa cuando se intenta dar un rol a alguien que nunca inició
+  -- sesión, porque su cuenta todavía no existe en auth.users.
+  if not found then
+    raise exception 'Esa persona todavía no ha iniciado sesión en el sistema. Debe iniciar sesión al menos una vez antes de que se le pueda asignar un rol.' using errcode = 'P0001';
+  end if;
 end;
 $$;
 grant execute on function public.asignar_rol(uuid, text) to authenticated;

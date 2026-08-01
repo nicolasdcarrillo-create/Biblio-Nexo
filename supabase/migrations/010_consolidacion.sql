@@ -101,17 +101,36 @@ grant execute on function public.sin_acentos(text) to authenticated;
 -- `security definer` porque tienen que poder leer la tabla `usuarios` incluso
 -- cuando la política que se está evaluando es la de esa misma tabla.
 
+-- Las dos llevan `set search_path = ''` y no `= public`, que es lo que
+-- recomienda Supabase para toda función `security definer`:
+--
+--   Con `= public`, un nombre sin esquema se busca en el search_path. Quien
+--   pueda crear objetos en otro esquema que vaya antes podría poner ahí una
+--   tabla `usuarios` propia y la función leería esa, no la nuestra. Con `= ''`
+--   no hay dónde buscar: todo nombre tiene que venir calificado o la función
+--   falla al ejecutarse. Es un error ruidoso en vez de un secuestro silencioso.
+--
+--   El cuerpo de ambas ya califica todo con `public.`, así que el cambio no
+--   altera lo que hacen. Solo `pg_catalog` sigue implícito, que es lo que
+--   permite que operadores y tipos sigan resolviéndose.
+--
+-- Y `(select auth.uid())` en vez de `auth.uid()` a secas: entre paréntesis,
+-- PostgreSQL lo trata como subconsulta sin correlación y la evalúa una sola
+-- vez por consulta en lugar de una vez por fila. Estas dos funciones son la
+-- base de todas las políticas RLS, así que se ejecutan en cada fila que el
+-- motor examina; sobre tablas grandes la diferencia se nota.
+
 -- ── es_admin ── (última versión: 003_rol_admin_y_contacto.sql)
 create or replace function public.es_admin()
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1 from public.usuarios
-    where id = auth.uid() and rol = 'admin'
+    where id = (select auth.uid()) and rol = 'admin'
   );
 $$;
 grant execute on function public.es_admin() to authenticated;
@@ -122,11 +141,50 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
-  select auth.uid() is not null;
+  select (select auth.uid()) is not null;
 $$;
 grant execute on function public.es_personal() to authenticated;
+
+-- PENDIENTE — el resto de las funciones `security definer` (commit aparte)
+--
+-- Este archivo declara 30 funciones `security definer`. Solo dos, las de
+-- arriba, llevan `set search_path = ''`; las otras 28 siguen con `= public`.
+-- Revisadas una por una contra los tres tipos de dependencia que importan:
+--
+-- 1. Objetos de extensiones (`extensions.unaccent`, operadores de `pg_trgm`)
+--    Ninguna función los usa. Es el caso que habría bloqueado el cambio, y no
+--    se da: `sin_acentos` quita los acentos con `translate`, que es de
+--    `pg_catalog`, y `buscar_libros` compara con `like`, sin similitud
+--    difusa. La mención a `pg_trgm` y `unaccent` al final del archivo es sobre
+--    el bucle de permisos, no sobre el cuerpo de ninguna función.
+--
+-- 2. `auth.users` y `auth.uid()`
+--    Sí se usan, en once sitios (asignar_rol, asegurar_perfil, mi_perfil,
+--    listar_personal, anonimizar_lector, registrar_auditoria, registrar_error
+--    y las de su entorno), pero **siempre calificados con `auth.`**. Un
+--    `search_path` vacío no los afecta: ya no dependen de él.
+--
+-- 3. `pg_catalog`
+--    `hoy_chile` usa `timezone()`, `purgar_errores` usa `now()` e `interval`,
+--    y varias consultan `pg_proc`, `pg_policies` o `pg_namespace`. Todo eso
+--    sigue funcionando: `pg_catalog` está siempre en el camino de búsqueda de
+--    forma implícita, aunque `search_path` esté vacío. No hay que calificarlo.
+--
+-- Aparte: ninguna usa SQL dinámico —los dos `execute format` del archivo están
+-- en bloques `do` de nivel superior, fuera de toda función— y no hay tipos
+-- propios, todos los `::` son a tipos base.
+--
+-- Conclusión: las 28 podrían pasar a `= ''` sin tocarles el cuerpo. No se hace
+-- aquí porque la revisión es de lectura del texto, no de ejecución. Un nombre
+-- sin calificar que se nos pase no falla al aplicar la migración: falla la
+-- primera vez que corre esa rama, y sería un «no existe la relación» delante
+-- de quien esté atendiendo el mesón. Va en su propio commit, por grupos y con
+-- la suite de PostgreSQL real corriendo entre medio.
+--
+-- Si alguna resulta no calificar algo, se deja como está: a medias es peor
+-- que sin tocar.
 
 -- ── parametro_int ── (última versión: 007_correcciones_y_cumplimiento_legal.sql)
 drop function if exists public.parametro_int(text, int);

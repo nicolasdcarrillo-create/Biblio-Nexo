@@ -388,7 +388,7 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-comprobar('el manifiesto cubre 33 funciones', len(filas) == 33, f'cubre {len(filas)}')
+comprobar('el manifiesto cubre 34 funciones', len(filas) == 34, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -519,7 +519,7 @@ comprobar('un librero SÍ puede consultar un lector', ok and out, texto(out)[-15
 ok, out = como(LIBRERO, "select titulo from public.consultar_libro('9789561234567');")
 comprobar('un librero SÍ puede consultar un libro', ok and out, texto(out)[-150:])
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 33,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 34,
           texto(out)[-150:])
 
 

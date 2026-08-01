@@ -37,12 +37,13 @@
 -- archivo dejaría de servir justo cuando más se necesita — para reparar una
 -- base de datos que quedó con una versión antigua.
 --
--- Cuatro funciones se exceptúan porque hay objetos que dependen de ellas. No es
+-- Cinco funciones se exceptúan porque hay objetos que dependen de ellas. No es
 -- una suposición: se obtuvo consultando pg_depend sobre una base ya migrada.
 --
 --   es_admin, es_personal  ← las usan las políticas RLS
 --   registrar_auditoria    ← la usan los disparadores de auditoría
 --   sin_acentos            ← la usa el índice libros_busqueda_idx
+--   marcar_actualizacion   ← la usan los disparadores de sincronización (011)
 --
 -- Eliminarlas arrastraría esas dependencias: un `drop ... cascade` sobre
 -- `es_admin` borraría las políticas RLS y dejaría las tablas abiertas. Sus
@@ -182,11 +183,6 @@ begin
   if not public.es_personal() then
     raise exception 'Debes iniciar sesión para consultar un lector.' using errcode = 'P0001';
   end if;
-
-  -- Sin esta comprobación, cualquiera con la llave anónima —que es pública por
-  -- diseño y va escrita en config.js— podía probar RUT uno por uno y recolectar
-  -- nombre, correo, teléfono y estado de morosidad de cada lector. Los RUT
-  -- chilenos son enumerables, así que era una lista de contactos al descubierto.
 
   v_limite := public.parametro_int('max_prestamos_por_lector', 3);
 
@@ -1031,6 +1027,41 @@ begin
 end;
 $$;
 
+-- ── marcar_actualizacion ── (nueva en 011_marcas_de_sincronizacion.sql)
+--
+-- Mantiene al día la columna `actualizado_en` de `libros` y `lectores`. Es lo
+-- que permite que el equipo del mesón pida "solo lo que cambió desde tal fecha"
+-- en vez de descargar el catálogo entero cada vez, que es inviable con la
+-- conexión de Futrono.
+--
+-- Va aquí, y no en la 011, porque la regla de la consolidación dice que las
+-- funciones viven en este archivo. La 011 crea las columnas y conecta los
+-- disparadores; la definición es esta.
+--
+-- No es SECURITY DEFINER a propósito: corre dentro de un UPDATE que ya pasó por
+-- las políticas RLS, así que no necesita esquivarlas. Una función definer de más
+-- es una barrera menos.
+create or replace function public.marcar_actualizacion()
+returns trigger
+language plpgsql
+set search_path = public
+as $marca$
+begin
+  if tg_op = 'UPDATE' then
+    -- Si la fila no cambió en nada salvo esta misma marca, se deja como estaba.
+    -- Sin esto, un UPDATE que no modifica nada —guardar un formulario sin
+    -- tocarlo, por ejemplo— obligaría al mesón a volver a descargar el registro
+    -- en la próxima sincronización, sin ninguna razón.
+    if to_jsonb(new) - 'actualizado_en' is not distinct from to_jsonb(old) - 'actualizado_en' then
+      return new;
+    end if;
+  end if;
+
+  new.actualizado_en := now();
+  return new;
+end;
+$marca$;
+
 -- ============================================================================
 -- REGISTRO DE ERRORES
 -- ============================================================================
@@ -1348,6 +1379,7 @@ as $manifiesto$
     ('purgar_datos_antiguos', true),
     ('evidencia_incidente', true),
     ('registrar_auditoria', true),
+    ('marcar_actualizacion', false),
     ('registrar_error', true),
     ('listar_errores', true),
     ('resumen_errores', true),
@@ -1505,3 +1537,4 @@ $permisos$;
 -- aplicación, así que no necesita permiso para nadie. Los disparadores se
 -- ejecutan en el contexto del dueño de la tabla, no de quien escribe.
 revoke all on function public.registrar_auditoria() from public, anon;
+revoke all on function public.marcar_actualizacion() from public, anon;

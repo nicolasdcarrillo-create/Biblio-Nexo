@@ -68,7 +68,9 @@ Comprueba el resultado:
 supabase migration list --linked
 ```
 
-Deben aparecer 001 a 009 como aplicadas y la **010 como pendiente**.
+Deben aparecer 001 a 009 como aplicadas, y la **010 y la 011 como pendientes**.
+Se aplican en ese orden: la 011 crea disparadores que llaman a una función
+definida en la 010.
 
 ---
 

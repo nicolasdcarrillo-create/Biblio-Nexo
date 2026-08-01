@@ -144,6 +144,55 @@ poder cumplir y acreditar.
 - Evaluación de impacto en privacidad, si la autoridad la estima exigible.
 - Capacitación del personal de la biblioteca sobre el manejo de datos.
 
+## 9 bis. Riesgo abierto: la copia local del equipo del mesón (Fase 1)
+
+**Estado:** identificado el 30 de julio de 2026, al diseñar el trabajo sin
+conexión. **No corregido.** La funcionalidad que lo produce todavía no existe;
+esto se escribe para que no se construya sin resolverlo.
+
+Para que la biblioteca pueda atender cuando se cae internet —que es lo habitual
+en Futrono— el equipo del mesón necesita una copia local de parte del padrón de
+lectores, guardada en el navegador (IndexedDB) del computador de la biblioteca.
+
+Eso abre dos problemas que hay que resolver **dentro** de la Fase 1, no después:
+
+**1. El derecho de supresión no llega a la copia local.**
+
+Los lectores se borran de verdad: existe un botón Eliminar para el
+administrador, y la política `lectores borrado admin` de la migración 008 lo
+permite. La supresión anonimizadora descrita en la sección 8 convive con ese
+borrado directo, no lo reemplaza.
+
+Una sincronización basada en marcas temporales (migración 011) transmite altas y
+modificaciones, pero **no puede transmitir un borrado**: la fila desapareció y
+no queda nada que traiga la fecha. Si una persona ejerce su derecho de supresión
+y el administrador borra su ficha, su nombre, RUT, correo y teléfono siguen en
+el disco del equipo del mesón indefinidamente.
+
+El municipio habría respondido la solicitud y seguiría tratando el dato.
+
+*Corrección comprometida:* tabla de lápidas en el servidor que registre id y
+hora de cada borrado, y purga en el almacén local que elimine a todo lector que
+ya no esté en el servidor. Ambas cosas antes de que la copia local se use con
+datos reales.
+
+**2. Datos personales en un disco que no controla el sistema.**
+
+La copia local queda sin cifrar en el perfil del navegador del equipo del mesón,
+un computador de uso compartido en un edificio municipal. Decisiones tomadas
+para acotarlo, que deben respetarse al implementar:
+
+- El service worker **no** cachea ninguna respuesta de Supabase. Los datos
+  personales van solo al almacén local, donde se controla qué entra y por
+  cuánto tiempo.
+- **No se replica el padrón completo.** Solo los lectores con préstamo activo y
+  los consultados recientemente, con purga automática por antigüedad.
+- El catálogo de libros sí se replica entero: no contiene datos personales.
+
+*Pendiente de la organización:* cifrado de disco en el equipo del mesón y
+bloqueo de sesión del sistema operativo. Sin eso, cualquiera con acceso físico
+al computador de la biblioteca alcanza la copia local.
+
 ## 10. Incidentes
 
 La herramienta Administración → Cumplimiento → Evidencia para reporte extrae la

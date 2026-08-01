@@ -333,3 +333,52 @@ Antes de escribir código:
    y por qué.
 
 No modifiques nada todavía.
+
+---
+
+## 11. Estado al 31 de julio de 2026
+
+### Base de datos
+
+Producción tiene aplicadas las migraciones **001 a 011**, y el historial del CLI
+está cuadrado con `migration repair`. `supabase migration list --linked` ya no
+muestra falsos pendientes.
+
+### Pendiente urgente: la migración 012 que falta
+
+`mi_perfil()` fallaba en producción con **«permission denied for table
+auth.users»**. Se corrigió a mano, sobre la base real:
+
+```sql
+grant usage on schema auth to authenticated;
+grant select on auth.users to authenticated;
+```
+
+**Esos dos `grant` no están en ninguna migración.** Hoy el sistema funciona
+porque el permiso está dado en esa base concreta, pero al reconstruir desde cero
+—una instalación nueva, un proyecto de repuesto tras una pausa de Supabase, o
+una rama de pruebas— faltarían, y el sistema se colgaría al arrancar: `mi_perfil`
+es de las primeras funciones que se llaman al iniciar sesión.
+
+Es el mismo tipo de deriva que la consolidación vino a resolver, solo que del
+lado de los permisos. **Hay que crear la migración 012 con esos dos `grant`.**
+
+### Deriva pendiente de auditar
+
+Las **cuatro migraciones remotas del 26 de julio** (`20260726153006` y las tres
+siguientes) siguen sin archivo local en el repositorio. Se aplicaron directo
+sobre la base y no se sabe qué contienen sin ir a mirarlas. Una de ellas es la
+que traía la versión endurecida de `es_admin`, que ya quedó incorporada a la 010
+en el commit `77f3651`; las otras tres están sin revisar.
+
+### Fases
+
+- **Fase 1.2 (esquema): cerrada.** Migración 011 con `actualizado_en`, sus
+  índices y los disparadores, más `marcar_actualizacion()` en la 010.
+- **Fase 1.1: no empezada.** Service worker, manifiesto y el icono de 512×512.
+  El icono no se inventa ni se escala desde el de 192: se vería borroso.
+- **Fase 1.2 (código): no empezada.** Almacén IndexedDB, `catalogo_desde()`,
+  replicación selectiva de lectores con purga automática, y las lápidas de
+  borrado con su purga local. Las lápidas no son opcional: sin ellas, un lector
+  borrado del servidor sobrevive en el disco del mesón con sus datos personales.
+  Ver `CUMPLIMIENTO-LEGAL.md`, sección 9 bis.

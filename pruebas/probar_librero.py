@@ -412,10 +412,24 @@ comprobar('reejecutar la 010 repara la deriva', ok, texto(err)[-300:] if not ok 
 ok, filas = como(ADMIN, "select nombre, estado from public.verificar_definiciones() where estado <> 'Correcto';")
 comprobar('tras reparar no queda nada fuera de norma', not filas, texto(filas))
 
-# Los disparadores de auditoría deben quedar conectados, no duplicados
+# Los disparadores de auditoría deben quedar conectados, no duplicados.
+# Se filtra por nombre a propósito: desde la 011, `libros` y `lectores` llevan
+# además los disparadores de sincronización, así que contar todos daría 5.
 ok, filas = sql("""select tgname from pg_trigger t join pg_class c on c.oid = t.tgrelid
-where c.relname in ('libros','lectores','prestamos') and not t.tgisinternal;""")
+where c.relname in ('libros','lectores','prestamos') and not t.tgisinternal
+  and t.tgname like 'auditoria_%';""")
 comprobar('los 3 disparadores de auditoría siguen conectados', len(filas) == 3, texto(filas))
+
+# Y los de la 011 tienen que ser BEFORE. Si alguien los recrea como AFTER, la
+# asignación `new.actualizado_en := now()` deja de tener efecto: la columna se
+# queda con su valor por omisión y la fila nunca vuelve a aparecer en
+# `where actualizado_en > $1`. Invisible para la sincronización, sin error.
+# tgtype & 2 es el bit de BEFORE en pg_trigger.
+ok, filas = sql("""select tgname from pg_trigger t join pg_class c on c.oid = t.tgrelid
+where c.relname in ('libros','lectores') and not t.tgisinternal
+  and t.tgname like 'marca_%' and (t.tgtype & 2) = 2;""")
+comprobar('los 2 disparadores de sincronización existen y son BEFORE',
+          len(filas) == 2, texto(filas))
 
 # Y el librero debe poder seguir trabajando después de todo esto
 sql("delete from public.prestamos;")

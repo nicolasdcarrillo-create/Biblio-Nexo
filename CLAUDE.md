@@ -73,7 +73,7 @@ declarar bajo la Ley 21.719. Ya existe una bitácora propia: migración 009,
 
     python3 pruebas/verificar_consolidacion.py   → regla de la consolidación
     node pruebas/probar-interfaz.mjs             → 56 comprobaciones, DOM simulado
-    python3 pruebas/probar_librero.py            → 89 comprobaciones, PostgreSQL real
+    python3 pruebas/probar_librero.py            → 90 comprobaciones, PostgreSQL real
 
 La última necesita `pip install pgserver "psycopg[binary]"` la primera vez.
 

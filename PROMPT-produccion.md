@@ -181,7 +181,7 @@ Verificado el 27 de julio de 2026. Confírmalo tú mismo antes de asumirlo.
 
     python3 pruebas/verificar_consolidacion.py   → regla de la consolidación
     node pruebas/probar-interfaz.mjs             → 56 comprobaciones, DOM simulado
-    python3 pruebas/probar_librero.py            → 89 comprobaciones, PostgreSQL real
+    python3 pruebas/probar_librero.py            → 90 comprobaciones, PostgreSQL real
 
 ---
 

@@ -445,3 +445,87 @@ textarea:focus-visible,
     }
     .btn-madera:hover, .btn-secundario:hover { transform: none; }
 }
+
+/* ============================================================================
+   Escáner de códigos — vista Mesón
+   ============================================================================
+   La librería html5-qrcode dibuja su propia interfaz dentro de #reader, en
+   inglés y con una marca del autor. No admite traducir nada por configuración:
+   sus textos viven en una clase que el empaquetado minificó como símbolo
+   interno, y el archivo solo expone Html5QrcodeScanner, Html5Qrcode,
+   Html5QrcodeSupportedFormats, Html5QrcodeScannerState y Html5QrcodeScanType.
+   No hay dónde enchufar una traducción.
+
+   Por eso se corrige desde aquí. En CSS y no en JavaScript a propósito: la
+   librería se carga en diferido, al encender la cámara, así que cualquier
+   script nuestro correría antes de que estos elementos existan y no
+   encontraría nada que arreglar. Una hoja de estilos no tiene ese problema:
+   se aplica cuando el elemento aparece, sin importar cuándo sea.
+
+   Los identificadores son constantes de la librería (CAMERA_PERMISSION_
+   BUTTON_ID y compañía), no clases generadas, así que no cambian entre
+   versiones menores. */
+
+/* ── La marca «Powered by ScanApp» ──
+   Es un enlace a un repositorio externo en una pantalla donde se ven el
+   nombre, el RUT y el teléfono de vecinos. No pinta nada ahí.
+
+   Cuelga de un icono de información en la esquina del recuadro de la cámara:
+   al pulsarlo se despliega un cartel con el enlace a scanapp.org y otro a los
+   issues de GitHub. Ocultando el icono, el cartel ya no se puede abrir.
+
+   Va con !important porque la librería escribe los estilos en el atributo
+   style del propio elemento, y eso gana a cualquier regla de hoja externa. */
+#reader img[alt="Info icon"] {
+    display: none !important;
+}
+
+/* Y el cartel en sí, por si alguna versión lo mostrara sin pasar por el icono.
+   No tiene id ni clase —solo estilos en línea—, así que se le llega por el
+   enlace que contiene. En navegadores sin :has() esta regla se ignora entera,
+   pero la de arriba ya deja el cartel inalcanzable. */
+#reader div:has(> a[href*="scanapp.org"]) {
+    display: none !important;
+}
+
+/* ── Los textos en inglés ──
+   Se apaga el texto original con font-size: 0 y se escribe el nuestro en
+   ::before. El texto en inglés sigue en el DOM: es invisible, pero un lector
+   de pantalla puede anunciarlo junto al de ::before. Es el precio de hacerlo
+   sin JavaScript, y se acepta porque la alternativa es dejar la pantalla en
+   inglés para todo el mundo. */
+#html5-qrcode-button-camera-permission,
+#html5-qrcode-button-camera-start,
+#html5-qrcode-button-camera-stop {
+    font-size: 0 !important;
+}
+
+#html5-qrcode-button-camera-permission::before,
+#html5-qrcode-button-camera-start::before,
+#html5-qrcode-button-camera-stop::before {
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+#html5-qrcode-button-camera-permission::before {
+    content: "Permitir el uso de la cámara";
+}
+
+#html5-qrcode-button-camera-start::before {
+    content: "Comenzar a escanear";
+}
+
+#html5-qrcode-button-camera-stop::before {
+    content: "Detener el escaneo";
+}
+
+/* El enlace «Scan an Image File» alterna entre dos textos según el modo, y con
+   CSS no se puede distinguir en cuál está: un solo ::before daría el texto
+   equivocado la mitad del tiempo. Se oculta. Sirve para leer un código desde
+   una foto guardada, que no es algo que se haga en el mesón: ahí se escanea el
+   libro que se tiene en la mano, y para lo demás está el campo de ISBN a mano
+   que ya existe debajo del recuadro. */
+#html5-qrcode-anchor-scan-type-change {
+    display: none !important;
+}

@@ -1,4 +1,11 @@
 import { supabase } from '../supabase-init.js';
+import { conTiempoLimite } from './utilidades.js';
+
+// Límite normal para una consulta o RPC. Ver utilidades.js: sin esto, una
+// llamada colgada deja la pantalla esperando para siempre.
+const ESPERA = 15000;
+// exportarTodo mueve páginas de hasta 1000 filas: se le da más margen.
+const ESPERA_RESPALDO = 25000;
 
 /**
  * Prepara un texto de búsqueda para usarlo dentro de un filtro `or()` de PostgREST.
@@ -60,14 +67,14 @@ export const db = {
         try {
             const hoy = hoyEnChile();
 
-            const [libros, lectores, activos, devueltos, vencidos, stockRows] = await Promise.all([
+            const [libros, lectores, activos, devueltos, vencidos, stockRows] = await conTiempoLimite(Promise.all([
                 supabase.from('libros').select('*', { count: 'exact', head: true }),
                 supabase.from('lectores').select('*', { count: 'exact', head: true }),
                 supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
                 supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'devuelto'),
                 supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'activo').lt('fecha_devolucion_esperada', hoy),
                 supabase.from('libros').select('stock')
-            ]);
+            ]), ESPERA);
 
             // "En estante" = suma del stock disponible de todos los libros (copias que no están prestadas ahora mismo)
             const enEstante = (stockRows.data || []).reduce((sum, b) => sum + (b.stock || 0), 0);
@@ -98,11 +105,11 @@ export const db = {
     async obtenerLibros(busqueda = '', pagina = 0, porPagina = 25) {
         const desplazamiento = pagina * porPagina;
 
-        const { data, error } = await supabase.rpc('buscar_libros', {
+        const { data, error } = await conTiempoLimite(supabase.rpc('buscar_libros', {
             p_busqueda: busqueda || '',
             p_limite: porPagina,
             p_desplazamiento: desplazamiento
-        });
+        }), ESPERA);
 
         if (!error) {
             const libros = data || [];
@@ -127,13 +134,13 @@ export const db = {
             q = q.or(`titulo.ilike.%${limpia}%,autor.ilike.%${limpia}%,isbn.ilike.%${limpia}%`);
         }
 
-        const { data: filas, error: err2, count } = await q;
+        const { data: filas, error: err2, count } = await conTiempoLimite(q, ESPERA);
         if (err2) throw err2;
         return { libros: filas || [], total: count || 0 };
     },
 
     async actualizarLibro(id, cambios) {
-        const { error } = await supabase.from('libros').update({
+        const { error } = await conTiempoLimite(supabase.from('libros').update({
             titulo: cambios.titulo,
             autor: cambios.autor,
             isbn: cambios.isbn,
@@ -142,12 +149,12 @@ export const db = {
             portada_url: cambios.portada_url || null
             // El número de ejemplares NO se toca aquí: pasa por ajustar_copias,
             // que recalcula las copias disponibles según los préstamos activos.
-        }).eq('id', id);
+        }).eq('id', id), ESPERA);
         if (error) throw new Error(error.code === '23505' ? 'Ese ISBN ya pertenece a otro libro.' : 'No se pudo guardar el libro.');
     },
 
     async agregarLibro(libro) {
-        const { error } = await supabase.from('libros').insert([{
+        const { error } = await conTiempoLimite(supabase.from('libros').insert([{
             isbn: libro.isbn,
             titulo: libro.titulo,
             autor: libro.autor,
@@ -156,12 +163,12 @@ export const db = {
             portada_url: libro.portada_url || null,
             copias_totales: libro.stock,
             stock: libro.stock
-        }]);
+        }]), ESPERA);
         if (error) throw new Error(error.code === '23505' ? 'El ISBN ya está registrado.' : 'Error al guardar el libro.');
     },
 
     async eliminarLibro(id) {
-        const { error } = await supabase.from('libros').delete().eq('id', id);
+        const { error } = await conTiempoLimite(supabase.from('libros').delete().eq('id', id), ESPERA);
         if (error) throw new Error('No se puede eliminar. Revise si el libro tiene préstamos activos.');
     },
 
@@ -176,25 +183,25 @@ export const db = {
         const limpia = limpiarBusqueda(busqueda);
         if (limpia) q = q.or(`nombre.ilike.%${limpia}%,rut.ilike.%${limpia}%,email.ilike.%${limpia}%`);
 
-        const { data, error, count } = await q;
+        const { data, error, count } = await conTiempoLimite(q, ESPERA);
         if (error) throw error;
         return { lectores: data || [], total: count || 0 };
     },
 
     async actualizarLector(id, cambios) {
-        const { error } = await supabase.from('lectores').update({
+        const { error } = await conTiempoLimite(supabase.from('lectores').update({
             nombre: cambios.nombre,
             rut: cambios.rut,
             email: cambios.email,
             telefono: cambios.telefono
-        }).eq('id', id);
+        }).eq('id', id), ESPERA);
         if (error) throw new Error(error.code === '23505' ? 'Ese RUT ya pertenece a otro lector.' : 'No se pudo guardar el lector.');
     },
 
     async agregarLector(lector) {
         // Se listan los campos explícitamente para no enviar propiedades
         // inesperadas a la base de datos.
-        const { error } = await supabase.from('lectores').insert([{
+        const { error } = await conTiempoLimite(supabase.from('lectores').insert([{
             rut: lector.rut,
             nombre: lector.nombre,
             email: lector.email,
@@ -205,12 +212,12 @@ export const db = {
             es_menor: lector.es_menor || false,
             apoderado_nombre: lector.apoderado_nombre || null,
             apoderado_rut: lector.apoderado_rut || null
-        }]);
+        }]), ESPERA);
         if (error) throw new Error(error.code === '23505' ? 'El RUT ya está registrado.' : 'Error al guardar lector.');
     },
 
     async eliminarLector(id) {
-        const { error } = await supabase.from('lectores').delete().eq('id', id);
+        const { error } = await conTiempoLimite(supabase.from('lectores').delete().eq('id', id), ESPERA);
         if (error) throw new Error('No se puede eliminar. El lector tiene historial en el sistema.');
     },
 
@@ -257,9 +264,9 @@ export const db = {
             return q;
         };
 
-        const [lista, cTodos, cVencidos, cPorVencer] = await Promise.all([
+        const [lista, cTodos, cVencidos, cPorVencer] = await conTiempoLimite(Promise.all([
             consulta, contar('todos'), contar('vencidos'), contar('porVencer')
-        ]);
+        ]), ESPERA);
 
         if (lista.error) throw lista.error;
 
@@ -284,12 +291,12 @@ export const db = {
         const limite = new Date(`${hoy}T12:00:00`);
         limite.setDate(limite.getDate() + diasAviso);
 
-        const { data, error } = await supabase.from('prestamos')
+        const { data, error } = await conTiempoLimite(supabase.from('prestamos')
             .select('id, fecha_devolucion_esperada, renovaciones, libros(id, titulo), lectores(id, nombre, rut, email, telefono)')
             .eq('estado', 'activo')
             .lte('fecha_devolucion_esperada', limite.toISOString().split('T')[0])
             .order('fecha_devolucion_esperada')
-            .limit(500);
+            .limit(500), ESPERA);
         if (error) throw error;
         return data || [];
     },
@@ -298,10 +305,10 @@ export const db = {
         // Usa la función RPC atómica prestar_libro (ver supabase/migrations/001_prestamos_atomicos.sql):
         // el chequeo de stock y el descuento ocurren en una sola transacción con bloqueo de fila,
         // así dos préstamos simultáneos del último ejemplar nunca dejan el stock negativo.
-        const { data, error } = await supabase.rpc('prestar_libro', {
+        const { data, error } = await conTiempoLimite(supabase.rpc('prestar_libro', {
             p_libro_id: libroId,
             p_lector_rut: lectorRut
-        });
+        }), ESPERA);
         if (error) throw new Error(error.message || 'Fallo al registrar préstamo.');
         return data;
     },
@@ -309,9 +316,9 @@ export const db = {
     async devolverPrestamo(prestamoId) {
         // Usa la función RPC atómica devolver_prestamo: recalcula el libro y el stock
         // del lado del servidor a partir del préstamo real, sin confiar en valores del cliente.
-        const { error } = await supabase.rpc('devolver_prestamo', {
+        const { error } = await conTiempoLimite(supabase.rpc('devolver_prestamo', {
             p_prestamo_id: prestamoId
-        });
+        }), ESPERA);
         if (error) throw new Error(error.message || 'Error en devolución.');
     },
 
@@ -321,9 +328,9 @@ export const db = {
      * se aplican en Postgres, no aquí.
      */
     async renovarPrestamo(prestamoId) {
-        const { data, error } = await supabase.rpc('renovar_prestamo', {
+        const { data, error } = await conTiempoLimite(supabase.rpc('renovar_prestamo', {
             p_prestamo_id: prestamoId
-        });
+        }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 005 en Supabase para poder renovar.');
             throw new Error(error.message || 'No se pudo renovar el préstamo.');
@@ -346,10 +353,10 @@ export const db = {
             const bloque = 1000;
             // Se repite hasta que una página vuelva incompleta, señal de que se acabó
             for (;;) {
-                const { data, error } = await supabase
+                const { data, error } = await conTiempoLimite(supabase
                     .from(tabla)
                     .select('*')
-                    .range(desde, desde + bloque - 1);
+                    .range(desde, desde + bloque - 1), ESPERA_RESPALDO);
                 if (error) throw new Error(`No se pudo respaldar la tabla ${tabla}: ${error.message}`);
                 filas.push(...(data || []));
                 if (!data || data.length < bloque) break;
@@ -365,11 +372,11 @@ export const db = {
      * Devuelve null si la tabla todavía no existe.
      */
     async obtenerAuditoria(limite = 50) {
-        const { data, error } = await supabase
+        const { data, error } = await conTiempoLimite(supabase
             .from('auditoria')
             .select('id, tabla, registro_id, accion, usuario_email, created_at')
             .order('created_at', { ascending: false })
-            .limit(limite);
+            .limit(limite), ESPERA);
         if (error) {
             const noExiste = error.code === '42P01' || /does not exist|could not find/i.test(error.message || '');
             if (noExiste) return null;
@@ -389,7 +396,7 @@ export const db = {
      * Devuelve { libro, prestamos } o null si el código no existe.
      */
     async consultarLibro(codigo) {
-        const { data, error } = await supabase.rpc('consultar_libro', { p_codigo: codigo });
+        const { data, error } = await conTiempoLimite(supabase.rpc('consultar_libro', { p_codigo: codigo }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) {
                 throw new Error('Falta ejecutar la migración 006 en Supabase para usar el mesón.');
@@ -425,7 +432,7 @@ export const db = {
      * tiene, cuántos atrasados, si está bloqueado y si puede pedir prestado.
      */
     async estadoLector(rut) {
-        const { data, error } = await supabase.rpc('estado_lector', { p_rut: rut });
+        const { data, error } = await conTiempoLimite(supabase.rpc('estado_lector', { p_rut: rut }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) {
                 throw new Error('Falta ejecutar la migración 006 en Supabase.');
@@ -436,9 +443,9 @@ export const db = {
     },
 
     async bloquearLector(lectorId, bloquear, motivo = null) {
-        const { error } = await supabase.rpc('bloquear_lector', {
+        const { error } = await conTiempoLimite(supabase.rpc('bloquear_lector', {
             p_lector_id: lectorId, p_bloquear: bloquear, p_motivo: motivo
-        });
+        }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 006 en Supabase.');
             throw new Error(error.message || 'No se pudo cambiar el bloqueo.');
@@ -451,9 +458,9 @@ export const db = {
 
     /** Ajusta el total de ejemplares y recalcula las copias disponibles. */
     async ajustarCopias(libroId, copiasTotales) {
-        const { data, error } = await supabase.rpc('ajustar_copias', {
+        const { data, error } = await conTiempoLimite(supabase.rpc('ajustar_copias', {
             p_libro_id: libroId, p_copias_totales: copiasTotales
-        });
+        }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 006 en Supabase.');
             throw new Error(error.message || 'No se pudo ajustar los ejemplares.');
@@ -463,7 +470,7 @@ export const db = {
 
     /** Libros cuyo inventario no cuadra. Devuelve null si falta la migración. */
     async revisarInventario() {
-        const { data, error } = await supabase.rpc('revisar_inventario');
+        const { data, error } = await conTiempoLimite(supabase.rpc('revisar_inventario'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo revisar el inventario.');
@@ -472,7 +479,7 @@ export const db = {
     },
 
     async corregirInventario(libroId) {
-        const { data, error } = await supabase.rpc('corregir_inventario', { p_libro_id: libroId });
+        const { data, error } = await conTiempoLimite(supabase.rpc('corregir_inventario', { p_libro_id: libroId }), ESPERA);
         if (error) throw new Error(error.message || 'No se pudo corregir el inventario.');
         return Array.isArray(data) ? data[0] : data;
     },
@@ -487,7 +494,7 @@ export const db = {
      * explicar qué ejecutar en vez de quedarse en blanco.
      */
     async miPerfil() {
-        const { data, error } = await supabase.rpc('mi_perfil');
+        const { data, error } = await conTiempoLimite(supabase.rpc('mi_perfil'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo cargar tu perfil.');
@@ -501,11 +508,11 @@ export const db = {
      * consola del navegador.
      */
     async actualizarMiPerfil({ nombre, telefono, cargo }) {
-        const { error } = await supabase.rpc('actualizar_mi_perfil', {
+        const { error } = await conTiempoLimite(supabase.rpc('actualizar_mi_perfil', {
             p_nombre: nombre,
             p_telefono: telefono || null,
             p_cargo: cargo || null
-        });
+        }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 008 en Supabase.');
             throw new Error(error.message || 'No se pudo guardar tu perfil.');
@@ -519,12 +526,12 @@ export const db = {
      * El RUT no se toca aquí — es la identidad del lector.
      */
     async actualizarContactoLector(lectorId, { nombre, email, telefono }) {
-        const { error } = await supabase.rpc('actualizar_contacto_lector', {
+        const { error } = await conTiempoLimite(supabase.rpc('actualizar_contacto_lector', {
             p_lector_id: lectorId,
             p_nombre: nombre,
             p_email: email || null,
             p_telefono: telefono || null
-        });
+        }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 008 en Supabase.');
             throw new Error(error.message || 'No se pudo guardar el contacto del lector.');
@@ -541,7 +548,7 @@ export const db = {
      * el security definer, y una duplicada por firma.
      */
     async verificarDefiniciones() {
-        const { data, error } = await supabase.rpc('verificar_definiciones');
+        const { data, error } = await conTiempoLimite(supabase.rpc('verificar_definiciones'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo verificar las definiciones.');
@@ -550,7 +557,7 @@ export const db = {
     },
 
     async verificarCirculacion() {
-        const { data, error } = await supabase.rpc('verificar_circulacion');
+        const { data, error } = await conTiempoLimite(supabase.rpc('verificar_circulacion'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo verificar la circulación.');
@@ -564,7 +571,7 @@ export const db = {
 
     /** Resumen para el panel. Devuelve null si falta la migración. */
     async resumenErrores() {
-        const { data, error } = await supabase.rpc('resumen_errores');
+        const { data, error } = await conTiempoLimite(supabase.rpc('resumen_errores'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo leer el registro de errores.');
@@ -573,9 +580,9 @@ export const db = {
     },
 
     async listarErrores(limite = 100, soloNuevos = false) {
-        const { data, error } = await supabase.rpc('listar_errores', {
+        const { data, error } = await conTiempoLimite(supabase.rpc('listar_errores', {
             p_limite: limite, p_solo_nuevos: soloNuevos
-        });
+        }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo leer el registro de errores.');
@@ -585,19 +592,19 @@ export const db = {
 
     /** Marca uno como revisado, o todos si no se indica cuál. */
     async marcarErrorVisto(id = null) {
-        const { error } = await supabase.rpc('marcar_error_visto', { p_id: id });
+        const { error } = await conTiempoLimite(supabase.rpc('marcar_error_visto', { p_id: id }), ESPERA);
         if (error) throw new Error(error.message || 'No se pudo marcar el error.');
     },
 
     async purgarErrores(dias = 90) {
-        const { data, error } = await supabase.rpc('purgar_errores', { p_dias: dias });
+        const { data, error } = await conTiempoLimite(supabase.rpc('purgar_errores', { p_dias: dias }), ESPERA);
         if (error) throw new Error(error.message || 'No se pudo purgar el registro.');
         return data ?? 0;
     },
 
     /** Personal con acceso al sistema. Devuelve null si falta la migración. */
     async listarPersonal() {
-        const { data, error } = await supabase.rpc('listar_personal');
+        const { data, error } = await conTiempoLimite(supabase.rpc('listar_personal'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo listar el personal.');
@@ -606,17 +613,17 @@ export const db = {
     },
 
     async asignarRol(usuarioId, rol) {
-        const { error } = await supabase.rpc('asignar_rol', { p_usuario_id: usuarioId, p_rol: rol });
+        const { error } = await conTiempoLimite(supabase.rpc('asignar_rol', { p_usuario_id: usuarioId, p_rol: rol }), ESPERA);
         if (error) throw new Error(error.message || 'No se pudo cambiar el rol.');
     },
 
     /** Lectores actualmente bloqueados a mano. */
     async obtenerBloqueados() {
-        const { data, error } = await supabase
+        const { data, error } = await conTiempoLimite(supabase
             .from('lectores')
             .select('id, nombre, rut, email, telefono, motivo_bloqueo, bloqueado_en')
             .eq('bloqueado_manual', true)
-            .order('bloqueado_en', { ascending: false });
+            .order('bloqueado_en', { ascending: false }), ESPERA);
         if (error) {
             if (/does not exist/i.test(error.message || '')) return null;
             throw error;
@@ -633,7 +640,7 @@ export const db = {
      * que la biblioteca tiene sobre un titular, en formato reutilizable.
      */
     async exportarDatosLector(rut) {
-        const { data, error } = await supabase.rpc('exportar_datos_lector', { p_rut: rut });
+        const { data, error } = await conTiempoLimite(supabase.rpc('exportar_datos_lector', { p_rut: rut }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 007 en Supabase.');
             throw new Error(error.message || 'No se pudo exportar los datos.');
@@ -647,7 +654,7 @@ export const db = {
      * constancia de su gestión (Ley 20.285 y normas de rendición).
      */
     async anonimizarLector(lectorId, motivo) {
-        const { error } = await supabase.rpc('anonimizar_lector', { p_lector_id: lectorId, p_motivo: motivo });
+        const { error } = await conTiempoLimite(supabase.rpc('anonimizar_lector', { p_lector_id: lectorId, p_motivo: motivo }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 007 en Supabase.');
             throw new Error(error.message || 'No se pudo suprimir los datos.');
@@ -656,7 +663,7 @@ export const db = {
 
     /** Anonimiza titulares que superaron el plazo de conservación. */
     async purgarDatosAntiguos() {
-        const { data, error } = await supabase.rpc('purgar_datos_antiguos');
+        const { data, error } = await conTiempoLimite(supabase.rpc('purgar_datos_antiguos'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 007 en Supabase.');
             throw new Error(error.message || 'No se pudo ejecutar la purga.');
@@ -666,7 +673,7 @@ export const db = {
 
     /** Evidencia de actividad para un reporte de incidente (Ley 21.663). */
     async evidenciaIncidente(desde, hasta) {
-        const { data, error } = await supabase.rpc('evidencia_incidente', { p_desde: desde, p_hasta: hasta });
+        const { data, error } = await conTiempoLimite(supabase.rpc('evidencia_incidente', { p_desde: desde, p_hasta: hasta }), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 007 en Supabase.');
             throw new Error(error.message || 'No se pudo extraer la evidencia.');
@@ -676,7 +683,7 @@ export const db = {
 
     /** Estado de las políticas RLS de las tablas con datos personales. */
     async verificarRls() {
-        const { data, error } = await supabase.rpc('verificar_rls');
+        const { data, error } = await conTiempoLimite(supabase.rpc('verificar_rls'), ESPERA);
         if (error) {
             if (esFuncionInexistente(error)) return null;
             throw new Error(error.message || 'No se pudo verificar RLS.');
@@ -686,7 +693,7 @@ export const db = {
 
     /** Parámetros del sistema, ahora definidos en la base de datos. */
     async obtenerParametros() {
-        const { data, error } = await supabase.from('parametros').select('clave, valor, descripcion').order('clave');
+        const { data, error } = await conTiempoLimite(supabase.from('parametros').select('clave, valor, descripcion').order('clave'), ESPERA);
         if (error) {
             if (/does not exist/i.test(error.message || '')) return null;
             throw error;
@@ -695,9 +702,9 @@ export const db = {
     },
 
     async actualizarParametro(clave, valor) {
-        const { error } = await supabase.from('parametros')
+        const { error } = await conTiempoLimite(supabase.from('parametros')
             .update({ valor: String(valor), actualizado_en: new Date().toISOString() })
-            .eq('clave', clave);
+            .eq('clave', clave), ESPERA);
         if (error) throw new Error(error.message || 'No se pudo guardar el parámetro.');
     },
 
@@ -711,7 +718,7 @@ export const db = {
      * pueda explicarle al usuario qué le falta.
      */
     async obtenerReporte(desde, hasta) {
-        const [prestamosRes, devolucionesRes, lectoresRes] = await Promise.all([
+        const [prestamosRes, devolucionesRes, lectoresRes] = await conTiempoLimite(Promise.all([
             supabase.from('prestamos')
                 .select('id, fecha_prestamo, fecha_devolucion_esperada, fecha_devolucion_real, estado, libros(id, titulo, autor), lectores(id, nombre, rut)')
                 .gte('fecha_prestamo', desde)
@@ -726,7 +733,7 @@ export const db = {
                 // el rango cubre exactamente los días de Chile solicitados.
                 .gte('created_at', `${desde}T00:00:00${desfaseChile(desde)}`)
                 .lte('created_at', `${hasta}T23:59:59${desfaseChile(hasta)}`)
-        ]);
+        ]), ESPERA);
 
         // 42703 = columna inexistente en Postgres
         const errores = [prestamosRes.error, devolucionesRes.error, lectoresRes.error].filter(Boolean);

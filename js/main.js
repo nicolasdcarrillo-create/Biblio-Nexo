@@ -1,12 +1,34 @@
 import { supabase } from './supabase-init.js';
 import * as auth from './modules/auth.js';
 import uiManager from './modules/ui.js';
+import registroErrores from './modules/errores.js';
+import { conTiempoLimite } from './modules/utilidades.js';
 
-function withTimeout(promise, ms, message) {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
-    ]);
+// Mensaje honesto: en el cuelgue que motivó este cambio nunca sale ninguna
+// petición de red (se comprobó con navigator.locks.query()), así que hablar
+// de "conexión" o "servidor" culparía a la red del usuario sin motivo. Es un
+// candado interno del cliente de Supabase que no se soltó a tiempo.
+const MENSAJE_ARRANQUE_LENTO =
+    'No se pudo iniciar la aplicación a tiempo. Recargue la página; si el problema sigue, ' +
+    'cierre esta pestaña y ábrala de nuevo.';
+
+/**
+ * Descarta el dato de sesión guardado en este navegador.
+ *
+ * Se usa solo cuando el arranque se cuelga (ver MENSAJE_ARRANQUE_LENTO): un
+ * dato de sesión dañado es la causa más probable de que la inicialización de
+ * Supabase quede esperando para siempre. Recargar sin limpiar esto reproduce
+ * el mismo cuelgue; limpiarlo fuerza un inicio de sesión limpio, sin perder
+ * nada, porque este navegador no guarda ningún otro dato en localStorage.
+ */
+function limpiarSesionLocal() {
+    try {
+        Object.keys(localStorage)
+            .filter(clave => clave.startsWith('sb-') && clave.endsWith('-auth-token'))
+            .forEach(clave => localStorage.removeItem(clave));
+    } catch (e) {
+        // Si el navegador bloquea localStorage no hay nada que limpiar
+    }
 }
 
 /**
@@ -19,6 +41,12 @@ function esEnlaceDeRecuperacion() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Se activa antes que cualquier otra cosa, incluso antes del try: un
+    // cuelgue o error durante el propio arranque —como el candado de
+    // sesión— antes no quedaba registrado en Administración → Diagnóstico
+    // porque el registro solo se activaba después de iniciar sesión.
+    registroErrores.iniciar(() => 'arranque');
+
     try {
         if (!supabase) {
             throw new Error('No se pudo inicializar la conexión con Supabase (CDN no disponible).');
@@ -52,10 +80,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        const { data: { session }, error } = await withTimeout(
+        const { data: { session }, error } = await conTiempoLimite(
             supabase.auth.getSession(),
             8000,
-            'La conexión con el servidor tardó demasiado en responder.'
+            MENSAJE_ARRANQUE_LENTO
         );
         if (error) throw error;
 
@@ -68,6 +96,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.__appBooted = true;
     } catch (err) {
         window.__appBooted = true; // evita que el timeout de respaldo pise este mensaje más específico
+        registroErrores.registrarOperacion('arranque', err);
+
+        if (err?.message === MENSAJE_ARRANQUE_LENTO) {
+            limpiarSesionLocal();
+        }
+
         if (window.__showCriticalError) {
             window.__showCriticalError(err.message || 'Fallo crítico en el inicio. Verifique su conexión a internet.');
         } else {

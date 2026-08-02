@@ -72,11 +72,17 @@ class RegistroDeErrores {
   /**
    * Empieza a escuchar. Recibe una función que dice en qué vista está la
    * persona, para que el informe sea útil sin tener que mirar la URL.
+   *
+   * Se puede llamar más de una vez: la primera vez engancha los escuchadores,
+   * las siguientes solo actualizan el localizador de vista. Así main.js puede
+   * activarlo apenas arranca la aplicación —antes de que exista una sesión—
+   * y ui.js puede después afinarlo para que el informe diga "Mesón" en vez
+   * de "arranque", sin duplicar ningún escuchador.
    */
   iniciar(obtenerVista) {
+    if (typeof obtenerVista === 'function') this.obtenerVista = obtenerVista;
     if (this.activo) return;
     this.activo = true;
-    if (typeof obtenerVista === 'function') this.obtenerVista = obtenerVista;
 
     window.addEventListener('error', evento => {
       // Los fallos de carga de imágenes llegan aquí y no son fallos del sistema

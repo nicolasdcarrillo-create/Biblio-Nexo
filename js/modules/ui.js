@@ -8,7 +8,8 @@
 // dentro de cada método, exactamente igual que cuando estaban todos juntos.
 import UIManager from './ui-base.js';
 import dashboard from '../vistas/dashboard.js';
+import reportes from '../vistas/reportes.js';
 
-Object.assign(UIManager.prototype, dashboard);
+Object.assign(UIManager.prototype, dashboard, reportes);
 
 export default new UIManager();

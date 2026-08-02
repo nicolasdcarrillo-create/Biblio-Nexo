@@ -7,5 +7,8 @@
 // mezcla sobre el prototipo aquí abajo — así "this" sigue siendo la instancia
 // dentro de cada método, exactamente igual que cuando estaban todos juntos.
 import UIManager from './ui-base.js';
+import dashboard from '../vistas/dashboard.js';
+
+Object.assign(UIManager.prototype, dashboard);
 
 export default new UIManager();

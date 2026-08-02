@@ -9,7 +9,8 @@
 import UIManager from './ui-base.js';
 import dashboard from '../vistas/dashboard.js';
 import reportes from '../vistas/reportes.js';
+import perfil from '../vistas/perfil.js';
 
-Object.assign(UIManager.prototype, dashboard, reportes);
+Object.assign(UIManager.prototype, dashboard, reportes, perfil);
 
 export default new UIManager();

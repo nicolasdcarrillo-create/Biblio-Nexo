@@ -31,9 +31,13 @@ código pudo cambiar. Si algo no calza, dilo antes de actuar.
 - **Librerías:** todas locales en `vendor/js/` (`supabase.js`, `chart.umd.js`,
   `html5-qrcode.min.js`). **No hay CDN.** No hay `package.json`.
 - **Módulos:** `js/main.js`, `js/config.js`, `js/supabase-init.js`,
-  `js/arranque.js`, y en `js/modules/`: `auth.js`, `db.js`, `ui.js`,
-  `scanner.js`, `errores.js`
-- **Backend:** Supabase (Postgres 16 + Auth + RLS). No hay Firebase.
+  `js/arranque.js`, y en `js/modules/`: `auth.js`, `db.js`, `ui-base.js`,
+  `ui.js` (ensamblador — mezcla las vistas en `UIManager.prototype`),
+  `scanner.js`, `errores.js`. La vista se sigue partiendo: hoy
+  `js/vistas/{dashboard,reportes,perfil,admin}.js` ya salieron de `ui.js`;
+  catálogo, usuarios, préstamos y escáner siguen dentro de `ui-base.js`.
+- **Backend:** Supabase (**Postgres 17.6.1**, no 16 — confirmado contra el
+  proyecto real). Auth + RLS. No hay Firebase.
 - **Tablas:** `libros`, `lectores`, `prestamos`, `usuarios`, `auditoria`,
   `parametros`, `errores`
 - **Despliegue:** Vercel (`vercel.json` con cabeceras de seguridad)
@@ -260,25 +264,26 @@ reconectar, revalidando el stock — no puede asumir que el préstamo se concret
 
 ### FASE 4 — Mantenibilidad 🟡
 
-- **Partir `ui.js`.** Tiene 4.018 líneas y 76 métodos en una sola clase: mezcla
-  enrutamiento, renderizado, validación, reglas de negocio y formato. Extracción
-  mecánica a `js/vistas/catalogo.js`, `meson.js`, `prestamos.js`, etc. **No es
-  una reescritura.**
-- **Plantilla que escape por defecto.** Una función etiquetada de plantilla
-  (tagged template literal), llamada por ejemplo `html`, que escape todas las
-  interpolaciones automáticamente. Uso previsto:
+- **Partir `ui.js`. En progreso, no terminada.** Tenía 4.018 líneas y 76
+  métodos en una sola clase: mezcla enrutamiento, renderizado, validación,
+  reglas de negocio y formato. Ya salió: `js/vistas/dashboard.js`,
+  `reportes.js`, `perfil.js`, `admin.js` (4 de 8 vistas), mezclados en
+  `UIManager.prototype` desde `js/modules/ui.js`. Faltan catálogo, usuarios,
+  préstamos y escáner, que siguen dentro de `js/modules/ui-base.js`.
+  Extracción mecánica, **no una reescritura**.
+- **Plantilla que escape por defecto — hecho.** `html` (tagged template
+  literal) en `js/modules/utilidades.js`, desde el commit `84a3428`. Uso real:
 
       contenedor.innerHTML = html`<p>${libro.titulo}</p>`;
 
-  y el título queda escapado sin que nadie tenga que acordarse. Hoy el escapado
-  es correcto, pero depende de disciplina: un `escapeHtml` olvidado en un título
-  de libro es XSS almacenado.
-- **Cobertura de pruebas** sobre la lógica de negocio: cálculo de plazos,
-  validaciones de RUT, `SyncQueue`, flujo préstamo/devolución. Puedes usar Vitest
-  o extender las suites existentes — pero **no rompas las tres que ya corren en
-  integración continua**.
-- **Hoja de impresión** `@media print` para comprobantes y actas.
-- **Control de tamaño de fuente** para adultos mayores.
+  y el título queda escapado sin que nadie tenga que acordarse.
+- **Cobertura de pruebas** sobre la lógica de negocio — parcial. Cálculo de
+  plazos, validaciones de RUT y el escapado de HTML ya se prueban en
+  `pruebas/probar-interfaz.mjs` (de antes de esta fase). Falta cobertura de
+  `SyncQueue`, que todavía no existe (depende de la Fase 1.3).
+- **Hoja de impresión — hecho.** `@media print` en `css/styles.css:276`.
+- **Control de tamaño de fuente — hecho.** En `js/vistas/perfil.js`, commit
+  `ba9f522`.
 
 ---
 
@@ -336,40 +341,90 @@ No modifiques nada todavía.
 
 ---
 
-## 11. Estado al 31 de julio de 2026
+## 11. Estado al 6 de agosto de 2026
 
 ### Base de datos
 
-Producción tiene aplicadas las migraciones **001 a 011**, y el historial del CLI
-está cuadrado con `migration repair`. `supabase migration list --linked` ya no
-muestra falsos pendientes.
+Producción corre **Postgres 17.6.1** (no 16 — dato corregido en esta revisión,
+verificado contra el proyecto real `vcngmgzxjoorjhcgqzpk`). Tiene aplicadas las
+migraciones **001 a 011** registradas en `supabase_migrations.schema_migrations`,
+más la **012** y la deriva del 26 de julio (ver abajo) aplicadas a mano, sin
+registro en esa tabla.
 
-### Pendiente urgente: la migración 012 que falta
+**La frase "el historial del CLI está cuadrado con `migration repair`" ya no es
+cierta.** Lo estuvo el 31 de julio. Desde entonces se aplicaron a mano la 012 y
+las cuatro migraciones remotas del 26 de julio (antes de esa fecha, en
+realidad — el nombre es por cuándo se aplicaron, no por cuándo se documentaron),
+y ninguna de las dos cosas quedó reconciliada con `migration repair`.
+`supabase migration list --linked` volvería a mostrar diferencias.
 
-`mi_perfil()` fallaba en producción con **«permission denied for table
-auth.users»**. Se corrigió a mano, sobre la base real:
+### La migración 012: aplicada, pero no registrada
 
-```sql
-grant usage on schema auth to authenticated;
-grant select on auth.users to authenticated;
-```
+El archivo existe (`012_permisos_auth_users.sql`, commit `aba778a`, 1 de
+agosto) y sus dos `grant` están confirmados activos en producción ahora mismo
+(`usage` sobre el esquema `auth`, `select` sobre `id, email, last_sign_in_at`
+de `auth.users`, ambos limitados a `authenticated`). El código y la base
+coinciden.
 
-**Esos dos `grant` no están en ninguna migración.** Hoy el sistema funciona
-porque el permiso está dado en esa base concreta, pero al reconstruir desde cero
-—una instalación nueva, un proyecto de repuesto tras una pausa de Supabase, o
-una rama de pruebas— faltarían, y el sistema se colgaría al arrancar: `mi_perfil`
-es de las primeras funciones que se llaman al iniciar sesión.
+Lo que falta es el registro: `supabase_migrations.schema_migrations` no tiene
+ninguna fila para la 012, porque se aplicó con el editor SQL, no con el CLI.
+**Pendiente: `migration repair` para marcarla aplicada.** Es una escritura
+contra producción — no se hizo en esta sesión a propósito, queda para
+aprobarla aparte.
 
-Es el mismo tipo de deriva que la consolidación vino a resolver, solo que del
-lado de los permisos. **Hay que crear la migración 012 con esos dos `grant`.**
+### Deriva del 26 de julio: auditada e incorporada al repositorio
 
-### Deriva pendiente de auditar
+Las **cuatro migraciones remotas del 26 de julio** (`20260726153006` y las
+tres siguientes) ya se revisaron una por una contra el SQL real que
+`supabase_migrations.schema_migrations` guarda en producción, no por
+inferencia:
 
-Las **cuatro migraciones remotas del 26 de julio** (`20260726153006` y las tres
-siguientes) siguen sin archivo local en el repositorio. Se aplicaron directo
-sobre la base y no se sabe qué contienen sin ir a mirarlas. Una de ellas es la
-que traía la versión endurecida de `es_admin`, que ya quedó incorporada a la 010
-en el commit `77f3651`; las otras tres están sin revisar.
+| Migración | Contenido | Resultado |
+|---|---|---|
+| `20260726153006` drop_orphaned_penalizar_si_atraso | Borra una función huérfana sin disparador, con columnas que ya no existen | Ya coincidía: no existe en ningún archivo local |
+| `20260726153034` usuarios_rls_insert_update_seed | Endurece `es_admin()` (ya incorporado en `77f3651`); crea 2 políticas RLS en `usuarios`; siembra 2 cuentas (dato puntual, no esquema) | Las 2 políticas **incorporadas en la migración 013** |
+| `20260726153503` restringir_execute_es_admin | `REVOKE EXECUTE ... FROM PUBLIC` sobre `es_admin()` | **Incorporado a la 010** en esta sesión |
+| `20260726153557` revocar_execute_anon_es_admin | `REVOKE EXECUTE ... FROM anon` sobre `es_admin()` (Supabase concede por privilegios por omisión, el `REVOKE` de `PUBLIC` no bastaba) | **Incorporado a la 010** en esta sesión |
+
+`verificar_definiciones()` y `verificar_rls()`, corridos contra producción
+como admin real, no marcaron nada fuera de norma durante toda esta deriva —
+ninguna de las dos comprobaciones mira políticas ni grants, solo cuerpos de
+función y si RLS está activo. Es un punto ciego real del autodiagnóstico, no
+solo de este caso puntual (ver más abajo).
+
+**Hallazgo aparte, no parte de las cuatro:** producción tiene una **quinta
+política** activa en `usuarios`, `"Lectura de roles propia"` (`SELECT` donde
+`auth.uid() = id`), que no existe en ningún archivo local — ni siquiera en
+migraciones previas al 26 de julio. Es redundante con `"usuarios ve su
+perfil"` (008/010): el mismo permiso ya queda cubierto por el `OR` de esa
+política. **Pendiente: decidir si se elimina en producción.** No se tocó en
+esta sesión.
+
+### Pendiente nuevo: punto ciego del autodiagnóstico
+
+`verificar_definiciones()` compara cuerpos de función contra un manifiesto.
+No existe nada equivalente para políticas RLS ni para grants — por eso la
+deriva de arriba fue invisible diez días. Se evaluó (sin implementar) una
+función `verificar_politicas()` con el mismo patrón: manifiesto de políticas
+y grants esperados, comparado contra `pg_policies` e
+`information_schema.role_table_grants`/`routine_privileges`. Cubriría drift
+de existencia y de texto de `using`/`with check`; no cubriría tablas que
+nadie sume al manifiesto, ni equivalencia semántica entre dos políticas
+distintas que hacen lo mismo. Costo: comparable al patrón ya existente de la
+010, con el mismo costo de disciplina — cada migración nueva que toque una
+política tendría que actualizar el manifiesto también.
+
+### Pendiente nuevo: CI corre Postgres 16, producción corre 17.6.1
+
+`.github/workflows/pruebas.yml` (trabajos `base-de-datos` y `reconstruccion`)
+usa la imagen `postgres:16`. Ninguna de las funciones verificadas usa sintaxis
+específica de una versión, así que no hay riesgo funcional conocido hoy — pero
+CI en verde no garantiza que el motor se comporte igual que producción, y esta
+misma sesión encontró un caso concreto (privilegios por omisión de Supabase
+sobre `anon`/`authenticated`) del tipo de detalle que puede diferir entre
+versiones mayores. Alinear a `postgres:17` en esos dos trabajos es mecánico y
+de bajo riesgo; el costo real es correrlo una vez para confirmarlo. No se
+cambió en esta sesión.
 
 ### Fases
 

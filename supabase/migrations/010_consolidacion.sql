@@ -135,6 +135,15 @@ as $$
 $$;
 grant execute on function public.es_admin() to authenticated;
 
+-- es_admin() es un helper interno para las políticas RLS, no un RPC público
+-- que el personal deba llamar directo. Supabase concede EXECUTE a `anon` y
+-- `authenticated` por privilegios por omisión, no solo vía PUBLIC — revocar
+-- de PUBLIC no basta, hay que revocarle a `anon` explícitamente aparte.
+-- Ya estaba así en producción desde el 26 de julio (aplicado a mano); esto
+-- lo trae al repositorio, no lo introduce.
+revoke execute on function public.es_admin() from public;
+revoke execute on function public.es_admin() from anon;
+
 -- ── es_personal ── (última versión: 008_perfiles_y_permisos_librero.sql)
 create or replace function public.es_personal()
 returns boolean

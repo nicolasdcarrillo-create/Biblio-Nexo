@@ -58,7 +58,7 @@ def preparar_esquema():
 if os.environ.get('PREPARAR_ESQUEMA', '1') == '1':
     preparar_esquema()
 
-pasadas, fallidas = 0, 0
+pasadas, fallidas, omitidas = 0, 0, 0
 
 def comprobar(desc, condicion, detalle=''):
     global pasadas, fallidas
@@ -68,6 +68,11 @@ def comprobar(desc, condicion, detalle=''):
     else:
         fallidas += 1
         print(f'  FALLO {desc}' + (f' — {detalle}' if detalle else ''))
+
+def omitir(desc):
+    global omitidas
+    omitidas += 1
+    print(f'  OMITIDO {desc} — entorno sin America/Santiago (ver pruebas/LEEME.md)')
 
 def sql(texto, como_usuario=None):
     """Ejecuta como superusuario, o con la identidad y permisos de un usuario."""
@@ -96,6 +101,41 @@ def valor(consulta):
 
 def texto(resultado):
     return str(resultado)
+
+# ---------------------------------------------------------------------------
+# ¿Este PostgreSQL resuelve la zona horaria America/Santiago?
+# ---------------------------------------------------------------------------
+# hoy_chile() usa timezone('America/Santiago', now()); la llaman prestar_libro,
+# renovar_prestamo, devolver_prestamo, estado_lector y consultar_libro. El
+# paquete pgserver para Windows no trae la carpeta share/postgresql/timezone
+# (ver pruebas/LEEME.md, "Limitación conocida: timezone"), así que sin ella
+# estas cinco funciones fallan aunque el resto del sistema esté sano.
+#
+# Gatillo único, antes de correr nada más. Si pasa, las cinco funciones
+# corren normal más abajo y cualquier fallo suyo es FALLO real — nunca un
+# try/except alrededor de las llamadas de negocio. Si falla por esta causa
+# puntual, se omiten por nombre los 12 casos que dependen de esto. Si falla
+# por cualquier otra causa (conexión caída, esquema a medio aplicar), NO es
+# lo mismo que "sin tzdata": la suite se detiene con error en vez de omitir,
+# para no confundir un entorno roto con uno incompleto.
+ERROR_TIMEZONE = 'time zone "America/Santiago" not recognized'
+
+ok, out = sql("select timezone('America/Santiago', now());")
+if ok:
+    TIMEZONE_OK = True
+elif ERROR_TIMEZONE in texto(out):
+    TIMEZONE_OK = False
+    print('\n' + '!' * 66)
+    print('AVISO: este PostgreSQL no resuelve America/Santiago.')
+    print(f'  {texto(out)[-150:]}')
+    print('  Entorno incompleto (ver pruebas/LEEME.md). prestar_libro,')
+    print('  renovar_prestamo, devolver_prestamo, estado_lector y')
+    print('  consultar_libro dependen de esto y se OMITEN: no pasan ni fallan.')
+    print('!' * 66)
+else:
+    print(f'\nFALLO al comprobar el entorno: {texto(out)[-300:]}')
+    print('No es la falta de America/Santiago: es otra causa. Deteniendo la suite.')
+    sys.exit(1)
 
 # ---------------------------------------------------------------------------
 print('\nPreparación: dos cuentas, un libro y un lector')
@@ -159,10 +199,13 @@ begin
 end; $f$;
 """)
 
-ok, out = como(LIBRERO, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
-comprobar('un librero NO podía prestar (error de RLS)',
-          not ok and 'row-level security' in texto(out).lower(),
-          f'resultado inesperado: {out[-200:]}')
+if TIMEZONE_OK:
+    ok, out = como(LIBRERO, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
+    comprobar('un librero NO podía prestar (error de RLS)',
+              not ok and 'row-level security' in texto(out).lower(),
+              f'resultado inesperado: {out[-200:]}')
+else:
+    omitir('un librero NO podía prestar (error de RLS)')
 
 # Se crea un préstamo saltándose RLS, para poder probar la devolución
 sql(f"""insert into public.prestamos (libro_id, lector_id, fecha_prestamo, fecha_devolucion_esperada, estado)
@@ -200,23 +243,30 @@ sql(f"""delete from public.prestamos;
 # ---------------------------------------------------------------------------
 print('\n3. EL LIBRERO YA PUEDE TRABAJAR')
 # ---------------------------------------------------------------------------
-ok, out = como(LIBRERO, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
-comprobar('un librero puede prestar', ok, texto(out)[-250:] if not ok else '')
+if TIMEZONE_OK:
+    ok, out = como(LIBRERO, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
+    comprobar('un librero puede prestar', ok, texto(out)[-250:] if not ok else '')
+    stock = valor(f"select stock from public.libros where id = {libro_id};")
+    comprobar('el stock bajó de 3 a 2', str(stock) == '2', f'stock = {stock}')
+
+    prestamo_id = valor("select id from public.prestamos order by id desc limit 1;")
+
+    ok, out = como(LIBRERO, f"select * from public.renovar_prestamo({prestamo_id});")
+    comprobar('un librero puede renovar', ok, texto(out)[-250:] if not ok else '')
+    renov = valor(f"select renovaciones from public.prestamos where id = {prestamo_id};")
+    comprobar('la renovación quedó registrada', str(renov) == '1', f'renovaciones = {renov}')
+
+    ok, out = como(LIBRERO, f"select public.devolver_prestamo({prestamo_id});")
+    comprobar('un librero puede devolver', ok, texto(out)[-250:] if not ok else '')
+    estado = valor(f"select estado from public.prestamos where id = {prestamo_id};")
+    comprobar('el préstamo quedó marcado como devuelto', estado == 'devuelto', f'estado = {estado}')
+else:
+    for desc in ('un librero puede prestar', 'el stock bajó de 3 a 2', 'un librero puede renovar',
+                 'la renovación quedó registrada', 'un librero puede devolver',
+                 'el préstamo quedó marcado como devuelto'):
+        omitir(desc)
+
 stock = valor(f"select stock from public.libros where id = {libro_id};")
-comprobar('el stock bajó de 3 a 2', str(stock) == '2', f'stock = {stock}')
-
-prestamo_id = valor("select id from public.prestamos order by id desc limit 1;")
-
-ok, out = como(LIBRERO, f"select * from public.renovar_prestamo({prestamo_id});")
-comprobar('un librero puede renovar', ok, texto(out)[-250:] if not ok else '')
-renov = valor(f"select renovaciones from public.prestamos where id = {prestamo_id};")
-comprobar('la renovación quedó registrada', str(renov) == '1', f'renovaciones = {renov}')
-
-ok, out = como(LIBRERO, f"select public.devolver_prestamo({prestamo_id});")
-comprobar('un librero puede devolver', ok, texto(out)[-250:] if not ok else '')
-estado = valor(f"select estado from public.prestamos where id = {prestamo_id};")
-stock = valor(f"select stock from public.libros where id = {libro_id};")
-comprobar('el préstamo quedó marcado como devuelto', estado == 'devuelto', f'estado = {estado}')
 comprobar('el stock volvió a 3', str(stock) == '3', f'stock = {stock}')
 
 ok, out = como(LIBRERO, "select public.actualizar_contacto_lector((select id from public.lectores limit 1), 'Maria Antileo Curiqueo', 'maria@correo.cl', '56999998888');")
@@ -282,8 +332,11 @@ comprobar('no puede leer el perfil de otra persona (RLS lo filtra)',
 # ---------------------------------------------------------------------------
 print('\n6. EL ADMINISTRADOR CONSERVA SUS PERMISOS')
 # ---------------------------------------------------------------------------
-ok, out = como(ADMIN, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
-comprobar('un admin puede prestar', ok, texto(out)[-250:] if not ok else '')
+if TIMEZONE_OK:
+    ok, out = como(ADMIN, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
+    comprobar('un admin puede prestar', ok, texto(out)[-250:] if not ok else '')
+else:
+    omitir('un admin puede prestar')
 
 ok, out = como(ADMIN, "select email, rol from public.listar_personal();")
 comprobar('un admin puede listar al personal', ok, texto(out)[-250:] if not ok else '')
@@ -434,11 +487,15 @@ comprobar('los 2 disparadores de sincronización existen y son BEFORE',
 # Y el librero debe poder seguir trabajando después de todo esto
 sql("delete from public.prestamos;")
 sql(f"update public.libros set stock = 3, copias_totales = 3 where id = {libro_id};")
-ok, out = como(LIBRERO, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
-comprobar('el librero sigue pudiendo prestar tras la consolidación', ok, texto(out)[-250:] if not ok else '')
-pid = valor("select id from public.prestamos order by id desc limit 1;")
-ok, out = como(LIBRERO, f"select public.devolver_prestamo({pid});")
-comprobar('y devolver', ok, texto(out)[-250:] if not ok else '')
+if TIMEZONE_OK:
+    ok, out = como(LIBRERO, f"select * from public.prestar_libro({libro_id}, '12345678-5');")
+    comprobar('el librero sigue pudiendo prestar tras la consolidación', ok, texto(out)[-250:] if not ok else '')
+    pid = valor("select id from public.prestamos order by id desc limit 1;")
+    ok, out = como(LIBRERO, f"select public.devolver_prestamo({pid});")
+    comprobar('y devolver', ok, texto(out)[-250:] if not ok else '')
+else:
+    omitir('el librero sigue pudiendo prestar tras la consolidación')
+    omitir('y devolver')
 comprobar('con el stock de vuelta en 3',
           str(valor(f"select stock from public.libros where id = {libro_id};")) == '3')
 
@@ -528,15 +585,22 @@ comprobar('el anónimo no puede llenar el registro de errores',
           valor("select count(*) from public.errores;") == antes)
 
 # Y lo que sí debe seguir funcionando para el personal
-ok, out = como(LIBRERO, "select nombre from public.estado_lector('12345678-5');")
-comprobar('un librero SÍ puede consultar un lector', ok and out, texto(out)[-150:])
-ok, out = como(LIBRERO, "select titulo from public.consultar_libro('9789561234567');")
-comprobar('un librero SÍ puede consultar un libro', ok and out, texto(out)[-150:])
+if TIMEZONE_OK:
+    ok, out = como(LIBRERO, "select nombre from public.estado_lector('12345678-5');")
+    comprobar('un librero SÍ puede consultar un lector', ok and out, texto(out)[-150:])
+    ok, out = como(LIBRERO, "select titulo from public.consultar_libro('9789561234567');")
+    comprobar('un librero SÍ puede consultar un libro', ok and out, texto(out)[-150:])
+else:
+    omitir('un librero SÍ puede consultar un lector')
+    omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
 comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 34,
           texto(out)[-150:])
 
 
 print('\n' + '─' * 62)
-print(f'{pasadas} comprobaciones correctas, {fallidas} con fallo')
+resumen = f'{pasadas} comprobaciones correctas, {fallidas} con fallo'
+if omitidas:
+    resumen += f', {omitidas} omitidas (America/Santiago no disponible)'
+print(resumen)
 sys.exit(1 if fallidas else 0)

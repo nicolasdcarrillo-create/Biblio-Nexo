@@ -109,6 +109,67 @@ pip install pgserver "psycopg[binary]" && python3 pruebas/probar_librero.py
 Incluye un bloque nuevo que comprueba que `verificar_definiciones()` detecta las
 tres formas de deriva y que reejecutar la 010 las repara.
 
+### En Windows: preparar pgserver antes de la primera corrida
+
+`pgserver` no trae `share/postgresql/timezone` en su paquete para Windows (el
+porqué está en la sección siguiente). Antes de la primera corrida en Windows,
+prepáralo:
+
+    python pruebas/preparar_timezone_pgserver.py
+
+Busca una instalación de PostgreSQL para Windows ya en el equipo y le copia la
+carpeta de zonas horarias a `pgserver`. Si no encuentra ninguna, dice cómo
+instalar una (`winget install PostgreSQL.PostgreSQL.17`) o cómo indicarle la
+ruta con `--donante`. Es idempotente: correrlo de nuevo cuando ya está listo no
+hace nada.
+
+**Esa carpeta vive dentro de `site-packages`, no en este repositorio.**
+Cualquier reinstalación de `pgserver` —`pip install --upgrade`, rehacer el
+entorno virtual, un equipo nuevo— la borra sin avisar. Si `probar_librero.py`
+vuelve a mostrar comprobaciones OMITIDAS después de haber corrido las 90, corre
+este script de nuevo antes de sospechar de otra cosa.
+
+### Limitación conocida: timezone en el entorno local de Windows
+
+`pgserver`, el PostgreSQL embebido que usa `probar_librero.py` para no depender
+de un servidor externo, no trae la carpeta `share/postgresql/timezone` en su
+paquete para Windows. Sin ella, Postgres no resuelve ninguna zona horaria real
+(cae a GMT), y `prestar_libro`, `renovar_prestamo`, `devolver_prestamo`,
+`estado_lector` y `consultar_libro` la necesitan (todas llaman a
+`hoy_chile()`, que hace `timezone('America/Santiago', now())`).
+
+`probar_librero.py` lo detecta con una única comprobación al arrancar
+(`select timezone('America/Santiago', now())`). Si falla exactamente por esa
+causa, los 12 casos que dependen de esas cinco funciones se marcan OMITIDO,
+no FALLO, con aviso explícito. Si la comprobación falla por cualquier otra
+causa —conexión caída, esquema a medio aplicar— la suite se detiene con error
+en vez de omitir: un entorno roto no es lo mismo que un entorno sin tzdata, y
+tratarlo igual escondería un problema real. Si la comprobación pasa, las cinco
+funciones corren igual que el resto de la suite, y cualquier fallo suyo cuenta
+como FALLO real, sin excepción.
+
+Importa especialmente porque son las mismas funciones donde ya ocurrió el
+colapso silencioso del rol librero (ver `CLAUDE.md` y `MIGRACIONES.md`): sin
+esta distinción, la única suite que las prueba contra PostgreSQL real —esta—
+quedaría ciega justo ahí, pero solo en este paquete. En el trabajo
+`base-de-datos` de `.github/workflows/pruebas.yml` este mismo script corre
+contra la imagen oficial `postgres:16` (con tzdata completo de fábrica, a
+diferencia de `pgserver`), así que ahí la comprobación pasa y las cinco
+funciones se prueban de verdad, autenticadas: cada llamada pasa por
+`como(LIBRERO, …)` o `como(ADMIN, …)` —el helper que hace
+`set role authenticated` más `set_config('request.jwt.claim.sub', …)`, la
+misma simulación de sesión que usa el resto del script. No hay, en el código,
+un camino sin esa guarda para estas cinco funciones.
+
+Mientras no se corra `preparar_timezone_pgserver.py` (sección anterior), un
+resultado de `probar_librero.py` en Windows de 78 comprobaciones correctas,
+0 con fallo y 12 omitidas es el esperado, no una regresión.
+
+Al inspeccionar el paquete directamente (no en la salida de la suite), la
+carencia se manifiesta como `could not open directory
+".../pgserver/pginstall/share/postgresql/timezone"`. Es la pista útil para
+quien tenga que depurar el paquete a mano.
+
 ## Integración continua
 
 `.github/workflows/pruebas.yml` corre cuatro trabajos en cada envío:

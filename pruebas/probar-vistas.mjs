@@ -10,8 +10,9 @@
 
 import { JSDOM } from 'jsdom';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // Raíz real del repo (carpeta que contiene pruebas/), derivada de la ubicación
 // de este archivo. Antes era path.resolve('biblionexo'), que dependía de
@@ -215,22 +216,35 @@ console.error = (...a) => { advertencias.push(a.join(' ')); };
 // ---------------------------------------------------------------------------
 // Carga de módulos con Supabase interceptado
 // ---------------------------------------------------------------------------
-const tmp = path.resolve('.tmp-pruebas');
-fs.rmSync(tmp, { recursive: true, force: true });
+// Fuera de RAIZ y con sufijo único (os.tmpdir() + mkdtempSync): antes era
+// path.resolve('.tmp-pruebas'), que caía DENTRO de RAIZ al invocar desde la
+// raíz del repo, y fs.cpSync fallaba al copiar el árbol dentro de sí mismo.
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'biblionexo-pruebas-'));
+let pasadas = 0, fallidas = 0;
+
+// A partir de aquí todo va en un try/finally: si cualquier prueba revienta
+// fuera del wrapper prueba() de más abajo (un error al montar una vista, un
+// import roto), el directorio temporal igual se borra. No se reindentó el
+// cuerpo completo para no inflar el diff con solo cambios de espacios.
+try {
+
 fs.cpSync(RAIZ, tmp, { recursive: true });
 // Se reemplaza el cliente real por el simulado
 fs.writeFileSync(path.join(tmp, 'js/supabase-init.js'),
   `export const supabase = globalThis.__supabaseFalso;`);
 globalThis.__supabaseFalso = supabaseFalso;
 
-const { db } = await import(path.join(tmp, 'js/modules/db.js'));
-const uiModule = await import(path.join(tmp, 'js/modules/ui.js'));
+// import() dinámico exige file:// para rutas absolutas en Windows: una ruta
+// cruda como "C:\...\db.js" se interpreta como URL con esquema "c:" y falla.
+const importDesdeTmp = ruta => import(pathToFileURL(path.join(tmp, ruta)));
+
+const { db } = await importDesdeTmp('js/modules/db.js');
+const uiModule = await importDesdeTmp('js/modules/ui.js');
 const ui = uiModule.default;
 
 // ---------------------------------------------------------------------------
 // Pruebas
 // ---------------------------------------------------------------------------
-let pasadas = 0, fallidas = 0;
 
 async function prueba(nombre, fn) {
   try {
@@ -708,7 +722,7 @@ await prueba('la vista advierte cuando una tabla no tiene RLS', async () => {
 });
 
 console.log('\n=== Zona horaria: pantalla y servidor deben coincidir ===');
-const { hoyEnChile } = await import(path.join(tmp, 'js/modules/db.js'));
+const { hoyEnChile } = await importDesdeTmp('js/modules/db.js');
 
 await prueba('_diasRestantes usa la fecha de Chile, no la del dispositivo', () => {
   const hoyCL = hoyEnChile();
@@ -879,8 +893,11 @@ await prueba('cambiar de filtro vuelve a la primera página', async () => {
 });
 
 // ---------------------------------------------------------------------------
-fs.rmSync(tmp, { recursive: true, force: true });
-console.error = errOriginal;
+
+} finally {
+  fs.rmSync(tmp, { recursive: true, force: true });
+  console.error = errOriginal;
+}
 
 console.log('\n' + '='.repeat(52));
 console.log(`  Pasadas: ${pasadas}    Fallidas: ${fallidas}`);

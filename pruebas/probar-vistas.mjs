@@ -11,8 +11,14 @@
 import { JSDOM } from 'jsdom';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const RAIZ = path.resolve('biblionexo');
+// Raíz real del repo (carpeta que contiene pruebas/), derivada de la ubicación
+// de este archivo. Antes era path.resolve('biblionexo'), que dependía de
+// ejecutar el script desde un directorio padre con una subcarpeta literal
+// "biblionexo" — no existía en este checkout y la suite fallaba con ENOENT
+// sin importar desde dónde se invocara.
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---------------------------------------------------------------------------
 // Datos de prueba

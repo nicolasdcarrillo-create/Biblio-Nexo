@@ -19,6 +19,15 @@ import re
 import sys
 from pathlib import Path
 
+# En Windows, la consola suele usar cp1252, que no tiene los caracteres de
+# dibujo de línea (─) que usa este script para separar secciones. Sin esto,
+# el script podía terminar TODAS las comprobaciones en orden y aun así morir
+# con UnicodeEncodeError al imprimir el cierre, devolviendo código 1 como si
+# algo hubiera fallado. reconfigure() no existe en Python < 3.7; la guarda
+# evita romper ahí.
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 RAIZ = Path(__file__).resolve().parent.parent
 MIGRACIONES = RAIZ / 'supabase' / 'migrations'
 CONSOLIDACION = '010_consolidacion.sql'

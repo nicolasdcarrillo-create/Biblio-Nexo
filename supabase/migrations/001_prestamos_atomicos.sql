@@ -1,3 +1,7 @@
+-- ADVERTENCIA: Este archivo es histórico y puede contener definiciones de funciones que han sido consolidadas.
+-- NO ejecutar este archivo directamente en staging o producción para corregir funciones críticas.
+-- Las definiciones autoritativas están en supabase/migrations/010_consolidacion.sql y se reaplican con 011_reaplicar_consolidacion.sql.
+-- Si se necesita corregir funciones en la base de datos, usar 011_reaplicar_consolidacion.sql (idempotente) tras respaldar la BD.
 -- ============================================================================
 -- BiblioNexo — Funciones RPC atómicas para préstamos y devoluciones
 -- ============================================================================

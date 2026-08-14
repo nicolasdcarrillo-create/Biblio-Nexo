@@ -22,7 +22,7 @@
 -- Ajusta los tipos de columna (bigint) si tus IDs son uuid.
 -- ============================================================================
 
-create or replace function public.prestar_libro(
+-- ARCHIVADO: create or replace function public.prestar_libro(
   p_libro_id bigint,
   p_lector_rut text
 )
@@ -69,7 +69,7 @@ grant execute on function public.prestar_libro(bigint, text) to authenticated;
 
 -- ----------------------------------------------------------------------------
 
-create or replace function public.devolver_prestamo(
+-- ARCHIVADO: create or replace function public.devolver_prestamo(
   p_prestamo_id bigint
 )
 returns void

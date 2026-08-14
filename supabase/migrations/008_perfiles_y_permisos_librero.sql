@@ -253,7 +253,7 @@ grant execute on function public.listar_personal() to authenticated;
 -- a escritura libre; el librero sigue sin poder cambiar un título ni borrar
 -- una obra, porque esas rutas pasan por las políticas RLS que quedan intactas.
 
-create or replace function public.prestar_libro(p_libro_id bigint, p_lector_rut text)
+-- ARCHIVADO: create or replace function public.prestar_libro(p_libro_id bigint, p_lector_rut text)
 returns table (prestamo_id bigint, fecha_devolucion_esperada date)
 language plpgsql
 security definer
@@ -304,7 +304,7 @@ $$;
 grant execute on function public.prestar_libro(bigint, text) to authenticated;
 
 
-create or replace function public.devolver_prestamo(p_prestamo_id bigint)
+-- ARCHIVADO: create or replace function public.devolver_prestamo(p_prestamo_id bigint)
 returns void
 language plpgsql
 security definer
@@ -348,7 +348,7 @@ $$;
 grant execute on function public.devolver_prestamo(bigint) to authenticated;
 
 
-create or replace function public.renovar_prestamo(p_prestamo_id bigint)
+-- ARCHIVADO: create or replace function public.renovar_prestamo(p_prestamo_id bigint)
 returns table (nueva_fecha date, renovaciones_usadas int)
 language plpgsql
 security definer
@@ -396,7 +396,7 @@ grant execute on function public.renovar_prestamo(bigint) to authenticated;
 
 -- ajustar_copias ya validaba es_admin() adentro, pero corría como invocador,
 -- así que el UPDATE lo bloqueaba la misma política que ya había comprobado.
-create or replace function public.ajustar_copias(p_libro_id bigint, p_copias_totales int)
+-- ARCHIVADO: create or replace function public.ajustar_copias(p_libro_id bigint, p_copias_totales int)
 returns table (copias_totales int, stock int)
 language plpgsql
 security definer
@@ -435,7 +435,7 @@ $$;
 grant execute on function public.ajustar_copias(bigint, int) to authenticated;
 
 
-create or replace function public.corregir_inventario(p_libro_id bigint)
+-- ARCHIVADO: create or replace function public.corregir_inventario(p_libro_id bigint)
 returns table (copias_totales int, stock int)
 language plpgsql
 security definer
@@ -595,7 +595,7 @@ create policy "usuarios admin gestiona" on public.usuarios
 --
 -- Es lo que había que revisar a mano entrando con una cuenta de librero real.
 
-create or replace function public.verificar_circulacion()
+-- ARCHIVADO: create or replace function public.verificar_circulacion()
 returns table (
   funcion text,
   es_definer boolean,

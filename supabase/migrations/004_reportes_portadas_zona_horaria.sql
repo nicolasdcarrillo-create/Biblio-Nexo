@@ -67,7 +67,7 @@ grant execute on function public.hoy_chile() to authenticated;
 -- 3) RPC DE PRÉSTAMO — ahora registra la fecha y usa hora local
 -- ----------------------------------------------------------------------------
 
-create or replace function public.prestar_libro(
+-- ARCHIVADO: create or replace function public.prestar_libro(
   p_libro_id bigint,
   p_lector_rut text
 )
@@ -130,7 +130,7 @@ grant execute on function public.prestar_libro(bigint, text) to authenticated;
 -- 4) RPC DE DEVOLUCIÓN — con hora local
 -- ----------------------------------------------------------------------------
 
-create or replace function public.devolver_prestamo(
+-- ARCHIVADO: create or replace function public.devolver_prestamo(
   p_prestamo_id bigint
 )
 returns void

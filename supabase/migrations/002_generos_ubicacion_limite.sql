@@ -17,7 +17,7 @@ alter table public.libros add column if not exists ubicacion text;
 --    activos por lector. El chequeo queda dentro de la misma transacción
 --    con bloqueo de fila, así que sigue siendo imposible saltárselo con
 --    solicitudes simultáneas.
-create or replace function public.prestar_libro(
+-- ARCHIVADO: create or replace function public.prestar_libro(
   p_libro_id bigint,
   p_lector_rut text
 )

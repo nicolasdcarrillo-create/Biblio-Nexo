@@ -29,7 +29,7 @@
 -- El principio es que la bitácora nunca debe impedir la operación real;
 -- si no se puede registrar, se deja una advertencia y la operación continúa.
 
-create or replace function public.registrar_auditoria()
+-- ARCHIVADO: create or replace function public.registrar_auditoria()
 returns trigger
 language plpgsql
 security definer
@@ -100,7 +100,7 @@ alter table public.libros alter column copias_totales set not null;
  * Se usa al editar: recibe cuántos ejemplares hay en total y deduce cuántos
  * están libres, en vez de dejar que el usuario escriba un número incoherente.
  */
-create or replace function public.ajustar_copias(
+-- ARCHIVADO: create or replace function public.ajustar_copias(
   p_libro_id bigint,
   p_copias_totales int
 )
@@ -155,7 +155,7 @@ alter table public.lectores add column if not exists bloqueado_en timestamptz;
  * Si el RUT no existe, devuelve una fila con existe = false, de modo que la
  * interfaz pueda ofrecer registrarlo como lector nuevo.
  */
-create or replace function public.estado_lector(p_rut text)
+-- ARCHIVADO: create or replace function public.estado_lector(p_rut text)
 returns table (
   existe boolean,
   lector_id bigint,
@@ -409,7 +409,7 @@ grant execute on function public.revisar_inventario() to authenticated;
  * Corrige el inventario de un libro recalculando las copias disponibles
  * a partir del total de ejemplares y los préstamos realmente activos.
  */
-create or replace function public.corregir_inventario(p_libro_id bigint)
+-- ARCHIVADO: create or replace function public.corregir_inventario(p_libro_id bigint)
 returns table (copias_totales int, stock int)
 language plpgsql
 security definer

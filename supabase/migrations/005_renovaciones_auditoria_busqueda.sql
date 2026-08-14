@@ -17,7 +17,7 @@
 
 alter table public.prestamos add column if not exists renovaciones int not null default 0;
 
-create or replace function public.renovar_prestamo(
+-- ARCHIVADO: create or replace function public.renovar_prestamo(
   p_prestamo_id bigint
 )
 returns table (
@@ -104,7 +104,7 @@ create index if not exists auditoria_tabla_idx on public.auditoria (tabla);
 -- se revierte y deja de poderse crear, editar o eliminar cualquier libro,
 -- lector o préstamo. La bitácora nunca debe impedir la operación real; si no se
 -- puede registrar, se deja una advertencia y la operación continúa.
-create or replace function public.registrar_auditoria()
+-- ARCHIVADO: create or replace function public.registrar_auditoria()
 returns trigger
 language plpgsql
 security definer

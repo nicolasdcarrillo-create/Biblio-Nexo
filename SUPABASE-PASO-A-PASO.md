@@ -221,22 +221,14 @@ teléfono reales: aparecen al final de cada aviso que se envía a los lectores.
 ## Paso 6 · Publicar con HTTPS
 
 La cámara del Mesón **no funciona sin certificado**: los navegadores solo dan
-acceso a la cámara en sitios con HTTPS. Netlify, Vercel y GitHub Pages lo dan
-gratis.
+acceso a la cámara en sitios con HTTPS. Vercel lo da gratis.
 
 Sube la carpeta completa, incluida `vendor/`.
 
 ### Las cabeceras de seguridad ya vienen listas
 
-El proyecto trae los archivos de configuración de cada opción. Se copian con el
-resto y funcionan solos:
-
-| Archivo | Para |
-|---|---|
-| `_headers` | Netlify |
-| `vercel.json` | Vercel |
-| `.htaccess` | Apache (servidor propio de la Municipalidad) |
-| `nginx.conf.ejemplo` | Nginx — hay que pegarlo en el bloque `server { }` |
+El proyecto trae `vercel.json` con la configuración lista. Se copia con el
+resto y funciona solo.
 
 ### Por qué hacen falta si la CSP ya está en el `<meta>`
 
@@ -262,7 +254,7 @@ No permite definir cabeceras. Si publicas ahí, `js/arranque.js` trae un respald
 en JavaScript que detecta si la página quedó dentro de un marco ajeno y se niega
 a mostrar contenido. Es menos sólido que la cabecera — un marco con el atributo
 `sandbox` puede impedir la salida — así que si tienes la opción, prefiere
-Netlify o Vercel.
+Vercel.
 
 ### Comprobar que quedaron activas
 

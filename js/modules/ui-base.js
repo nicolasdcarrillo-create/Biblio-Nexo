@@ -2152,7 +2152,7 @@ class UIManager {
         <p class="text-xs leading-relaxed">
           Los navegadores solo permiten usar la cámara en sitios con HTTPS. Esta página se abrió con
           <span class="font-mono">${escapeHtml(window.location.protocol)}//</span>.
-          Publica el sistema en un servidor con certificado (Netlify, Vercel y GitHub Pages lo dan sin costo)
+          Publica el sistema en un servidor con certificado (Vercel lo da sin costo)
           o ábrelo desde <span class="font-mono">localhost</span> mientras desarrollas.
           Mientras tanto puedes escribir el ISBN a mano.
         </p>

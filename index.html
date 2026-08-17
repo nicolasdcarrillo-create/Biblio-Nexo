@@ -39,18 +39,9 @@
       impresión de una protección que no existe — y además el navegador lo
       reclama en la consola.
 
-      La protección contra clickjacking se envía por cabecera, en los archivos
-      de configuración del servidor que van en la raíz del proyecto:
-
-        _headers      → Netlify
-        vercel.json   → Vercel
-        .htaccess     → Apache
-        nginx.conf.ejemplo → Nginx
-
-      GitHub Pages no permite definir cabeceras. Para ese caso hay un respaldo
-      en JavaScript dentro de js/arranque.js, que detecta si la página quedó
-      dentro de un marco ajeno. Es menos sólido que la cabecera, pero es lo
-      único disponible ahí.
+      La protección contra clickjacking se envía por cabecera, en
+      vercel.json, que va en la raíz del proyecto y Vercel lee
+      automáticamente al desplegar.
     -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';

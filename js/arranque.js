@@ -24,11 +24,11 @@
   // Respaldo contra clickjacking
   // ------------------------------------------------------------------------
   // La defensa correcta es la cabecera HTTP `frame-ancestors 'none'`, que va en
-  // los archivos _headers, vercel.json, .htaccess o nginx.conf.ejemplo. Esa
-  // directiva NO se puede enviar por <meta>: el navegador la ignora.
+  // `vercel.json`. Esa directiva NO se puede enviar por <meta>: el navegador
+  // la ignora.
   //
-  // Pero GitHub Pages no permite definir cabeceras. Si el sistema se publica
-  // ahí, esto es lo único disponible.
+  // Esto queda como respaldo adicional en JavaScript, por si algo impide que
+  // la cabecera llegue.
   //
   // El ataque que evita: alguien monta el sistema dentro de un marco invisible
   // en otra página y superpone botones falsos. La persona del mesón cree estar

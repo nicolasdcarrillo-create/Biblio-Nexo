@@ -116,8 +116,7 @@ sobre un archivo propio no aporta nada.
 ### 4.4 No pongas `frame-ancestors` en el `<meta>` de la CSP
 
 El navegador la ignora ahí y avisa en consola. Va por cabecera HTTP, en
-`vercel.json`, `_headers`, `.htaccess` y `nginx.conf.ejemplo`. Lo mismo vale para
-`sandbox`, `report-uri` y `report-to`.
+`vercel.json`. Lo mismo vale para `sandbox`, `report-uri` y `report-to`.
 
 ---
 
@@ -167,7 +166,7 @@ Verificado el 27 de julio de 2026. Confírmalo tú mismo antes de asumirlo.
 | Préstamo/devolución atómicos con `FOR UPDATE` y advisory locks | Hecho |
 | Escapado de HTML en `ui.js` | Auditado: todo dato de BD pasa por `escapeHtml` |
 | Rol en el servidor | Tabla `usuarios` + `es_admin()` / `es_personal()` en RLS |
-| Cabeceras de seguridad | `vercel.json`, `_headers`, `.htaccess`, `nginx.conf.ejemplo` |
+| Cabeceras de seguridad | `vercel.json` |
 | Auditoría de solo inserción | Tabla `auditoria` + disparadores en 3 tablas |
 | Registro de errores | Migración 009 + panel de Diagnóstico |
 | Perfil editable del personal | Vista "Mi perfil" + cambio de contraseña con reautenticación |

@@ -247,25 +247,14 @@ for (const d of soloCabecera) {
     `${d} está en el <meta> y el navegador lo ignora`);
 }
 
-console.log('\n7d. La protección por cabecera existe para cada forma de publicar');
+console.log('\n7d. La protección por cabecera existe para Vercel');
 const fs = (await import('node:fs'));
-const archivosCabecera = {
-  '_headers': 'Netlify',
-  'vercel.json': 'Vercel',
-  '.htaccess': 'Apache',
-  'nginx.conf.ejemplo': 'Nginx'
-};
-for (const [archivo, host] of Object.entries(archivosCabecera)) {
-  const existe = fs.existsSync(archivo);
-  comprobar(`existe la configuración para ${host} (${archivo})`, existe);
-  if (existe) {
-    const contenido = fs.readFileSync(archivo, 'utf8');
-    comprobar(`  ...y envía frame-ancestors`, contenido.includes("frame-ancestors 'none'"));
-  }
-}
-// GitHub Pages no permite cabeceras: debe existir el respaldo en JavaScript
+comprobar('existe la configuración para Vercel (vercel.json)', fs.existsSync('vercel.json'));
+comprobar('  ...y envía frame-ancestors',
+  fs.readFileSync('vercel.json', 'utf8').includes("frame-ancestors 'none'"));
+// Respaldo en JavaScript por si algún despliegue queda sin cabeceras
 const arranque = fs.readFileSync('js/arranque.js', 'utf8');
-comprobar('hay respaldo en JavaScript para GitHub Pages (sin cabeceras)',
+comprobar('hay respaldo en JavaScript por si faltan las cabeceras',
   /window\.top\s*!==\s*window\.self/.test(arranque));
 
 console.log('\n8. Regresión: administrador sin fila de rol en la base de datos');

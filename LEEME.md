@@ -67,16 +67,15 @@ En Supabase → **Authentication**:
 
 ## 3. Publicar con HTTPS
 
-Las cabeceras de seguridad ya vienen listas: `_headers` (Netlify),
-`vercel.json` (Vercel), `.htaccess` (Apache), `nginx.conf.ejemplo` (Nginx).
-Se copian con el resto de la carpeta. Hacen falta porque `frame-ancestors`
-—la que impide el clickjacking— el navegador la ignora si llega en un `<meta>`.
+Las cabeceras de seguridad ya vienen listas en `vercel.json`. Se copian con
+el resto de la carpeta. Hacen falta porque `frame-ancestors` —la que impide
+el clickjacking— el navegador la ignora si llega en un `<meta>`.
 
 
 **Obligatorio para el lector de códigos.** Los navegadores solo permiten usar
-la cámara en sitios con certificado. Netlify, Vercel y GitHub Pages lo dan sin
-costo. Si abres el sistema por HTTP, el mesón te avisa en pantalla y puedes
-seguir escribiendo los ISBN a mano.
+la cámara en sitios con certificado. Vercel lo da sin costo. Si abres el
+sistema por HTTP, el mesón te avisa en pantalla y puedes seguir escribiendo
+los ISBN a mano.
 
 ## 4. Verificar las políticas RLS
 

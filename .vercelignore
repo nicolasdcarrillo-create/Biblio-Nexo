@@ -23,12 +23,6 @@ pruebas/
 # Integración continua
 .github/
 
-# Configuración de otros servidores. .htaccess servido como texto plano
-# muestra la configuración de seguridad del servidor de la Municipalidad.
-.htaccess
-_headers
-nginx.conf.ejemplo
-
 # Documentación interna
 MIGRACIONES.md
 CUMPLIMIENTO-LEGAL.md

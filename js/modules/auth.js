@@ -1,8 +1,16 @@
 import { supabase } from '../supabase-init.js';
 import { CONFIG } from '../config.js';
+import { conTiempoLimite } from './utilidades.js';
 
 export async function login(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Con tiempo límite igual que el resto de las llamadas a Supabase: sin
+    // esto, un cuelgue de la librería (ver supabase-init.js) dejaba el botón
+    // de ingresar esperando para siempre, sin ningún aviso.
+    const { data, error } = await conTiempoLimite(
+        supabase.auth.signInWithPassword({ email, password }),
+        15000,
+        'El inicio de sesión tardó demasiado en responder. Intente nuevamente; si el problema persiste, recargue la página.'
+    );
     if (error) throw new Error('Credenciales inválidas. Acceso denegado.');
     return data;
 }

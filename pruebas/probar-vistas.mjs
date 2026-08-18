@@ -773,7 +773,10 @@ await prueba('todo campo de formulario tiene etiqueta accesible', async () => {
 await prueba('los avisos se anuncian al lector de pantalla', () => {
   // Se revisa el código fuente de la aplicación, no el marcado del banco de
   // pruebas: así la verificación no depende de cómo montamos el entorno.
-  const fuente = fs.readFileSync(path.join(tmp, 'js/modules/ui.js'), 'utf8');
+  // El contenedor vive en ui-base.js (constructor y navegación transversal),
+  // no en ui.js: ese quedó reducido a ensamblar ui-base.js + js/vistas/*.js
+  // cuando UIManager se repartió en varios archivos.
+  const fuente = fs.readFileSync(path.join(tmp, 'js/modules/ui-base.js'), 'utf8');
   const contenedores = fuente.match(/<div id="toast-container"[^>]*>/g) || [];
   assert(contenedores.length > 0, 'la aplicación no crea ningún contenedor de avisos');
   contenedores.forEach((c, i) => {

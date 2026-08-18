@@ -844,6 +844,79 @@ end;
 $$;
 grant execute on function public.listar_personal() to authenticated;
 
+-- ── eliminar_personal ── (nueva)
+--
+-- Elimina por completo la cuenta de otra persona del personal: primero su
+-- fila en `usuarios` y después la cuenta de acceso en `auth.users`. Se borra
+-- en ese orden porque `usuarios.id` tiene una llave foránea hacia
+-- `auth.users(id)` sin `on delete cascade` (se agregó a mano en producción,
+-- nunca quedó en una migración): borrar primero de `auth.users` deja
+-- «violates foreign key constraint "usuarios_id_fkey"».
+--
+-- No borra el historial: los movimientos que esa persona ya generó en
+-- `auditoria` guardan su correo como texto (`usuario_email`), no una
+-- referencia a esta fila, así que sobreviven a la eliminación. Esta misma
+-- acción también queda registrada ahí, a mano, porque `usuarios` no tiene
+-- disparador de auditoría (solo lo tienen `libros`, `lectores` y `prestamos`).
+drop function if exists public.eliminar_personal(uuid);
+create or replace function public.eliminar_personal(
+  p_usuario_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_email       text;
+  v_rol         text;
+  v_admins_rest int;
+begin
+  if not public.es_admin() then
+    raise exception 'Solo un administrador puede eliminar cuentas del personal.' using errcode = 'P0001';
+  end if;
+
+  if p_usuario_id = (select auth.uid()) then
+    raise exception 'No puedes eliminar tu propia cuenta.' using errcode = 'P0001';
+  end if;
+
+  select u.email, coalesce(p.rol, 'librero')
+    into v_email, v_rol
+    from auth.users u
+    left join public.usuarios p on p.id = u.id
+   where u.id = p_usuario_id;
+
+  if not found then
+    raise exception 'Esa cuenta no existe.' using errcode = 'P0001';
+  end if;
+
+  -- Solo importa si la persona eliminada es administradora: nunca debe
+  -- quedar la biblioteca sin ninguna cuenta capaz de gestionar al resto del
+  -- personal. Con un solo administrador, esto en la práctica coincide con el
+  -- rechazo de más arriba (nadie puede eliminarse a sí mismo), pero queda
+  -- como resguardo si en algún momento hay una sesión desactualizada.
+  if v_rol = 'admin' then
+    select count(*) into v_admins_rest
+      from public.usuarios
+     where rol = 'admin' and id <> p_usuario_id;
+    if v_admins_rest = 0 then
+      raise exception 'No puedes eliminar al único administrador que queda.' using errcode = 'P0001';
+    end if;
+  end if;
+
+  insert into public.auditoria (tabla, registro_id, accion, usuario_id, usuario_email, datos_antes)
+  values (
+    'usuarios', p_usuario_id::text, 'DELETE', (select auth.uid()),
+    (select email from auth.users where id = (select auth.uid())),
+    jsonb_build_object('email', v_email, 'rol', v_rol)
+  );
+
+  delete from public.usuarios where id = p_usuario_id;
+  delete from auth.users where id = p_usuario_id;
+end;
+$$;
+grant execute on function public.eliminar_personal(uuid) to authenticated;
+
 -- ── actualizar_contacto_lector ── (última versión: 008_perfiles_y_permisos_librero.sql)
 drop function if exists public.actualizar_contacto_lector(bigint, text, text, text);
 create or replace function public.actualizar_contacto_lector(
@@ -1454,6 +1527,7 @@ as $manifiesto$
     ('mi_perfil', true),
     ('actualizar_mi_perfil', true),
     ('listar_personal', true),
+    ('eliminar_personal', true),
     ('actualizar_contacto_lector', true),
     ('exportar_datos_lector', true),
     ('anonimizar_lector', true),

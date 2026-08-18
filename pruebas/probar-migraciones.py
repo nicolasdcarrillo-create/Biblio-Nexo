@@ -149,9 +149,14 @@ def correr(srv, sql):
     # El identificador del usuario simulado se fija en cada llamada porque
     # cada invocación de psql abre una sesión nueva y el ámbito de set_config
     # es la sesión.
+    # `do $$ ... $$` en vez de `select set_config(...)`: un bloque DO no
+    # devuelve resultset. Con `select`, psql imprime su propia tabla antes de
+    # la del SQL real, y eso corre el índice de línea (o el texto plano) que
+    # varias pruebas usan para leer el resultado — un valor como '2' termina
+    # coincidiendo por azar con algún dígito del uuid simulado.
     preludio = ""
     if UID_SIMULADO['valor']:
-        preludio = f"select set_config('pruebas.uid', '{UID_SIMULADO['valor']}', false);\n"
+        preludio = f"do $$ begin perform set_config('pruebas.uid', '{UID_SIMULADO['valor']}', false); end $$;\n"
     r = subprocess.run(
         [str(PSQL), srv.get_uri(), '-v', 'ON_ERROR_STOP=1', '-q', '-f', '-'],
         input=preludio + sql, capture_output=True, text=True
@@ -228,6 +233,30 @@ def main():
                 """)
             prueba("inserta libros y lectores", cargar)
 
+            # --- Sesiones simuladas para el resto de la corrida ---
+            # Las funciones de circulación (008/010) exigen es_personal(): sin
+            # una sesión activa, todas fallan con "Debes iniciar sesión", que es
+            # el comportamiento correcto de la aplicación, no un defecto. Se crea
+            # un librero de prueba y queda como sesión por defecto de aquí en
+            # adelante; el admin de la 003 (nicolasd.carrillo@gmail.com) ya
+            # existe y se usa solo puntualmente, donde una función exige
+            # es_admin() en vez de es_personal().
+            uid_librero = correr(
+                srv, "insert into auth.users (email) values ('librera-prueba@futrono.cl') returning id;"
+            ).split('\n')[2].strip()
+            correr(srv, f"""
+              insert into public.usuarios (id, email, rol)
+              values ('{uid_librero}', 'librera-prueba@futrono.cl', 'librero');
+            """)
+            uid_admin = correr(
+                srv, "select id from auth.users where email = 'nicolasd.carrillo@gmail.com';"
+            ).split('\n')[2].strip()
+
+            def como(uid):
+                UID_SIMULADO['valor'] = uid
+
+            como(uid_librero)
+
             # --- Las funciones RPC deben ejecutarse y devolver la forma correcta ---
             print("\n  Funciones de consulta:")
             prueba("hoy_chile() devuelve una fecha",
@@ -244,8 +273,14 @@ def main():
                    lambda: correr(srv, "select * from public.consultar_libro('9789561117');"))
             prueba("revisar_inventario()",
                    lambda: correr(srv, "select * from public.revisar_inventario();"))
-            prueba("verificar_rls()",
-                   lambda: correr(srv, "select * from public.verificar_rls();"))
+            def verificar_rls_como_admin():
+                # Exige es_admin(): la sesión de librero no alcanza aquí.
+                como(uid_admin)
+                try:
+                    correr(srv, "select * from public.verificar_rls();")
+                finally:
+                    como(uid_librero)
+            prueba("verificar_rls()", verificar_rls_como_admin)
             prueba("parametro_int() lee de la tabla",
                    lambda: correr(srv, "select public.parametro_int('max_prestamos_por_lector', 0);"))
 
@@ -309,8 +344,63 @@ def main():
                        "atrasado"))
 
             def copias_menores_que_prestadas():
-                debe_fallar("select * from public.ajustar_copias(2, 0);", "prestado")
+                # ajustar_copias() exige es_admin(): la sesión de librero no
+                # alcanza aquí tampoco.
+                como(uid_admin)
+                try:
+                    debe_fallar("select * from public.ajustar_copias(2, 0);", "prestado")
+                finally:
+                    como(uid_librero)
             prueba("no deja menos ejemplares que los prestados", copias_menores_que_prestadas)
+
+            # --- Personal: listar, asignar rol, eliminar ---
+            print("\n  Personal:")
+
+            def crear_cuenta_personal(correo):
+                uid = correr(
+                    srv, f"insert into auth.users (email) values ('{correo}') returning id;"
+                ).split('\n')[2].strip()
+                return uid
+
+            def listar_personal_como_admin():
+                como(uid_admin)
+                try:
+                    correr(srv, "select * from public.listar_personal();")
+                finally:
+                    como(uid_librero)
+            prueba("listar_personal() responde para un administrador", listar_personal_como_admin)
+
+            def eliminar_personal_rechaza_a_librero():
+                # es_admin() debe bloquear a quien no lo es, sin importar a quién
+                # intente eliminar.
+                debe_fallar(f"select public.eliminar_personal('{uid_librero}');", "administrador")
+            prueba("eliminar_personal() rechaza a quien no es administrador", eliminar_personal_rechaza_a_librero)
+
+            def eliminar_personal_rechaza_autoeliminacion():
+                como(uid_admin)
+                try:
+                    debe_fallar(f"select public.eliminar_personal('{uid_admin}');", "propia cuenta")
+                finally:
+                    como(uid_librero)
+            prueba("eliminar_personal() no deja que un administrador se elimine a sí mismo",
+                   eliminar_personal_rechaza_autoeliminacion)
+
+            def eliminar_personal_borra_cuenta():
+                uid_baja = crear_cuenta_personal('personal-de-baja@futrono.cl')
+                correr(srv, f"""
+                  insert into public.usuarios (id, email, rol)
+                  values ('{uid_baja}', 'personal-de-baja@futrono.cl', 'librero');
+                """)
+                como(uid_admin)
+                try:
+                    correr(srv, f"select public.eliminar_personal('{uid_baja}');")
+                finally:
+                    como(uid_librero)
+                r = correr(srv, f"select count(*) from auth.users where id = '{uid_baja}';")
+                assert '0' in r.split('\n')[2], f"la cuenta debió desaparecer de auth.users, se leyó: {r}"
+                r = correr(srv, f"select count(*) from public.usuarios where id = '{uid_baja}';")
+                assert '0' in r.split('\n')[2], f"la cuenta debió desaparecer de usuarios, se leyó: {r}"
+            prueba("eliminar_personal() borra el perfil y la cuenta de acceso", eliminar_personal_borra_cuenta)
 
             # --- Auditoría ---
             print("\n  Auditoría:")
@@ -337,11 +427,10 @@ def main():
 
             # --- Derechos del titular ---
             print("\n  Cumplimiento (Ley 21.719):")
-            # Se toma el uuid del administrador y se le asigna el rol, para que
-            # es_admin() lo reconozca en las funciones protegidas.
-            uid = correr(srv, "select id from auth.users limit 1;").split('\n')[2].strip()
-            UID_SIMULADO['valor'] = uid
-            correr(srv, f"insert into public.usuarios (id, email, rol) values ('{uid}', 'admin@futrono.cl', 'admin') on conflict (id) do update set rol='admin';")
+            # Se reutiliza el admin de la 003 (nicolasd.carrillo@gmail.com):
+            # ya tiene rol 'admin' en public.usuarios desde que se aplicó esa
+            # migración, así que es_admin() lo reconoce sin más.
+            como(uid_admin)
 
             prueba("exportar_datos_lector() entrega el historial",
                    lambda: correr(srv, "select public.exportar_datos_lector('12345678-5');"))

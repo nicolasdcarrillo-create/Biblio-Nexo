@@ -19,6 +19,9 @@ En Supabase → **SQL Editor**, ejecuta los archivos de `supabase/migrations/`
 | `008_perfiles_y_permisos_librero.sql` | **Corrige el rol librero**, políticas RLS versionadas y perfiles del personal |
 | `009_registro_de_errores.sql` | Bitácora técnica de fallos, en la propia base de datos |
 | `010_consolidacion.sql` | **Única definición viva de las 33 funciones**, con manifiesto verificable |
+| `011_marcas_de_sincronizacion.sql` | Columna `actualizado_en` y disparadores, para sincronizar sin conexión solo lo que cambió |
+| `012_permisos_auth_users.sql` | Permisos sobre `auth.users` que necesitan `mi_perfil()`, `listar_personal()` y otras |
+| `013_politicas_usuarios.sql` | Políticas RLS: autoprovisión de la propia fila en `usuarios`, solo admins cambian roles |
 
 > **Desde la 010, las funciones se modifican editando ese archivo, nunca agregando otro.**
 > Para el esquema (tablas, columnas, índices) sí se agrega uno nuevo: `011_...`.

@@ -248,6 +248,7 @@ export default {
               <th class="text-left px-4 py-3">Rol</th>
               <th class="text-left px-4 py-3">Último acceso</th>
               <th class="text-right px-4 py-3">Cambiar a</th>
+              <th class="text-right px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -270,6 +271,12 @@ export default {
                     ${u.rol === 'admin' ? 'Librero' : 'Administrador'}
                   </button>
                 </td>
+                <td class="px-4 py-3 text-right">
+                  <button class="delete-personal-btn text-rose-700 hover:text-rose-800 p-1.5" title="Eliminar cuenta"
+                    data-id="${u.usuario_id}" data-email="${u.email}">
+                    <i aria-hidden="true" class="fas fa-trash"></i>
+                  </button>
+                </td>
               </tr>`)}
           </tbody>
         </table>
@@ -289,6 +296,25 @@ export default {
           this.renderAdmin();
         } catch (err) {
           this.showToast(err.message || 'No se pudo cambiar el rol.', 'error');
+        }
+      });
+    });
+
+    panel.querySelectorAll('.delete-personal-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await this.showConfirm(
+          `¿Eliminar por completo la cuenta de ${btn.dataset.email}? Pierde acceso al sistema de inmediato y no puede deshacerse.`,
+          { title: 'Eliminar cuenta', confirmText: 'Eliminar' }
+        );
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          await db.eliminarPersonal(btn.dataset.id);
+          this.showToast('Cuenta eliminada.', 'success');
+          this.renderAdmin();
+        } catch (err) {
+          this.showToast(err.message || 'No se pudo eliminar la cuenta.', 'error');
+          btn.disabled = false;
         }
       });
     });

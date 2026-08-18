@@ -113,7 +113,7 @@ def main():
         'prestar_libro', 'devolver_prestamo', 'renovar_prestamo',
         'ajustar_copias', 'corregir_inventario', 'bloquear_lector',
         'actualizar_contacto_lector', 'actualizar_mi_perfil', 'asegurar_perfil',
-        'asignar_rol', 'anonimizar_lector', 'purgar_datos_antiguos',
+        'asignar_rol', 'eliminar_personal', 'anonimizar_lector', 'purgar_datos_antiguos',
         'registrar_error', 'marcar_error_visto', 'purgar_errores',
     }
     for nombre in sorted(DEBEN_SER_DEFINER):

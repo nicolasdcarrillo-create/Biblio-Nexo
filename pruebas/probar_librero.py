@@ -441,7 +441,7 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-comprobar('el manifiesto cubre 34 funciones', len(filas) == 34, f'cubre {len(filas)}')
+comprobar('el manifiesto cubre 35 funciones', len(filas) == 35, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -560,6 +560,7 @@ for desc, consulta in [
     ('no puede bloquear lectores',     "select public.bloquear_lector(1, true, 'x')"),
     ('no puede listar al personal',    "select * from public.listar_personal()"),
     ('no puede cambiar roles',         "select public.asignar_rol('00000000-0000-0000-0000-000000000000','admin')"),
+    ('no puede eliminar al personal',  "select public.eliminar_personal('00000000-0000-0000-0000-000000000000')"),
     ('no puede exportar datos',        "select * from public.exportar_datos_lector('12345678-5')"),
     ('no puede anonimizar un lector',  "select public.anonimizar_lector('12345678-5')"),
     ('no puede leer los errores',      "select * from public.listar_errores(5, false)"),
@@ -594,7 +595,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 34,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 35,
           texto(out)[-150:])
 
 

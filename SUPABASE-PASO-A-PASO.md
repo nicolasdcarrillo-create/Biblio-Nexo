@@ -43,6 +43,9 @@ contenido y ejecútalo. **Uno a la vez y en este orden:**
 | 8 | `008_perfiles_y_permisos_librero.sql` | **Corrige el rol librero**, políticas RLS y perfiles del personal |
 | 9 | `009_registro_de_errores.sql` | Bitácora técnica de fallos, en la propia base de datos |
 | 10 | `010_consolidacion.sql` | **Única definición viva de las 33 funciones** |
+| 11 | `011_marcas_de_sincronizacion.sql` | Columna `actualizado_en` y disparadores, para sincronizar sin conexión solo lo que cambió |
+| 12 | `012_permisos_auth_users.sql` | Permisos sobre `auth.users` que necesitan `mi_perfil()`, `listar_personal()` y otras |
+| 13 | `013_politicas_usuarios.sql` | Políticas RLS: autoprovisión de la propia fila en `usuarios`, solo admins cambian roles |
 
 > Desde la versión 10 las migraciones **no se copian y pegan**: se aplican con
 > `supabase db push`. Ver [MIGRACIONES.md](MIGRACIONES.md), que explica por qué el

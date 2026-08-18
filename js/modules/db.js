@@ -617,6 +617,12 @@ export const db = {
         if (error) throw new Error(error.message || 'No se pudo cambiar el rol.');
     },
 
+    /** Elimina por completo la cuenta de otra persona del personal (perfil + acceso). */
+    async eliminarPersonal(usuarioId) {
+        const { error } = await conTiempoLimite(supabase.rpc('eliminar_personal', { p_usuario_id: usuarioId }), ESPERA);
+        if (error) throw new Error(error.message || 'No se pudo eliminar la cuenta.');
+    },
+
     /** Lectores actualmente bloqueados a mano. */
     async obtenerBloqueados() {
         const { data, error } = await conTiempoLimite(supabase

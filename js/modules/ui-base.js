@@ -4,6 +4,8 @@ import Scanner from './scanner.js';
 import registroErrores from './errores.js';
 import { CONFIG } from '../config.js';
 import { escapeHtml, html } from './utilidades.js';
+import { buscarPorIsbnExterno } from './libros-externos.js';
+import { generarSvgQr } from './qr.js';
 
 // Instancias de Chart.js activas, indexadas por id de canvas. Se destruyen
 // antes de volver a dibujar para no acumular gráficos huérfanos en memoria.
@@ -162,11 +164,21 @@ class UIManager {
     return true;
   }
 
-  validateBookForm(isEdit = false) {
-    const isbn = document.getElementById(isEdit ? 'edit-book-isbn' : 'new-book-isbn')?.value.trim() || '';
-    const title = document.getElementById(isEdit ? 'edit-book-title' : 'new-book-title')?.value.trim() || '';
-    const author = document.getElementById(isEdit ? 'edit-book-author' : 'new-book-author')?.value.trim() || '';
-    const qtyStr = document.getElementById(isEdit ? 'edit-book-qty' : 'new-book-qty')?.value || '';
+  /**
+   * @param {boolean|string} modo  `true`/`'edit'` para el modal de edición
+   *   (ids `edit-book-*`), `false`/`'new'` para el formulario del Catálogo
+   *   (ids `new-book-*`), o cualquier otro texto para usarlo directo como
+   *   prefijo de otro formulario con la misma forma (por ejemplo, el alta
+   *   rápida desde el escáner usa `'scan-new-book'`).
+   */
+  validateBookForm(modo = false) {
+    const isEdit = modo === true || modo === 'edit';
+    const prefijo = isEdit ? 'edit-book' : (modo === false || modo === 'new') ? 'new-book' : modo;
+
+    const isbn = document.getElementById(`${prefijo}-isbn`)?.value.trim() || '';
+    const title = document.getElementById(`${prefijo}-title`)?.value.trim() || '';
+    const author = document.getElementById(`${prefijo}-author`)?.value.trim() || '';
+    const qtyStr = document.getElementById(`${prefijo}-qty`)?.value || '';
     const qty = parseInt(qtyStr, 10);
 
     if (!isbn && !isEdit) {
@@ -1315,8 +1327,23 @@ class UIManager {
     await this.updateUserInfo(user);
     this.renderNavMenu();
 
-    const defaultView = (CONFIG.VIEWS_BY_ROLE[this.currentUserRole] || CONFIG.VIEWS_BY_ROLE.librero)[0].id;
-    await this.switchView(defaultView);
+    await this.switchView(this._vistaInicial(this.currentUserRole));
+  }
+
+  /**
+   * Con qué vista abrir la primera vez.
+   *
+   * Normalmente es la primera de CONFIG.VIEWS_BY_ROLE. El QR de acceso
+   * remoto (ver showQrRemotoModal) codifica "?vista=scanner" en el enlace
+   * para abrir directo en el escáner en vez de aterrizar en el Dashboard y
+   * obligar a navegar con el celular. Se valida contra las vistas que ese
+   * rol puede ver de verdad: un id inventado, mal escrito, o de una vista
+   * sin permiso para ese rol, simplemente se ignora y cae a la de siempre.
+   */
+  _vistaInicial(rol) {
+    const vistasDelRol = CONFIG.VIEWS_BY_ROLE[rol] || CONFIG.VIEWS_BY_ROLE.librero;
+    const vistaPedida = new URLSearchParams(window.location.search).get('vista');
+    return vistasDelRol.some(v => v.id === vistaPedida) ? vistaPedida : vistasDelRol[0].id;
   }
 
   // Dibuja un gráfico de anillo con leyenda propia (número + porcentaje).
@@ -2160,7 +2187,13 @@ class UIManager {
 
     container.innerHTML = `
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-xl">
-        <h3 class="font-serif font-semibold text-lg text-stone-900 mb-4"><i aria-hidden="true" class="fas fa-qrcode text-amber-400 mr-2"></i>Escanear libro</h3>
+        <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+          <h3 class="font-serif font-semibold text-lg text-stone-900"><i aria-hidden="true" class="fas fa-qrcode text-amber-400 mr-2"></i>Escanear libro</h3>
+          <button id="qr-remoto-btn" type="button"
+            class="btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
+            <i aria-hidden="true" class="fas fa-mobile-screen-button mr-1"></i> Escanear desde el celular
+          </button>
+        </div>
         ${avisoHttps}
         <div class="flex gap-3 mb-4">
           <button id="start-scan-btn" ${contextoSeguro ? '' : 'disabled'}
@@ -2185,11 +2218,7 @@ class UIManager {
       try {
         const resultado = await db.consultarLibro(code);
         if (!resultado) {
-          resultEl.innerHTML = `
-            <div class="border border-stone-300 rounded-xl p-4 text-center">
-              <p class="text-sm text-stone-600">Ningún libro registrado con el código <span class="font-mono font-bold">${escapeHtml(code)}</span>.</p>
-              <p class="text-xs text-stone-500 mt-1">Puedes agregarlo desde la vista Catálogo.</p>
-            </div>`;
+          await this._formularioAltaRapida(resultEl, code);
           return;
         }
         resultEl.innerHTML = this._fichaCirculacion(resultado);
@@ -2199,6 +2228,8 @@ class UIManager {
       }
     };
     this._mostrarResultadoEscaneo = showResult;
+
+    document.getElementById('qr-remoto-btn').addEventListener('click', () => this.showQrRemotoModal());
 
     document.getElementById('start-scan-btn').addEventListener('click', async e => {
       const boton = e.currentTarget;
@@ -2229,6 +2260,130 @@ class UIManager {
     document.getElementById('manual-scan-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') buscarManual();
     });
+  }
+
+  /**
+   * Alta rápida desde el escáner: el código no está en el catálogo, así que
+   * se ofrece agregarlo ahí mismo en vez de mandar a la persona a la vista
+   * Catálogo a escribir de nuevo el ISBN que ya se acaba de leer.
+   *
+   * Título y autor se intentan completar solos con Open Library — es solo
+   * una ayuda para no escribirlos a mano: la persona los ve en pantalla y
+   * los puede corregir antes de guardar, así que un dato importado mal
+   * nunca llega al catálogo sin que alguien lo revise primero.
+   */
+  async _formularioAltaRapida(resultEl, code) {
+    const campo = (id, etiqueta, valor, extra = '') => `
+      <div>
+        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">${etiqueta}</label>
+        <input id="${id}" value="${escapeHtml(valor ?? '')}" ${extra}
+          class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+      </div>`;
+
+    resultEl.innerHTML = `
+      <div class="border border-stone-300 rounded-xl p-4">
+        <p class="text-sm text-stone-600 mb-1">
+          Ningún libro registrado con el código <span class="font-mono font-bold">${escapeHtml(code)}</span>.
+        </p>
+        <p class="text-xs text-stone-500 mb-3">Complete los datos y agréguelo al catálogo.</p>
+        <p id="scan-new-book-buscando" class="text-xs text-stone-500 mb-3">
+          <i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Buscando título y autor en Open Library…
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${campo('scan-new-book-isbn', 'ISBN', code, 'readonly')}
+          ${campo('scan-new-book-qty', 'Ejemplares', 1, 'type="number" min="1"')}
+          ${campo('scan-new-book-title', 'Título', '')}
+          ${campo('scan-new-book-author', 'Autor', '')}
+          ${campo('scan-new-book-genre', 'Género (opcional)', '')}
+          ${campo('scan-new-book-location', 'Ubicación (opcional)', '')}
+        </div>
+        <div class="flex justify-end gap-3 pt-3">
+          <button id="scan-new-book-btn" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">
+            <i aria-hidden="true" class="fas fa-plus mr-1"></i> Agregar al catálogo
+          </button>
+        </div>
+      </div>`;
+
+    document.getElementById('scan-new-book-btn').addEventListener('click', async e => {
+      if (!this.validateBookForm('scan-new-book')) return;
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        await db.agregarLibro({
+          isbn: document.getElementById('scan-new-book-isbn').value.trim(),
+          titulo: document.getElementById('scan-new-book-title').value.trim(),
+          autor: document.getElementById('scan-new-book-author').value.trim(),
+          genero: document.getElementById('scan-new-book-genre').value.trim(),
+          ubicacion: document.getElementById('scan-new-book-location').value.trim(),
+          stock: Number(document.getElementById('scan-new-book-qty').value || 1)
+        });
+        this.showToast('Libro agregado al catálogo.', 'success');
+        resultEl.innerHTML = '';
+      } catch (err) {
+        this.showToast(err.message || 'No se pudo agregar el libro.', 'error');
+        btn.disabled = false;
+      }
+    });
+
+    // Se completa DESPUÉS de pintar el formulario: la persona ya puede
+    // empezar a escribir mientras se espera la respuesta externa, y si
+    // Open Library no responde a tiempo, el formulario queda intacto para
+    // llenarlo a mano — nunca bloquea el alta.
+    const datos = await buscarPorIsbnExterno(code);
+    const avisoBuscando = document.getElementById('scan-new-book-buscando');
+    if (avisoBuscando) avisoBuscando.remove();
+    if (datos) {
+      const tituloInput = document.getElementById('scan-new-book-title');
+      const autorInput = document.getElementById('scan-new-book-author');
+      // No se pisa lo que la persona ya haya escrito mientras se esperaba.
+      if (tituloInput && !tituloInput.value.trim() && datos.titulo) tituloInput.value = datos.titulo;
+      if (autorInput && !autorInput.value.trim() && datos.autor) autorInput.value = datos.autor;
+    }
+  }
+
+  /**
+   * Código QR que lleva directo a la pantalla de escaneo, para abrir el
+   * sistema desde un celular sin tener que escribir la dirección a mano.
+   *
+   * No es una puerta de acceso nueva: el enlace no lleva ninguna clave ni
+   * sesión — solo la dirección del sistema, con qué pantalla mostrar
+   * primero. Quien lo abra igual tiene que iniciar sesión con su propia
+   * cuenta, con los mismos permisos de siempre. El QR ahorra escribir la
+   * URL a mano en el celular, nada más.
+   */
+  async showQrRemotoModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+    const url = `${window.location.origin}${window.location.pathname}?vista=scanner`;
+
+    overlay.innerHTML = `
+      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+        <h3 class="font-serif text-lg font-bold text-stone-900">Escanear desde el celular</h3>
+        <p class="text-xs text-stone-600">
+          Escanee este código con la cámara del celular. Se abrirá esta misma pantalla; ahí deberá iniciar
+          sesión con su propia cuenta del sistema — este código no da acceso por sí solo.
+        </p>
+        <div id="qr-remoto-imagen" class="flex items-center justify-center py-2 min-h-[180px]">
+          <i aria-hidden="true" class="fas fa-spinner fa-spin text-2xl text-patrimonio-lago"></i>
+          <span class="sr-only">Generando el código QR…</span>
+        </div>
+        <p class="text-[11px] font-mono text-stone-500 break-all">${escapeHtml(url)}</p>
+        <button data-action="cerrar" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-bold w-full">Cerrar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const cerrar = this._prepararModal(overlay);
+    overlay.querySelector('[data-action="cerrar"]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    try {
+      const svg = await generarSvgQr(url);
+      const contenedor = document.getElementById('qr-remoto-imagen');
+      if (contenedor) contenedor.innerHTML = svg;
+    } catch (e) {
+      const contenedor = document.getElementById('qr-remoto-imagen');
+      if (contenedor) contenedor.innerHTML = '<p class="text-xs text-rose-700">No se pudo generar el código QR. Puede copiar la dirección de más abajo.</p>';
+    }
   }
 
   /**

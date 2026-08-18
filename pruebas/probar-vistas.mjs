@@ -241,6 +241,9 @@ const importDesdeTmp = ruta => import(pathToFileURL(path.join(tmp, ruta)));
 const { db } = await importDesdeTmp('js/modules/db.js');
 const uiModule = await importDesdeTmp('js/modules/ui.js');
 const ui = uiModule.default;
+const { buscarPorIsbnExterno } = await importDesdeTmp('js/modules/libros-externos.js');
+const { generarSvgQr } = await importDesdeTmp('js/modules/qr.js');
+const { CONFIG } = await importDesdeTmp('js/config.js');
 
 // ---------------------------------------------------------------------------
 // Pruebas
@@ -796,6 +799,7 @@ const modalesAProbar = [
   ['showNotifyModal', () => ui.showNotifyModal(PRESTAMOS[0])],
   ['showNuevoLectorModal', () => ui.showNuevoLectorModal('16179263-2', null)],
   ['showBulkNotifyModal', () => ui.showBulkNotifyModal([PRESTAMOS[0]])],
+  ['showQrRemotoModal', () => ui.showQrRemotoModal()],
 ];
 
 for (const [nombre, abrir] of modalesAProbar) {
@@ -834,6 +838,91 @@ await prueba('los botones de solo icono tienen nombre accesible', () => {
   const html = ui._paginacionHtml(1, 100, 25, 'x');
   assert(html.includes('aria-label="Página anterior"'), 'falta nombre en el botón anterior');
   assert(html.includes('aria-label="Página siguiente"'), 'falta nombre en el botón siguiente');
+});
+
+console.log('\n=== Escáner remoto: alta rápida y QR de acceso ===');
+
+await prueba('buscarPorIsbnExterno() completa título y autor', async () => {
+  const fetchOriginal = global.fetch;
+  global.fetch = async (url) => {
+    assert(String(url).includes('openlibrary.org'), `no consultó Open Library: ${url}`);
+    return {
+      ok: true,
+      json: async () => ({
+        'ISBN:9780140449136': { title: 'La Odisea', authors: [{ name: 'Homero' }] }
+      })
+    };
+  };
+  try {
+    const datos = await buscarPorIsbnExterno('978-0-14-044913-6');
+    assert(datos?.titulo === 'La Odisea', `título no llegó: ${JSON.stringify(datos)}`);
+    assert(datos?.autor === 'Homero', `autor no llegó: ${JSON.stringify(datos)}`);
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+});
+
+await prueba('buscarPorIsbnExterno() no revienta si Open Library falla', async () => {
+  const fetchOriginal = global.fetch;
+  global.fetch = async () => { throw new Error('sin conexión'); };
+  try {
+    const datos = await buscarPorIsbnExterno('9780140449136');
+    assert(datos === null, 'debió devolver null en vez de lanzar el error');
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+});
+
+await prueba('buscarPorIsbnExterno() no revienta si el ISBN no aparece', async () => {
+  const fetchOriginal = global.fetch;
+  global.fetch = async () => ({ ok: true, json: async () => ({}) });
+  try {
+    const datos = await buscarPorIsbnExterno('0000000000');
+    assert(datos === null, 'debió devolver null cuando Open Library no tiene el ISBN');
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+});
+
+await prueba('generarSvgQr() produce un SVG usable', async () => {
+  const svg = await generarSvgQr('https://biblionexo.test/?vista=scanner');
+  assert(svg.startsWith('<svg'), `no parece un SVG: ${svg.slice(0, 40)}`);
+  assert(svg.includes('</svg>'), 'el SVG no está cerrado');
+});
+
+await prueba('_vistaInicial() respeta ?vista= cuando el rol puede verla', () => {
+  dom.reconfigure({ url: 'https://biblionexo.test/?vista=scanner' });
+  assert(ui._vistaInicial('librero') === 'scanner', 'no usó la vista pedida por la URL');
+});
+
+await prueba('_vistaInicial() ignora un valor inventado o sin permiso', () => {
+  dom.reconfigure({ url: 'https://biblionexo.test/?vista=admin' });
+  // 'admin' no está en las vistas de librero: debe caer a la primera de su rol
+  assert(ui._vistaInicial('librero') === CONFIG.VIEWS_BY_ROLE.librero[0].id,
+    'no cayó a la vista por defecto del rol');
+
+  dom.reconfigure({ url: 'https://biblionexo.test/?vista=lo-que-sea' });
+  assert(ui._vistaInicial('admin') === CONFIG.VIEWS_BY_ROLE.admin[0].id,
+    'un valor inventado no cayó a la vista por defecto');
+
+  dom.reconfigure({ url: 'https://biblionexo.test/' });
+});
+
+await prueba('el escáner ofrece alta rápida cuando el código no está en el catálogo', async () => {
+  // Se simula Open Library también aquí: sin esto, la prueba dependería de
+  // una red real, con el riesgo de quedar lenta o inestable en CI.
+  const fetchOriginal = global.fetch;
+  global.fetch = async () => ({ ok: true, json: async () => ({}) });
+  try {
+    ui.currentView = 'scanner';
+    await ui.renderScannerView();
+    await ui._mostrarResultadoEscaneo('9999999999999');
+    assert(document.getElementById('scan-new-book-title'), 'no se ofreció el formulario de alta rápida');
+    assert(document.getElementById('scan-new-book-isbn').value === '9999999999999',
+      'el ISBN escaneado no quedó precargado');
+  } finally {
+    global.fetch = fetchOriginal;
+  }
 });
 
 console.log('\n=== Parámetros: pantalla y base de datos sincronizadas ===');

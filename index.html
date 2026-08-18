@@ -8,9 +8,11 @@
     <!--
       Política de Seguridad de Contenido.
 
-      Todo se sirve desde este mismo origen ('self'), salvo dos excepciones
-      declaradas: la API de Supabase y las portadas de Open Library. Cualquier
-      otro origen queda bloqueado por el navegador.
+      Todo se sirve desde este mismo origen ('self'), salvo las excepciones
+      declaradas: la API de Supabase y Open Library (las portadas, y también
+      su API de datos, que se usa para completar título y autor por ISBN al
+      registrar un libro nuevo desde el escáner). Cualquier otro origen queda
+      bloqueado por el navegador.
 
       Esto cierra el riesgo de cadena de suministro: antes se cargaban Tailwind,
       Supabase, Chart.js y FontAwesome desde CDN de terceros, así que si alguno
@@ -49,7 +51,7 @@
       style-src 'self' 'unsafe-inline';
       font-src 'self';
       img-src 'self' data: https://covers.openlibrary.org;
-      connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org;
       base-uri 'self';
       form-action 'self';
       object-src 'none'">

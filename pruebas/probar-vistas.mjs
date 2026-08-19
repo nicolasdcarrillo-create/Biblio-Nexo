@@ -79,6 +79,14 @@ const PARAMETROS = [
 ];
 const TABLAS = { libros: LIBROS, lectores: LECTORES, prestamos: PRESTAMOS, usuarios: [], parametros: PARAMETROS };
 
+// Estado en memoria de los enlaces de escaneo remoto que el propio banco de
+// pruebas va creando, para que listar_enlaces_escaneo() y
+// revocar_enlace_escaneo() reflejen lo que crear_enlace_escaneo() generó (en
+// vez de datos fijos, como en el resto de los RPC simulados de más abajo).
+const ENLACES_ESCANEO = [];
+let PROXIMO_ID_ENLACE = 1;
+const masFechaHoras = n => { const d = new Date(hoy); d.setHours(d.getHours() + n); return d.toISOString(); };
+
 const supabaseFalso = {
   from: tabla => crearConsulta(TABLAS[tabla] || [], tabla),
   rpc: (nombre, args) => {
@@ -157,6 +165,29 @@ const supabaseFalso = {
     }
     if (nombre === 'renovar_prestamo') {
       return Promise.resolve({ data: [{ nueva_fecha: masDias(14), renovaciones_usadas: 1 }], error: null });
+    }
+    if (nombre === 'crear_enlace_escaneo') {
+      ENLACES_ESCANEO.push({
+        id: PROXIMO_ID_ENLACE, token_hash: `hash-${PROXIMO_ID_ENLACE}`,
+        creado_por_email: 'admin@biblionexo.cl', creado_en: '2026-08-19T10:00:00Z',
+        expira_en: masFechaHoras(args?.p_horas ?? 4), revocado: false, usos: 0, ultimo_uso_en: null
+      });
+      const nueva = ENLACES_ESCANEO[ENLACES_ESCANEO.length - 1];
+      const resultado = { id: nueva.id, token: `token-de-prueba-${nueva.id}`, expira_en: nueva.expira_en };
+      PROXIMO_ID_ENLACE++;
+      return Promise.resolve({ data: [resultado], error: null });
+    }
+    if (nombre === 'listar_enlaces_escaneo') {
+      return Promise.resolve({
+        data: ENLACES_ESCANEO.map(e => ({ ...e, vigente: !e.revocado && new Date(e.expira_en) > new Date() })),
+        error: null
+      });
+    }
+    if (nombre === 'revocar_enlace_escaneo') {
+      const fila = ENLACES_ESCANEO.find(e => String(e.id) === String(args?.p_id));
+      if (!fila) return Promise.resolve({ data: null, error: { message: 'Ese enlace no existe.' } });
+      fila.revocado = true;
+      return Promise.resolve({ data: null, error: null });
     }
     return Promise.resolve({ data: null, error: null });
   },
@@ -626,7 +657,7 @@ await prueba('el aviso por vencer advierte lo que pasará', () => {
 });
 
 console.log('\n=== Herramientas de administración ===');
-for (const tab of ['inventario', 'bloqueados', 'personal', 'auditoria']) {
+for (const tab of ['inventario', 'bloqueados', 'personal', 'enlaces', 'auditoria']) {
   await prueba(`la pestaña de administración "${tab}" se renderiza`, async () => {
     ui.currentUserRole = 'admin';
     ui.currentView = 'admin';
@@ -888,6 +919,63 @@ await prueba('generarSvgQr() produce un SVG usable', async () => {
   const svg = await generarSvgQr('https://biblionexo.test/?vista=scanner');
   assert(svg.startsWith('<svg'), `no parece un SVG: ${svg.slice(0, 40)}`);
   assert(svg.includes('</svg>'), 'el SVG no está cerrado');
+});
+
+await prueba('db.crearEnlaceEscaneo() devuelve token y fecha de vencimiento', async () => {
+  const enlace = await db.crearEnlaceEscaneo(4);
+  assert(enlace?.token, 'no devolvió el token');
+  assert(enlace?.expira_en, 'no devolvió la fecha de vencimiento');
+  assert(typeof enlace.id === 'number', 'no devolvió el id del enlace');
+});
+
+await prueba('db.listarEnlacesEscaneo() y db.revocarEnlaceEscaneo() funcionan juntos', async () => {
+  const enlace = await db.crearEnlaceEscaneo(4);
+  let filas = await db.listarEnlacesEscaneo();
+  const propia = filas.find(f => f.id === enlace.id);
+  assert(propia, 'el enlace recién creado no aparece en el listado');
+  assert(propia.vigente === true, 'un enlace recién creado debería figurar vigente');
+
+  await db.revocarEnlaceEscaneo(enlace.id);
+  filas = await db.listarEnlacesEscaneo();
+  const revocada = filas.find(f => f.id === enlace.id);
+  assert(revocada.revocado === true, 'no quedó marcado como revocado');
+});
+
+await prueba('showQrRemotoModal() genera un enlace SIN sesión, no "?vista=scanner"', async () => {
+  await ui.showQrRemotoModal();
+  // La generación es asíncrona (crea el enlace antes de dibujar el QR): se
+  // espera un instante, igual que en la prueba de guardar el perfil más arriba.
+  await new Promise(r => setTimeout(r, 60));
+  const overlay = document.body.lastElementChild;
+  const texto = overlay.textContent;
+  assert(/escaneo-remoto\.html\?token=/.test(texto), `no armó la URL sin sesión: ${texto.slice(0, 200)}`);
+  assert(!/\?vista=scanner/.test(texto), 'sigue mandando a la vista con sesión, no al enlace sin sesión');
+  assert(/Vence el/.test(texto), 'no muestra cuándo vence el enlace');
+  assert(overlay.querySelector('[data-action="revocar"]'), 'falta el botón para revocar de inmediato');
+  overlay.remove();
+});
+
+await prueba('showQrRemotoModal(): "Revocar este enlace ahora" lo invalida', async () => {
+  const antes = (await db.listarEnlacesEscaneo()).filter(f => f.vigente).length;
+  await ui.showQrRemotoModal();
+  await new Promise(r => setTimeout(r, 60));
+  const overlay = document.body.lastElementChild;
+  overlay.querySelector('[data-action="revocar"]').click();
+  await new Promise(r => setTimeout(r, 60));
+  const despues = (await db.listarEnlacesEscaneo()).filter(f => f.vigente).length;
+  assert(despues === antes, `debió quedar un enlace vigente menos: antes=${antes} después=${despues}`);
+  assert(/revocado/i.test(overlay.textContent), 'no avisa que el enlace quedó revocado');
+  overlay.remove();
+});
+
+await prueba('la pestaña "Enlaces remotos" de Administración lista lo generado y permite revocar', async () => {
+  ui.currentUserRole = 'admin';
+  ui.currentView = 'admin';
+  ui.adminTab = 'enlaces';
+  await ui.renderAdmin();
+  const panel = document.getElementById('admin-panel');
+  assert(/admin@biblionexo\.cl/.test(panel.innerHTML), 'no muestra quién generó el enlace');
+  assert(panel.querySelectorAll('.revocar-enlace-btn').length > 0, 'no ofrece revocar los enlaces vigentes');
 });
 
 await prueba('_vistaInicial() respeta ?vista= cuando el rol puede verla', () => {

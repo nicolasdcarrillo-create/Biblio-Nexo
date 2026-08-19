@@ -26,6 +26,7 @@ export default {
         ${boton('inventario', 'Inventario', 'fa-boxes-stacked')}
         ${boton('bloqueados', 'Bloqueados', 'fa-user-lock')}
         ${boton('personal', 'Personal', 'fa-user-shield')}
+        ${boton('enlaces', 'Enlaces remotos', 'fa-qrcode')}
         ${boton('auditoria', 'Auditoría', 'fa-clipboard-list')}
         ${boton('cumplimiento', 'Cumplimiento', 'fa-scale-balanced')}
         ${boton('diagnostico', 'Diagnóstico', 'fa-heart-pulse')}
@@ -45,6 +46,7 @@ export default {
       inventario: () => this._adminInventario(panel),
       bloqueados: () => this._adminBloqueados(panel),
       personal: () => this._adminPersonal(panel),
+      enlaces: () => this._adminEnlacesEscaneo(panel),
       auditoria: () => this._adminAuditoria(panel),
       cumplimiento: () => this._adminCumplimiento(panel),
       diagnostico: () => this._adminDiagnostico(panel)
@@ -314,6 +316,98 @@ export default {
           this.renderAdmin();
         } catch (err) {
           this.showToast(err.message || 'No se pudo eliminar la cuenta.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+  },
+
+  /**
+   * Enlaces de escaneo remoto sin sesión (ver ui-base.js, showQrRemotoModal,
+   * y 010_consolidacion.sql, sección «ESCANEO REMOTO SIN SESIÓN»). Cualquiera
+   * del personal puede generar uno desde Mesón; aquí un administrador ve
+   * todos los que existen y puede revocar cualquiera, no solo los propios.
+   */
+  async _adminEnlacesEscaneo(panel) {
+    const filas = await db.listarEnlacesEscaneo();
+    if (filas === null) {
+      panel.innerHTML = this._avisoMigracion('014', '014_enlaces_escaneo_remoto.sql');
+      return;
+    }
+
+    if (filas.length === 0) {
+      panel.innerHTML = html`
+        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-lg">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Enlaces de escaneo remoto</h3>
+          <p class="text-sm text-stone-600">Nadie ha generado un enlace todavía. Se crean desde Mesón, con el botón
+            «Escanear desde el celular».</p>
+        </div>`;
+      return;
+    }
+
+    panel.innerHTML = html`
+      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+        <div class="catalog-card-header">
+          <h3 class="font-serif font-semibold text-lg text-stone-900">Enlaces de escaneo remoto</h3>
+          <p class="text-xs text-stone-500 mt-0.5">
+            Cada uno permite agregar o reponer libros sin iniciar sesión, hasta que vence o se revoca. Se generan
+            desde Mesón, con el botón «Escanear desde el celular». Los últimos 200, del más nuevo al más antiguo.
+          </p>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+            <tr>
+              <th class="text-left px-4 py-3">Generado por</th>
+              <th class="text-left px-4 py-3">Vence</th>
+              <th class="text-left px-4 py-3">Estado</th>
+              <th class="text-left px-4 py-3">Usos</th>
+              <th class="text-right px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filas.map(e => html`
+              <tr class="border-t border-stone-200">
+                <td class="px-4 py-3">
+                  <div class="text-xs text-stone-500">${e.creado_por_email || 'Cuenta eliminada'}</div>
+                  <div class="text-[11px] text-stone-400">${this._fechaHoraLegible(e.creado_en)}</div>
+                </td>
+                <td class="px-4 py-3 text-stone-600 text-xs">${this._fechaHoraLegible(e.expira_en)}</td>
+                <td class="px-4 py-3">
+                  ${e.vigente
+                    ? '<span class="stamp stamp-success !rotate-0"><i aria-hidden="true" class="fas fa-check"></i> Vigente</span>'
+                    : e.revocado
+                      ? '<span class="stamp stamp-danger !rotate-0"><i aria-hidden="true" class="fas fa-ban"></i> Revocado</span>'
+                      : '<span class="stamp !rotate-0 bg-stone-200 text-stone-600"><i aria-hidden="true" class="fas fa-clock"></i> Vencido</span>'}
+                </td>
+                <td class="px-4 py-3 text-stone-600 text-xs">
+                  ${e.usos}${e.ultimo_uso_en ? html`<div class="text-[11px] text-stone-400">último: ${this._fechaHoraLegible(e.ultimo_uso_en)}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  ${e.vigente ? html`
+                    <button class="revocar-enlace-btn text-rose-700 hover:text-rose-800 p-1.5" title="Revocar enlace"
+                      data-id="${e.id}">
+                      <i aria-hidden="true" class="fas fa-ban"></i>
+                    </button>` : ''}
+                </td>
+              </tr>`)}
+          </tbody>
+        </table>
+      </div>`;
+
+    panel.querySelectorAll('.revocar-enlace-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await this.showConfirm(
+          '¿Revocar este enlace? Deja de servir de inmediato, aunque alguien lo tenga guardado.',
+          { title: 'Revocar enlace', confirmText: 'Revocar' }
+        );
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          await db.revocarEnlaceEscaneo(btn.dataset.id);
+          this.showToast('Enlace revocado.', 'success');
+          this.renderAdmin();
+        } catch (err) {
+          this.showToast(err.message || 'No se pudo revocar el enlace.', 'error');
           btn.disabled = false;
         }
       });

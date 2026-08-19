@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escaneo remoto — BiblioNexo</title>
+
+    <!--
+      Página aparte del sistema principal, a propósito: esta es la que abre
+      el enlace de escaneo remoto (ver ui-base.js, showQrRemotoModal), que NO
+      exige iniciar sesión. No carga js/main.js ni nada del panel del
+      personal — solo lo necesario para leer el token de la URL, comprobarlo,
+      y agregar o reponer libros con él.
+
+      Misma Política de Seguridad de Contenido que index.html — ver ese
+      archivo para la explicación completa. Aquí no hace falta img-src hacia
+      Open Library (esta página no muestra portadas), pero sí connect-src
+      hacia Supabase y Open Library: la primera para validar el token y
+      escribir el libro, la segunda para completar título y autor por ISBN.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline';
+      font-src 'self';
+      img-src 'self' data:;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org;
+      base-uri 'self';
+      form-action 'self';
+      object-src 'none'">
+
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="Escaneo remoto de libros — Biblioteca Pública Municipal de Futrono.">
+
+    <link rel="icon" href="icono-192x192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="icono-192x192.png">
+
+    <link rel="stylesheet" href="vendor/css/tailwind.css">
+    <link rel="stylesheet" href="vendor/css/fonts.css">
+    <link rel="stylesheet" href="vendor/css/fontawesome.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-patrimonio-lago font-sans text-stone-800 min-h-screen flex items-center justify-center p-4">
+
+    <noscript>
+        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-sm w-full p-6 text-center">
+            Esta página necesita JavaScript para funcionar.
+        </div>
+    </noscript>
+
+    <main id="escaneo-remoto-app" tabindex="-1" aria-label="Escaneo remoto" class="w-full max-w-md">
+        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl shadow-2xl p-6 text-center">
+            <i aria-hidden="true" class="fas fa-spinner fa-spin text-3xl text-patrimonio-madera"></i>
+            <p class="text-sm text-stone-500 mt-3">Comprobando el enlace…</p>
+        </div>
+    </main>
+
+    <script type="module" src="js/escaneo-remoto.js"></script>
+</body>
+</html>

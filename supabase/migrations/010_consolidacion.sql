@@ -917,6 +917,316 @@ end;
 $$;
 grant execute on function public.eliminar_personal(uuid) to authenticated;
 
+-- ============================================================================
+-- ESCANEO REMOTO SIN SESIÓN
+-- ============================================================================
+-- Un enlace (QR o URL) que permite escanear libros desde un celular SIN que
+-- esa persona inicie sesión en el sistema — pensado para prestar el celular a
+-- quien no tiene cuenta (un voluntario, un proveedor que trae libros nuevos)
+-- sin entregarle una contraseña.
+--
+-- El diseño, en tres puntos:
+--
+--   1. El token vive solo en la respuesta de crear_enlace_escaneo. Desde ahí
+--      la base solo guarda su huella SHA-256 (enlaces_escaneo_remoto.token_hash,
+--      ver 014_enlaces_escaneo_remoto.sql). Nadie con acceso de lectura a la
+--      base —ni un volcado completo— puede reconstruir un enlace válido.
+--   2. Vence solo (por defecto a las 4 horas, máximo 24) y se puede revocar
+--      antes: desde Administración → Enlaces remotos, o por quien lo creó,
+--      con el botón "Revocar este enlace ahora" en la propia ventana del
+--      código QR.
+--   3. Angosto a propósito: agregar_libro_remoto SOLO puede crear un libro o
+--      sumarle ejemplares a uno que ya existe. No toca lectores ni préstamos.
+--      Aunque el enlace se filtrara, lo máximo que permite es escribir
+--      entradas de catálogo — nunca leer datos de personas ni mover un
+--      préstamo.
+--
+-- validar_enlace_escaneo y agregar_libro_remoto NO llevan la guarda
+-- es_admin()/es_personal(): las llama, a propósito, un celular sin sesión.
+-- Están en SIN_GUARDA_JUSTIFICADO en pruebas/verificar_consolidacion.py, con
+-- el motivo escrito ahí. Su única barrera es el token, y por eso
+-- agregar_libro_remoto lo vuelve a validar por su cuenta —nunca confía en que
+-- el celular ya llamó a validar_enlace_escaneo antes— para que un enlace que
+-- expira justo entre la comprobación y el guardado no alcance a escribir
+-- nada.
+
+-- ── crear_enlace_escaneo ── (nueva)
+--
+-- Genera el enlace. p_horas queda entre 1 y 24: alcanza para una jornada de
+-- trabajo, y poco para que un enlace olvidado quede abierto por semanas.
+drop function if exists public.crear_enlace_escaneo(int);
+create or replace function public.crear_enlace_escaneo(
+  p_horas int default 4
+)
+returns table (id bigint, token text, expira_en timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_horas int := greatest(1, least(coalesce(p_horas, 4), 24));
+  v_token text;
+  v_id bigint;
+  v_expira timestamptz;
+begin
+  if not public.es_personal() then
+    raise exception 'Debes iniciar sesión para generar un enlace de escaneo.' using errcode = 'P0001';
+  end if;
+
+  -- 24 bytes = 192 bits de aleatoriedad: adivinarlo por fuerza bruta es inviable.
+  v_token := encode(extensions.gen_random_bytes(24), 'hex');
+  v_expira := now() + (v_horas || ' hours')::interval;
+
+  insert into public.enlaces_escaneo_remoto (token_hash, creado_por, creado_por_email, expira_en)
+  values (
+    encode(extensions.digest(v_token, 'sha256'), 'hex'),
+    (select auth.uid()),
+    -- auth.users.id calificado a propósito: esta función devuelve una tabla
+    -- con una columna «id» (RETURNS TABLE), y un «id» sin calificar aquí
+    -- queda ambiguo entre esa salida y la columna de auth.users.
+    (select email from auth.users where auth.users.id = (select auth.uid())),
+    v_expira
+  )
+  returning enlaces_escaneo_remoto.id into v_id;
+
+  return query select v_id, v_token, v_expira;
+end;
+$$;
+grant execute on function public.crear_enlace_escaneo(int) to authenticated;
+
+-- ── validar_enlace_escaneo ── (nueva)
+--
+-- Comprueba si un enlace sigue vigente, sin gastarlo: no cuenta como "uso"
+-- (eso lo hace agregar_libro_remoto, solo cuando de verdad escribe algo), así
+-- que la pantalla del celular puede llamarla al abrir sin consumir nada.
+-- El token se compara siempre por su huella SHA-256, nunca en texto plano.
+drop function if exists public.validar_enlace_escaneo(text);
+create or replace function public.validar_enlace_escaneo(
+  p_token text
+)
+returns table (valido boolean, motivo text, expira_en timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  -- Variables sueltas, no una fila de public.enlaces_escaneo_remoto%ROWTYPE:
+  -- esa tabla la crea 014_enlaces_escaneo_remoto.sql, una migración
+  -- POSTERIOR a esta. PL/pgSQL no valida el SQL del cuerpo hasta que se
+  -- ejecuta, así que una consulta contra ella aquí no rompe nada — pero un
+  -- tipo de fila SÍ se resuelve al crear la función, así que declarar
+  -- `v_fila public.enlaces_escaneo_remoto` fallaría con «no existe el tipo»
+  -- en cuanto se aplicara este archivo antes que la 014.
+  v_revocado boolean;
+  v_expira   timestamptz;
+begin
+  select revocado, enlaces_escaneo_remoto.expira_en
+    into v_revocado, v_expira
+    from public.enlaces_escaneo_remoto
+   where token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex');
+
+  if not found then
+    return query select false, 'Este enlace no es válido.'::text, null::timestamptz;
+    return;
+  end if;
+  if v_revocado then
+    return query select false, 'Este enlace fue revocado.'::text, v_expira;
+    return;
+  end if;
+  if v_expira < now() then
+    return query select false, 'Este enlace expiró.'::text, v_expira;
+    return;
+  end if;
+
+  return query select true, null::text, v_expira;
+end;
+$$;
+grant execute on function public.validar_enlace_escaneo(text) to authenticated;
+
+-- ── agregar_libro_remoto ── (nueva)
+--
+-- Único punto de escritura que puede llamar el celular sin sesión: crea un
+-- libro nuevo o le suma ejemplares a uno que ya existe. Nunca toca lectores
+-- ni préstamos.
+--
+-- Devuelve estado = 'falta_info' cuando el ISBN no está en el catálogo y no
+-- llegó título: así el celular puede pedir los datos (con la ayuda de Open
+-- Library, ver libros-externos.js) y volver a llamar, en vez de que la
+-- función falle con una excepción por cada libro nuevo.
+--
+-- El movimiento SÍ pasa por el disparador automático de auditoría (como
+-- cualquier escritura en libros), que lo deja sin atribuir porque quien llama
+-- no tiene sesión (auth.uid() nulo). Por eso se agrega, además, un registro
+-- manual atribuido a quien creó el enlace — así queda claro que se hizo por
+-- este camino y quién es responsable, igual que en eliminar_personal.
+drop function if exists public.agregar_libro_remoto(text, text, text, text, text, text, int);
+create or replace function public.agregar_libro_remoto(
+  p_token     text,
+  p_isbn      text,
+  p_titulo    text default null,
+  p_autor     text default null,
+  p_genero    text default null,
+  p_ubicacion text default null,
+  p_stock     int default 1
+)
+returns table (
+  estado text, libro_id bigint, isbn text, titulo text, autor text,
+  stock int, copias_totales int
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  -- Variables sueltas para lo que viene de enlaces_escaneo_remoto, no una
+  -- fila %ROWTYPE de esa tabla: la crea 014_enlaces_escaneo_remoto.sql,
+  -- posterior a este archivo. Ver el comentario de validar_enlace_escaneo,
+  -- justo arriba, para el porqué. `public.libros` sí existe desde antes de
+  -- la 010 (la crean las migraciones 001-009), así que v_libro puede seguir
+  -- siendo su tipo de fila sin problema.
+  v_enlace_id        bigint;
+  v_enlace_revocado  boolean;
+  v_enlace_expira    timestamptz;
+  v_creado_por       uuid;
+  v_creado_por_email text;
+  v_isbn    text := nullif(btrim(coalesce(p_isbn, '')), '');
+  v_titulo  text := nullif(btrim(coalesce(p_titulo, '')), '');
+  v_stock   int := greatest(1, least(coalesce(p_stock, 1), 500));
+  v_libro   public.libros;
+begin
+  select enlaces_escaneo_remoto.id, revocado, enlaces_escaneo_remoto.expira_en,
+         creado_por, creado_por_email
+    into v_enlace_id, v_enlace_revocado, v_enlace_expira, v_creado_por, v_creado_por_email
+    from public.enlaces_escaneo_remoto
+   where token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex')
+   for update;
+
+  -- Se revalida aquí, no solo en validar_enlace_escaneo: entre que el celular
+  -- comprobó el enlace y llegó a escanear el primer libro puede haber pasado
+  -- tiempo de sobra para que expirara.
+  if not found or v_enlace_revocado or v_enlace_expira < now() then
+    raise exception 'Este enlace no es válido o ya expiró. Pide uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_isbn is null then
+    raise exception 'Falta el código del libro.' using errcode = 'P0001';
+  end if;
+
+  select * into v_libro from public.libros where libros.isbn = v_isbn for update;
+
+  if found then
+    update public.libros
+       set copias_totales = v_libro.copias_totales + v_stock,
+           stock = v_libro.stock + v_stock
+     where libros.id = v_libro.id
+    returning * into v_libro;
+
+    insert into public.auditoria (tabla, registro_id, accion, usuario_id, usuario_email, datos_despues)
+    values ('libros', v_libro.id::text, 'UPDATE', v_creado_por, v_creado_por_email,
+            jsonb_build_object('operacion', 'escaneo_remoto', 'enlace_id', v_enlace_id,
+                                'ejemplares_agregados', v_stock, 'copias_totales', v_libro.copias_totales));
+
+    update public.enlaces_escaneo_remoto
+       set usos = usos + 1, ultimo_uso_en = now()
+     where enlaces_escaneo_remoto.id = v_enlace_id;
+
+    return query select 'incrementado'::text, v_libro.id::bigint, v_libro.isbn::text, v_libro.titulo::text,
+                        v_libro.autor::text, v_libro.stock, v_libro.copias_totales;
+    return;
+  end if;
+
+  if v_titulo is null then
+    return query select 'falta_info'::text, null::bigint, v_isbn, null::text, null::text,
+                        null::int, null::int;
+    return;
+  end if;
+
+  insert into public.libros (isbn, titulo, autor, genero, ubicacion, stock, copias_totales)
+  values (v_isbn, v_titulo, nullif(btrim(coalesce(p_autor, '')), ''),
+          nullif(btrim(coalesce(p_genero, '')), ''), nullif(btrim(coalesce(p_ubicacion, '')), ''),
+          v_stock, v_stock)
+  returning * into v_libro;
+
+  insert into public.auditoria (tabla, registro_id, accion, usuario_id, usuario_email, datos_despues)
+  values ('libros', v_libro.id::text, 'INSERT', v_creado_por, v_creado_por_email,
+          jsonb_build_object('operacion', 'escaneo_remoto', 'enlace_id', v_enlace_id,
+                              'isbn', v_libro.isbn, 'titulo', v_libro.titulo));
+
+  update public.enlaces_escaneo_remoto
+     set usos = usos + 1, ultimo_uso_en = now()
+   where enlaces_escaneo_remoto.id = v_enlace_id;
+
+  return query select 'creado'::text, v_libro.id::bigint, v_libro.isbn::text, v_libro.titulo::text,
+                      v_libro.autor::text, v_libro.stock, v_libro.copias_totales;
+end;
+$$;
+grant execute on function public.agregar_libro_remoto(text, text, text, text, text, text, int) to authenticated;
+
+-- ── listar_enlaces_escaneo ── (nueva)
+--
+-- Solo un administrador ve el listado completo: es la misma frontera que
+-- listar_personal, en Administración.
+drop function if exists public.listar_enlaces_escaneo();
+create or replace function public.listar_enlaces_escaneo()
+returns table (
+  id bigint, creado_por_email text, creado_en timestamptz, expira_en timestamptz,
+  revocado boolean, usos int, ultimo_uso_en timestamptz, vigente boolean
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.es_admin() then
+    raise exception 'Solo un administrador puede ver los enlaces de escaneo remoto.' using errcode = 'P0001';
+  end if;
+
+  return query
+    select e.id, e.creado_por_email, e.creado_en, e.expira_en, e.revocado, e.usos, e.ultimo_uso_en,
+           (not e.revocado and e.expira_en > now()) as vigente
+    from public.enlaces_escaneo_remoto e
+    order by e.creado_en desc
+    limit 200;
+end;
+$$;
+grant execute on function public.listar_enlaces_escaneo() to authenticated;
+
+-- ── revocar_enlace_escaneo ── (nueva)
+--
+-- Puede revocarlo un administrador, o quien creó el enlace (para el botón
+-- "Revocar este enlace ahora" de la propia ventana del código QR).
+drop function if exists public.revocar_enlace_escaneo(bigint);
+create or replace function public.revocar_enlace_escaneo(
+  p_id bigint
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_creado_por uuid;
+begin
+  if not public.es_personal() then
+    raise exception 'Debes iniciar sesión para revocar un enlace.' using errcode = 'P0001';
+  end if;
+
+  select creado_por into v_creado_por from public.enlaces_escaneo_remoto where id = p_id;
+  if not found then
+    raise exception 'Ese enlace no existe.' using errcode = 'P0001';
+  end if;
+
+  if not public.es_admin() and v_creado_por is distinct from (select auth.uid()) then
+    raise exception 'Solo un administrador, o quien creó el enlace, puede revocarlo.' using errcode = 'P0001';
+  end if;
+
+  update public.enlaces_escaneo_remoto
+     set revocado = true, revocado_en = now()
+   where id = p_id;
+end;
+$$;
+grant execute on function public.revocar_enlace_escaneo(bigint) to authenticated;
+
 -- ── actualizar_contacto_lector ── (última versión: 008_perfiles_y_permisos_librero.sql)
 drop function if exists public.actualizar_contacto_lector(bigint, text, text, text);
 create or replace function public.actualizar_contacto_lector(
@@ -1528,6 +1838,11 @@ as $manifiesto$
     ('actualizar_mi_perfil', true),
     ('listar_personal', true),
     ('eliminar_personal', true),
+    ('crear_enlace_escaneo', true),
+    ('validar_enlace_escaneo', true),
+    ('agregar_libro_remoto', true),
+    ('listar_enlaces_escaneo', true),
+    ('revocar_enlace_escaneo', true),
     ('actualizar_contacto_lector', true),
     ('exportar_datos_lector', true),
     ('anonimizar_lector', true),
@@ -1693,3 +2008,14 @@ $permisos$;
 -- ejecutan en el contexto del dueño de la tabla, no de quien escribe.
 revoke all on function public.registrar_auditoria() from public, anon;
 revoke all on function public.marcar_actualizacion() from public, anon;
+
+-- Escaneo remoto sin sesión: dos funciones SÍ deben quedar abiertas a `anon`,
+-- porque quien escanea desde el enlace nunca inicia sesión. El bloque de
+-- arriba ya les quitó el permiso a `anon` (alcanza a toda función del
+-- manifiesto); se restituye aquí, aparte y a propósito, para que quede visible
+-- como una excepción deliberada y no como un descuido. El control de acceso
+-- no es el rol —anon es, por definición, cualquiera— sino el token de un solo
+-- objetivo que cada una exige y valida por su cuenta (ver 010, sección
+-- «ESCANEO REMOTO SIN SESIÓN»).
+grant execute on function public.validar_enlace_escaneo(text) to anon;
+grant execute on function public.agregar_libro_remoto(text, text, text, text, text, text, int) to anon;

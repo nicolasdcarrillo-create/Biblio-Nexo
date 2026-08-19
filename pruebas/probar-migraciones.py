@@ -59,6 +59,15 @@ create schema if not exists extensions;
 create or replace function extensions.digest(texto text, algoritmo text)
 returns bytea language sql immutable as $$ select decode(md5(texto), 'hex') $$;
 
+-- Sustituto de gen_random_bytes: no necesita ser criptográficamente fuerte
+-- aquí, solo devolver bytea del largo pedido para que crear_enlace_escaneo()
+-- pueda generar un token de prueba.
+create or replace function extensions.gen_random_bytes(n int)
+returns bytea language sql volatile as $$
+  select decode(string_agg(lpad(to_hex((random() * 255)::int), 2, '0'), ''), 'hex')
+  from generate_series(1, n)
+$$;
+
 create or replace function extensions.unaccent(texto text)
 returns text language sql immutable as $$
   select translate(texto, 'áàâäãéèêëíìîïóòôöõúùûüñçÁÀÂÄÃÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÑÇ',
@@ -402,12 +411,121 @@ def main():
                 assert '0' in r.split('\n')[2], f"la cuenta debió desaparecer de usuarios, se leyó: {r}"
             prueba("eliminar_personal() borra el perfil y la cuenta de acceso", eliminar_personal_borra_cuenta)
 
+            # --- Escaneo remoto sin sesión ---
+            print("\n  Escaneo remoto sin sesión:")
+
+            def crea_enlace_y_devuelve_token():
+                como(uid_librero)
+                r = correr(srv, "select token from public.crear_enlace_escaneo(4);")
+                return r.split('\n')[2].strip()
+
+            def anon():
+                UID_SIMULADO['valor'] = None
+
+            def valida_enlace_recien_creado():
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select valido from public.validar_enlace_escaneo('{token}');")
+                    assert 't' in r.split('\n')[2], f"un enlace recién creado debió ser válido, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("validar_enlace_escaneo() acepta un enlace recién creado", valida_enlace_recien_creado)
+
+            def valida_token_inventado():
+                r = correr(srv, "select valido from public.validar_enlace_escaneo('token-que-no-existe');")
+                assert 'f' in r.split('\n')[2], f"un token inventado no debió validar, se leyó: {r}"
+            prueba("validar_enlace_escaneo() rechaza un token inventado", valida_token_inventado)
+
+            def agrega_libro_nuevo_por_enlace():
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"""
+                      select estado from public.agregar_libro_remoto(
+                        '{token}', 'REMOTO-1', 'Libro agregado remoto', 'Autor Remoto', null, null, 2);
+                    """)
+                    assert 'creado' in r.split('\n')[2], f"debió crear el libro, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+                r = correr(srv, "select stock, copias_totales from public.libros where isbn = 'REMOTO-1';")
+                assert '2' in r.split('\n')[2], f"el libro nuevo debió quedar con 2 ejemplares, se leyó: {r}"
+            prueba("agregar_libro_remoto() crea un libro nuevo con un enlace válido", agrega_libro_nuevo_por_enlace)
+
+            def agregar_libro_remoto_sin_titulo_pide_info():
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select estado from public.agregar_libro_remoto('{token}', 'ISBN-SIN-TITULO');")
+                    assert 'falta_info' in r.split('\n')[2], f"debió pedir los datos, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+                r = correr(srv, "select count(*) from public.libros where isbn = 'ISBN-SIN-TITULO';")
+                assert '0' in r.split('\n')[2], "no debió crear nada mientras faltan los datos"
+            prueba("agregar_libro_remoto() pide los datos si el ISBN es nuevo y no llegó título",
+                   agregar_libro_remoto_sin_titulo_pide_info)
+
+            def agrega_libro_existente_por_enlace_suma_ejemplares():
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"""
+                      select estado from public.agregar_libro_remoto('{token}', '9789561117', null, null, null, null, 5);
+                    """)
+                    assert 'incrementado' in r.split('\n')[2], f"debió reponer el libro existente, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+                r = correr(srv, "select stock from public.libros where isbn = '9789561117';")
+                assert '8' in r.split('\n')[2], f"el stock debió sumar 5 (había 3), se leyó: {r}"
+            prueba("agregar_libro_remoto() repone ejemplares de un libro que ya existe",
+                   agrega_libro_existente_por_enlace_suma_ejemplares)
+
+            def agregar_libro_remoto_rechaza_token_invalido():
+                anon()
+                try:
+                    debe_fallar(
+                        "select * from public.agregar_libro_remoto('token-inventado', '000', 'X', 'Y');",
+                        "no es válido")
+                finally:
+                    como(uid_librero)
+            prueba("agregar_libro_remoto() rechaza un token inventado", agregar_libro_remoto_rechaza_token_invalido)
+
+            def revoca_enlace_propio():
+                token = crea_enlace_y_devuelve_token()
+                r = correr(srv, "select id from public.enlaces_escaneo_remoto order by id desc limit 1;")
+                enlace_id = r.split('\n')[2].strip()
+                correr(srv, f"select public.revocar_enlace_escaneo({enlace_id});")
+                anon()
+                try:
+                    r = correr(srv, f"select valido from public.validar_enlace_escaneo('{token}');")
+                    assert 'f' in r.split('\n')[2], f"un enlace revocado no debió seguir siendo válido, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("revocar_enlace_escaneo() invalida el enlace de inmediato", revoca_enlace_propio)
+
+            def listar_enlaces_rechaza_a_librero():
+                debe_fallar("select * from public.listar_enlaces_escaneo();", "administrador")
+            prueba("listar_enlaces_escaneo() rechaza a quien no es administrador", listar_enlaces_rechaza_a_librero)
+
+            def listar_enlaces_como_admin():
+                como(uid_admin)
+                try:
+                    correr(srv, "select * from public.listar_enlaces_escaneo();")
+                finally:
+                    como(uid_librero)
+            prueba("listar_enlaces_escaneo() responde para un administrador", listar_enlaces_como_admin)
+
             # --- Auditoría ---
             print("\n  Auditoría:")
             def auditoria_registra():
                 correr(srv, "insert into public.libros (isbn, titulo, autor, stock, copias_totales) values ('AUD-1','Prueba','X',1,1);")
                 r = correr(srv, "select count(*) from public.auditoria where tabla='libros';")
-                assert '0' not in r.split('\n')[2] if len(r.split('\n')) > 2 else True, "no registró"
+                # Antes se probaba con `'0' not in texto`, que da un falso negativo
+                # apenas el conteo llega a un número de dos cifras que contenga un
+                # 0 (10, 20, 100...) — justo lo que empezó a pasar al sumarse las
+                # pruebas del escaneo remoto. Se compara el número, no el texto.
+                conteo = int(r.split('\n')[2].strip()) if len(r.split('\n')) > 2 else 0
+                assert conteo > 0, f"no registró, se leyó: {r}"
             prueba("el trigger registra los movimientos", auditoria_registra)
 
             def auditoria_no_bloquea():

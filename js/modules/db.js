@@ -623,6 +623,32 @@ export const db = {
         if (error) throw new Error(error.message || 'No se pudo eliminar la cuenta.');
     },
 
+    // ------------------------------------------------------------------
+    // ESCANEO REMOTO SIN SESIÓN
+    // ------------------------------------------------------------------
+
+    /** Genera un enlace de escaneo remoto. Devuelve {id, token, expira_en}. */
+    async crearEnlaceEscaneo(horas = 4) {
+        const { data, error } = await conTiempoLimite(supabase.rpc('crear_enlace_escaneo', { p_horas: horas }), ESPERA);
+        if (error) throw new Error(error.message || 'No se pudo generar el enlace.');
+        return data?.[0] || null;
+    },
+
+    /** Enlaces de escaneo remoto generados por el personal. Solo administración. */
+    async listarEnlacesEscaneo() {
+        const { data, error } = await conTiempoLimite(supabase.rpc('listar_enlaces_escaneo'), ESPERA);
+        if (error) {
+            if (esFuncionInexistente(error)) return null;
+            throw new Error(error.message || 'No se pudo listar los enlaces.');
+        }
+        return data || [];
+    },
+
+    async revocarEnlaceEscaneo(id) {
+        const { error } = await conTiempoLimite(supabase.rpc('revocar_enlace_escaneo', { p_id: id }), ESPERA);
+        if (error) throw new Error(error.message || 'No se pudo revocar el enlace.');
+    },
+
     /** Lectores actualmente bloqueados a mano. */
     async obtenerBloqueados() {
         const { data, error } = await conTiempoLimite(supabase

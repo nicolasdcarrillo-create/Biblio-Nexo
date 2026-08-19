@@ -72,3 +72,22 @@ create table if not exists public.usuarios (
 
 grant select, insert, update, delete on public.libros, public.lectores, public.prestamos, public.usuarios to authenticated;
 grant select on public.libros, public.lectores, public.prestamos, public.usuarios to anon;
+
+-- ---------------------------------------------------------------------------
+-- Sustitutos de pgcrypto (esquema `extensions` de Supabase)
+-- ---------------------------------------------------------------------------
+-- Este PostgreSQL de prueba no trae la extensión real. Imitan la firma y el
+-- comportamiento suficiente para validar el SQL de crear_enlace_escaneo(),
+-- validar_enlace_escaneo() y agregar_libro_remoto() (010_consolidacion.sql);
+-- en producción las reemplaza la extensión real. No son criptográficamente
+-- fuertes — no hace falta para lo que prueban estos archivos.
+create schema if not exists extensions;
+
+create or replace function extensions.digest(texto text, algoritmo text)
+returns bytea language sql immutable as $$ select decode(md5(texto), 'hex') $$;
+
+create or replace function extensions.gen_random_bytes(n int)
+returns bytea language sql volatile as $$
+  select decode(string_agg(lpad(to_hex((random() * 255)::int), 2, '0'), ''), 'hex')
+  from generate_series(1, n)
+$$;

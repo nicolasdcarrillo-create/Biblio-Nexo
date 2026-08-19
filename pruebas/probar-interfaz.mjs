@@ -257,6 +257,26 @@ const arranque = fs.readFileSync('js/arranque.js', 'utf8');
 comprobar('hay respaldo en JavaScript por si faltan las cabeceras',
   /window\.top\s*!==\s*window\.self/.test(arranque));
 
+console.log('\n7e. escaneo-remoto.html (la página del enlace sin sesión) tiene su propia CSP correcta');
+const htmlRemoto = fs.readFileSync('escaneo-remoto.html', 'utf8');
+const cspRemoto = (htmlRemoto.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/) || [])[1] || '';
+const directivaRemoto = d => (cspRemoto.match(new RegExp(d + '\\s+([^;]+)')) || [])[1] || '';
+comprobar('tiene su propia etiqueta <meta> de CSP', !!cspRemoto);
+comprobar('su script-src no permite scripts en línea',
+  directivaRemoto('script-src').includes("'self'") && !directivaRemoto('script-src').includes('unsafe-inline'));
+comprobar('su default-src sigue bloqueando orígenes de terceros por defecto',
+  directivaRemoto('default-src').includes("'self'"));
+comprobar('permite hablar con Supabase (valida el token y agrega libros sin sesión)',
+  directivaRemoto('connect-src').includes('supabase.co'));
+comprobar('permite hablar con Open Library (autocompletar título y autor)',
+  directivaRemoto('connect-src').includes('openlibrary.org'));
+comprobar('no queda ningún manejador onclick/onerror en el HTML',
+  !/\son(click|error|load)=/.test(htmlRemoto));
+comprobar('solo carga su propio script, ningún <script src> de CDN externo',
+  [...htmlRemoto.matchAll(/<script[^>]+src="([^"]+)"/g)].every(m => !/^https?:\/\//.test(m[1])));
+comprobar('vercel.json también le manda Cache-Control: no-cache (igual que a index.html)',
+  fs.readFileSync('vercel.json', 'utf8').includes('/escaneo-remoto.html'));
+
 console.log('\n8. Regresión: administrador sin fila de rol en la base de datos');
 // mi_perfil() crea la fila que falta con el rol de menor privilegio. Si el
 // respaldo por CONFIG.ADMIN_EMAILS no se aplicara, el administrador quedaría

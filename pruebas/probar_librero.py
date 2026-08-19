@@ -441,7 +441,7 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-comprobar('el manifiesto cubre 35 funciones', len(filas) == 35, f'cubre {len(filas)}')
+comprobar('el manifiesto cubre 40 funciones', len(filas) == 40, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -585,6 +585,30 @@ como_anonimo("select public.registrar_error('spam desde fuera')")
 comprobar('el anónimo no puede llenar el registro de errores',
           valor("select count(*) from public.errores;") == antes)
 
+# Escaneo remoto: el anónimo SÍ debe poder llamar a las dos funciones del
+# enlace (ese es el punto: el celular que escanea nunca inicia sesión), pero
+# nunca gestionar enlaces, ni leer la tabla directo, ni escribir con un token
+# inventado.
+for desc, consulta in [
+    ('no puede generar un enlace de escaneo', "select * from public.crear_enlace_escaneo(4)"),
+    ('no puede listar los enlaces de escaneo', "select * from public.listar_enlaces_escaneo()"),
+    ('no puede revocar un enlace de escaneo', "select public.revocar_enlace_escaneo(1)"),
+    ('no puede leer la tabla de enlaces directo', "select * from public.enlaces_escaneo_remoto"),
+]:
+    ok, r = como_anonimo(consulta)
+    comprobar('el anónimo ' + desc, not ok, f'se ejecutó y devolvió: {texto(r)[:100]}')
+
+ok, r = como_anonimo("select valido, motivo from public.validar_enlace_escaneo('token-inventado')")
+comprobar('el anónimo SÍ puede llamar a validar_enlace_escaneo, pero un token inventado no es válido',
+          ok and r and r[0][0] is False, texto(r))
+
+ok, r = como_anonimo(
+    "select * from public.agregar_libro_remoto('token-inventado', '000-inventado', 'X', 'Y')")
+comprobar('el anónimo no puede agregar un libro con un token inventado',
+          not ok, f'se ejecutó y devolvió: {texto(r)[:100]}')
+comprobar('...y ese ISBN inventado no quedó en el catálogo',
+          valor("select count(*) from public.libros where isbn = '000-inventado';") == 0)
+
 # Y lo que sí debe seguir funcionando para el personal
 if TIMEZONE_OK:
     ok, out = como(LIBRERO, "select nombre from public.estado_lector('12345678-5');")
@@ -595,7 +619,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 35,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 40,
           texto(out)[-150:])
 
 

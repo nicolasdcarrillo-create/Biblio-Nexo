@@ -458,6 +458,20 @@ class UIManager {
     });
   }
 
+  /**
+   * Fecha y hora legibles, para marcas de tiempo completas (timestamptz) como
+   * la expiración de un enlace de escaneo remoto o cuándo se usó por última
+   * vez — a diferencia de _fechaLegible(), que es solo para fechas (date).
+   */
+  _fechaHoraLegible(fechaIso) {
+    if (!fechaIso) return '—';
+    const fecha = new Date(fechaIso);
+    if (isNaN(fecha)) return fechaIso;
+    return fecha.toLocaleString('es-CL', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+    });
+  }
+
   // Modal con las dos vías de contacto disponibles sin servidor de correo:
   // WhatsApp (lo más usado en la comuna) y el cliente de correo del equipo.
   showNotifyModal(prestamo) {
@@ -2342,32 +2356,49 @@ class UIManager {
   }
 
   /**
-   * Código QR que lleva directo a la pantalla de escaneo, para abrir el
-   * sistema desde un celular sin tener que escribir la dirección a mano.
+   * Código QR de escaneo remoto SIN sesión: manda a escaneo-remoto.html, una
+   * página aparte del sistema principal, con un token de un solo objetivo en
+   * la URL (?token=...). Quien lo abra puede agregar o reponer libros al
+   * catálogo — nada más — sin iniciar sesión ni tener cuenta.
    *
-   * No es una puerta de acceso nueva: el enlace no lleva ninguna clave ni
-   * sesión — solo la dirección del sistema, con qué pantalla mostrar
-   * primero. Quien lo abra igual tiene que iniciar sesión con su propia
-   * cuenta, con los mismos permisos de siempre. El QR ahorra escribir la
-   * URL a mano en el celular, nada más.
+   * Es justo lo contrario de la versión anterior de este modal, que mandaba
+   * a "?vista=scanner" y exigía iniciar sesión igual: eso servía para el
+   * propio personal, no para prestarle el celular a alguien sin cuenta (un
+   * voluntario, un proveedor que trae libros nuevos).
+   *
+   * El token se genera en el momento (crear_enlace_escaneo, ver
+   * 010_consolidacion.sql) y se muestra UNA sola vez, aquí: desde ese
+   * instante la base solo guarda su huella, no el token en sí. Por eso el
+   * enlace vence solo y se puede revocar de inmediato con el botón de abajo
+   * — es lo más parecido a "no se filtra la dirección" que se puede ofrecer
+   * sin dejar de ser un enlace: técnicamente nada impide que alguien lo
+   * reenvíe o lo capture en una foto, así que la defensa real es que deja de
+   * servir apenas se revoca o vence.
    */
   async showQrRemotoModal() {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
-    const url = `${window.location.origin}${window.location.pathname}?vista=scanner`;
 
     overlay.innerHTML = `
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
         <h3 class="font-serif text-lg font-bold text-stone-900">Escanear desde el celular</h3>
         <p class="text-xs text-stone-600">
-          Escanee este código con la cámara del celular. Se abrirá esta misma pantalla; ahí deberá iniciar
-          sesión con su propia cuenta del sistema — este código no da acceso por sí solo.
+          Quien escanee este código NO necesita iniciar sesión. Solo puede agregar libros al
+          catálogo o sumar ejemplares — nada más — y el enlace deja de servir cuando vence o lo revoca.
         </p>
-        <div id="qr-remoto-imagen" class="flex items-center justify-center py-2 min-h-[180px]">
-          <i aria-hidden="true" class="fas fa-spinner fa-spin text-2xl text-patrimonio-lago"></i>
-          <span class="sr-only">Generando el código QR…</span>
+        <label for="qr-remoto-horas" class="text-[11px] font-black uppercase tracking-wide text-stone-600 block">Vigente por</label>
+        <select id="qr-remoto-horas" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm">
+          <option value="1">1 hora</option>
+          <option value="4" selected>4 horas</option>
+          <option value="8">8 horas (una jornada)</option>
+          <option value="24">24 horas (máximo)</option>
+        </select>
+        <div id="qr-remoto-cuerpo">
+          <div class="flex items-center justify-center py-2 min-h-[180px]">
+            <i aria-hidden="true" class="fas fa-spinner fa-spin text-2xl text-patrimonio-lago"></i>
+            <span class="sr-only">Generando el enlace…</span>
+          </div>
         </div>
-        <p class="text-[11px] font-mono text-stone-500 break-all">${escapeHtml(url)}</p>
         <button data-action="cerrar" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-bold w-full">Cerrar</button>
       </div>`;
     document.body.appendChild(overlay);
@@ -2376,14 +2407,72 @@ class UIManager {
     overlay.querySelector('[data-action="cerrar"]').addEventListener('click', cerrar);
     overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
 
-    try {
-      const svg = await generarSvgQr(url);
-      const contenedor = document.getElementById('qr-remoto-imagen');
-      if (contenedor) contenedor.innerHTML = svg;
-    } catch (e) {
-      const contenedor = document.getElementById('qr-remoto-imagen');
-      if (contenedor) contenedor.innerHTML = '<p class="text-xs text-rose-700">No se pudo generar el código QR. Puede copiar la dirección de más abajo.</p>';
-    }
+    // Enlace vigente en este momento, para poder revocarlo con el botón de
+    // abajo sin tener que ir hasta Administración → Enlaces remotos.
+    let enlaceActual = null;
+
+    const generar = async () => {
+      const cuerpo = document.getElementById('qr-remoto-cuerpo');
+      if (!cuerpo) return;
+      cuerpo.innerHTML = `<div class="flex items-center justify-center py-2 min-h-[180px]">
+        <i aria-hidden="true" class="fas fa-spinner fa-spin text-2xl text-patrimonio-lago"></i>
+        <span class="sr-only">Generando el enlace…</span></div>`;
+
+      // Si ya había un enlace vigente (por ejemplo, se cambió la duración),
+      // se revoca antes de generar el siguiente: no debe quedar más de un
+      // enlace válido abierto por esta ventana a la vez.
+      if (enlaceActual) {
+        try { await db.revocarEnlaceEscaneo(enlaceActual.id); } catch (e) { /* best-effort */ }
+        enlaceActual = null;
+      }
+
+      const horas = Number(document.getElementById('qr-remoto-horas')?.value || 4);
+      try {
+        enlaceActual = await db.crearEnlaceEscaneo(horas);
+        if (!enlaceActual) throw new Error('El sistema no devolvió el enlace.');
+      } catch (err) {
+        cuerpo.innerHTML = `<p class="text-xs text-rose-700 py-6">${escapeHtml(err.message || 'No se pudo generar el enlace.')}</p>`;
+        return;
+      }
+
+      const url = `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}escaneo-remoto.html?token=${encodeURIComponent(enlaceActual.token)}`;
+      cuerpo.innerHTML = `
+        <div id="qr-remoto-imagen" class="flex items-center justify-center py-2 min-h-[180px]">
+          <i aria-hidden="true" class="fas fa-spinner fa-spin text-2xl text-patrimonio-lago"></i>
+          <span class="sr-only">Dibujando el código QR…</span>
+        </div>
+        <p class="text-[11px] font-mono text-stone-500 break-all">${escapeHtml(url)}</p>
+        <p class="text-[11px] text-stone-500">Vence el ${escapeHtml(this._fechaHoraLegible(enlaceActual.expira_en))}.</p>
+        <button data-action="revocar" class="text-rose-700 hover:text-rose-800 text-xs font-bold underline mt-1">
+          <i aria-hidden="true" class="fas fa-ban mr-1"></i>Revocar este enlace ahora
+        </button>`;
+
+      try {
+        const svg = await generarSvgQr(url);
+        const contenedor = document.getElementById('qr-remoto-imagen');
+        if (contenedor) contenedor.innerHTML = svg;
+      } catch (e) {
+        const contenedor = document.getElementById('qr-remoto-imagen');
+        if (contenedor) contenedor.innerHTML = '<p class="text-xs text-rose-700">No se pudo generar el código QR. Puede copiar la dirección de más abajo.</p>';
+      }
+
+      cuerpo.querySelector('[data-action="revocar"]')?.addEventListener('click', async btn_e => {
+        const boton = btn_e.currentTarget;
+        boton.disabled = true;
+        try {
+          await db.revocarEnlaceEscaneo(enlaceActual.id);
+          enlaceActual = null;
+          this.showToast('Enlace revocado. Ya no sirve para agregar libros.', 'success');
+          cuerpo.innerHTML = '<p class="text-xs text-stone-500 py-6">Este enlace fue revocado. Genere uno nuevo si lo necesita.</p>';
+        } catch (err) {
+          this.showToast(err.message || 'No se pudo revocar el enlace.', 'error');
+          boton.disabled = false;
+        }
+      });
+    };
+
+    document.getElementById('qr-remoto-horas').addEventListener('change', generar);
+    generar();
   }
 
   /**

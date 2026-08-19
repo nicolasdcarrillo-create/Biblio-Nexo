@@ -177,14 +177,25 @@ Verificado el 27 de julio de 2026. Confírmalo tú mismo antes de asumirlo.
 | Recuperación de contraseña y Google | Implementado en `auth.js` (falta probar de extremo a extremo) |
 | Reintento de carga de Chart.js | Hecho |
 | Consolidación de funciones SQL | Migración 010, con manifiesto verificable |
-| Integración continua | `.github/workflows/pruebas.yml`, 4 trabajos |
+| Integración continua | `.github/workflows/pruebas.yml`, 4 trabajos — **no cubre todas las suites, ver sección 12** |
 | Contraste WCAG | `pruebas/probar-contraste.mjs` |
+| Escaneo remoto sin sesión (QR temporal, sin login) | Migración 014 + funciones en 010; `escaneo-remoto.html` + `js/escaneo-remoto.js`; probado en celular real |
 
-**Suites de prueba existentes** — ejecútalas antes y después de cada cambio:
+**Suites de prueba existentes** — ejecútalas antes y después de cada cambio
+(conteos verificados el 19 de agosto de 2026; corren todas en verde):
 
     python3 pruebas/verificar_consolidacion.py   → regla de la consolidación
-    node pruebas/probar-interfaz.mjs             → 56 comprobaciones, DOM simulado
-    python3 pruebas/probar_librero.py            → 90 comprobaciones, PostgreSQL real
+    node pruebas/probar-interfaz.mjs             → 58 comprobaciones, DOM simulado
+    node pruebas/probar-vistas.mjs               → 106 comprobaciones, DOM simulado
+    node pruebas/probar-escaneo-remoto.mjs       → 9 comprobaciones, DOM simulado (página sin sesión)
+    python3 pruebas/probar_librero.py            → 98 comprobaciones, PostgreSQL real
+    python3 pruebas/probar-migraciones.py        → 112 comprobaciones, PostgreSQL real (dos escenarios de esquema)
+
+Solo las primeras dos corren en CI hoy (trabajos `consolidacion` e
+`interfaz`) más `probar_librero.py` y una reconstrucción completa de
+migraciones (trabajos `base-de-datos` y `reconstruccion`). Las tres restantes
+(`probar-vistas.mjs`, `probar-escaneo-remoto.mjs`, `probar-migraciones.py`)
+solo corren si alguien se acuerda de hacerlo a mano — ver sección 12.
 
 ---
 
@@ -436,3 +447,112 @@ cambió en esta sesión.
   borrado con su purga local. Las lápidas no son opcional: sin ellas, un lector
   borrado del servidor sobrevive en el disco del mesón con sus datos personales.
   Ver `CUMPLIMIENTO-LEGAL.md`, sección 9 bis.
+
+---
+
+## 12. Estado al 19 de agosto de 2026
+
+### Escaneo remoto sin sesión: hecho y verificado
+
+Migración 014 (tabla `enlaces_escaneo_remoto`) y cinco funciones en la 010
+(`crear_enlace_escaneo`, `validar_enlace_escaneo`, `agregar_libro_remoto`,
+`listar_enlaces_escaneo`, `revocar_enlace_escaneo`), desplegadas en
+producción y verificadas con `get_advisors`. El personal genera un enlace de
+1–24 h desde el panel de Administración → "Enlaces remotos"; quien lo abre
+(por QR o link) escanea o escribe el ISBN **sin iniciar sesión**, y solo
+puede agregar o reponer libros en el catálogo — nunca lectores ni préstamos.
+Token de un solo objetivo, guardado como hash, revalidado en cada escritura,
+revocable por quien lo creó o por un admin. Probado de punta a punta en un
+celular real, cámara incluida.
+
+### Dos bugs de esta sesión, ambos corregidos
+
+1. **La cámara no encendía con un clic.** `Html5QrcodeScanner` (la interfaz
+   "enlatada" de `html5-qrcode`) dibuja su propio botón de permiso, aparte
+   del de la aplicación — fácil de no ver la primera vez, en un celular
+   ajeno. Se cambió a `Html5Qrcode` (API de bajo nivel): un clic pide el
+   permiso directo. Ver `js/modules/scanner.js`.
+2. **Hallazgo con implicancia para cualquier interfaz nueva de aquí en
+   adelante: el proyecto no tiene paso de compilación de Tailwind.**
+   `vendor/css/tailwind.css` es estático — se generó una vez, no se
+   regenera en cada cambio. Una clase de Tailwind que "se ve" válida pero
+   nunca se usó antes en ningún otro archivo del proyecto no existe en ese
+   CSS compilado, y no da ningún error: el elemento queda sin ese estilo,
+   en silencio. Pasó con el primer diseño del recuadro de la cámara
+   (relación de aspecto, color de marca en el borde, posición de las
+   esquinas). **Regla práctica para el próximo cambio visual:** antes de
+   usar una clase de Tailwind, comprobar que ya aparezca en algún otro
+   archivo del proyecto (`grep` rápido basta); si no, escribirla a mano en
+   `css/styles.css` en vez de asumir que existe. Documentado también ahí,
+   junto a las clases que motivaron el hallazgo.
+
+### Suites de prueba: conteo actualizado y brecha de CI
+
+Ver la tabla y el bloque de comandos de la sección 6 — se corrigieron los
+conteos (estaban desactualizados) y se agregaron las tres suites que
+faltaban en la lista (`probar-vistas.mjs`, `probar-escaneo-remoto.mjs`,
+`probar-migraciones.py`). Las tres corren en verde pero **no están
+enganchadas a `.github/workflows/pruebas.yml`** — dependen de que alguien se
+acuerde de correrlas a mano. Es la brecha #1 de la lista de prioridades de
+abajo, por lo barato que es cerrarla.
+
+### Lista de prioridades
+
+Ordenada por una mezcla de riesgo si se deja como está y costo de
+corregirlo — no es un orden rígido, es un punto de partida para decidir en
+qué seguir.
+
+**Ahora — barato y con impacto real**
+
+1. **Enganchar `probar-vistas.mjs`, `probar-migraciones.py` y
+   `probar-escaneo-remoto.mjs` a `.github/workflows/pruebas.yml`.** Mecánico,
+   mismo patrón que los 4 trabajos que ya existen. Sin esto, una regresión en
+   227 de las 383 comprobaciones totales solo se detecta si alguien corre las
+   suites a mano.
+2. **Decidir qué hacer con la política RLS "de más" en `usuarios`**
+   (`"Lectura de roles propia"`, redundante con una política ya existente,
+   sin explicación en ningún archivo local). Solo hace falta la decisión;
+   borrarla es una línea de SQL.
+3. **`migration repair` para las migraciones 012, 013 y 014**, aplicadas por
+   fuera del CLI de Supabase y no registradas en
+   `supabase_migrations.schema_migrations`. Es una escritura contra
+   producción — requiere aprobación explícita antes de tocarla, pero el
+   trabajo en sí es acotado.
+4. **Alinear CI a `postgres:17`** en los trabajos `base-de-datos` y
+   `reconstruccion` (hoy usan `postgres:16`, producción corre 17.6.1).
+   Mecánico, bajo riesgo, el costo real es correr la suite una vez para
+   confirmar que no cambia nada.
+
+**Después — más esfuerzo, sigue siendo importante**
+
+5. **Fase 1 completa (funcionamiento sin conexión).** El propio documento ya
+   la marca como "el trabajo más valioso que queda" — service worker,
+   manifiesto, IndexedDB y cola de sincronización. Multi-semana, no un
+   parche.
+6. **`verificar_politicas()`**: extender el patrón de
+   `verificar_definiciones()` a políticas RLS y a `grant`/`revoke`, para que
+   una deriva de permisos como la del 26 de julio no vuelva a pasar diez días
+   sin que nada la detecte.
+7. **Terminar de partir `ui.js`/`ui-base.js`**: catálogo, usuarios,
+   préstamos y escáner siguen mezclados en `ui-base.js` (145 KB). Extracción
+   mecánica, no una reescritura — ya hay un patrón establecido con
+   `js/vistas/*.js`.
+
+**No es código, pero bloquea el cierre del proyecto igual**
+
+8. **Asignar, por nombre, quién aprieta el botón de respaldo.** Supabase
+   gratuito pausa proyectos tras 7 días sin actividad, y la biblioteca cierra
+   en febrero.
+9. **Designar Delegado de Protección de Datos y Encargado de
+   Ciberseguridad, y firmar el encargo de tratamiento con Supabase**, antes
+   del 1 de diciembre de 2026 (entrada en vigor de la Ley 21.719).
+
+**Pulido, no urgente**
+
+10. Portada del libro y lista de lo escaneado (con "deshacer") en el
+    escaneo remoto — ver sugerencias en el análisis de estado del proyecto,
+    guardado también en el Proyecto de Claude.
+11. Evaluar si conviene sumar el Tailwind CLI como paso de build antes de
+    desplegar, para que el hallazgo de esta sesión (clases "invisibles" por
+    no estar compiladas) deje de ser un riesgo permanente. Cambio de flujo de
+    trabajo más grande — no decidirlo a la ligera.

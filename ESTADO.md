@@ -1,132 +1,107 @@
-# Estado de la auditoría en curso
+# Estado de la sesión en curso
 
-Sesión de corrección de hallazgos de la auditoría técnica. No es documentación
-permanente del proyecto — se borra o se vacía cuando esta ronda de trabajo
-termine. Mientras tanto, es el punto de partida para retomar mañana.
+No es documentación permanente del proyecto — se borra o se vacía cuando esta
+ronda de trabajo termine. Mientras tanto, es el punto de partida para
+retomar mañana. El detalle completo de lo de hoy (con el porqué de cada
+cosa) está en `PROMPT-produccion.md`, sección 12.
 
-**Fecha**: 2026-08-09 (última sesión)
-**Último commit**: `80a48f3` — "pruebas: deja probar-vistas.mjs corriendo de verdad (tmpdir + Windows)"
-**Working tree**: limpio. Rama `main`, 3 commits por delante de `origin/main` (sin pushear).
-
----
-
-## Completados esta sesión
-
-1. **`pruebas/verificar_consolidacion.py`** — se fuerza UTF-8 en stdout al
-   inicio (con guarda `hasattr`), porque en consolas Windows/cp1252 el script
-   terminaba las 36 comprobaciones sin ningún problema real y aun así moría
-   con `UnicodeEncodeError` al imprimir el separador de cierre, devolviendo
-   código 1 como si algo hubiera fallado. Confirmado: ahora sale con código 0
-   en esta consola, sin tocar ninguna comprobación lógica. — commit `409df10`.
-
-2. **`pruebas/probar-vistas.mjs`, RAIZ** — dejó de depender de
-   `path.resolve('biblionexo')` (una subcarpeta literal que no existe en este
-   checkout) y ahora se deriva de `import.meta.url`, así corre desde
-   cualquier directorio. — commit `105826c`.
-
-3. **`pruebas/probar-vistas.mjs`, tmpdir + Windows** — dos defectos que
-   estaban enmascarados por el de arriba:
-   - el directorio temporal cambió de `path.resolve('.tmp-pruebas')`
-     (caía dentro de `RAIZ` y `fs.cpSync` fallaba al copiarse dentro de sí
-     mismo) a `fs.mkdtempSync(path.join(os.tmpdir(), 'biblionexo-pruebas-'))`,
-     fuera del repo;
-   - los `import()` dinámicos ahora pasan por `pathToFileURL()`, porque en
-     Windows una ruta cruda (`C:\...`) se interpretaba como URL con esquema
-     `c:` y el loader de ESM la rechazaba;
-   - la limpieza del temporal quedó en `try/finally` (sin reindentar el
-     cuerpo de ~650 líneas, para no inflar el diff).
-   Resultado: la suite corre de verdad. **91 pasadas, 1 fallida.**
-   — commit `80a48f3`.
-
-4. **Clasificación del único fallo** de `probar-vistas.mjs` (hecha, no
-   aplicada todavía): "los avisos se anuncian al lector de pantalla" es
-   **(B) prueba desactualizada** — busca `<div id="toast-container">` en
-   `js/modules/ui.js`, que quedó reducido a 17 líneas de ensamblaje cuando
-   `UIManager` se repartió en `js/modules/ui-base.js` + `js/vistas/*.js`. El
-   comportamiento real ya es correcto (`role="status"` + `aria-live="polite"`
-   están en los tres lugares donde `ui-base.js` crea el contenedor, y en
-   `index.html:88`). Cero hallazgos (A) — ningún bug real de RUT, RLS,
-   consentimiento ni mesón en esta corrida.
+**Fecha**: 2026-08-19 (última sesión)
+**Último commit local sin confirmar en Vercel al momento de escribir esto**:
+verificar en el panel de Vercel que el deployment más reciente corresponda
+al commit del arreglo visual del recuadro de la cámara, no a uno anterior.
+**Working tree**: revisar con `git status` — puede haber cambios sin subir
+si el `git push` del último arreglo (recuadro de la cámara) no se hizo
+todavía.
 
 ---
 
-## En curso — qué falta para cerrarlo
+## Completado esta sesión
 
-**Paso 2 del plan de corrección** (reparar y enganchar `probar-vistas.mjs`).
-Falta, en orden:
+1. **Escaneo remoto sin sesión: cámara arreglada, dos bugs distintos.**
+   - La cámara no encendía con un clic porque `Html5QrcodeScanner` (interfaz
+     "enlatada" de `html5-qrcode`) pedía un segundo clic en un botón propio
+     de la librería, fácil de no ver. Se cambió a `Html5Qrcode` (API de bajo
+     nivel) en `js/modules/scanner.js` — un clic, permiso directo.
+   - El recuadro de la cámara se veía roto (video sin proporción, sin
+     esquinas de color, sin ancho máximo) porque el proyecto no tiene paso
+     de compilación de Tailwind: varias clases usadas en el primer diseño
+     nunca se habían usado antes en ningún otro archivo, así que no existían
+     en el `vendor/css/tailwind.css` estático — sin ningún error, solo sin
+     estilo. Se reescribió el recuadro en CSS de verdad en `css/styles.css`.
+   - Interfaz más amigable de regalo: pasos numerados, contador de libros
+     agregados en la sesión, mensajes de error específicos por causa
+     (permiso denegado / sin cámara / cámara ocupada / abierto desde una app
+     como WhatsApp en vez del navegador), la cámara se apaga sola si la
+     persona cambia de aplicación.
+   - Ambos arreglos probados con pruebas nuevas (9 en
+     `pruebas/probar-escaneo-remoto.mjs`, incluyendo el flujo de la cámara,
+     que antes no se probaba en absoluto) y confirmados en un celular real.
 
-1. Tu decisión sobre cómo corregir el fallo (B): ¿cambio mínimo de una línea
-   (`js/modules/ui.js` → `js/modules/ui-base.js` en la prueba), o lo amplío
-   para además revisar `js/vistas/*.js` por si algún día crean su propio
-   contenedor de avisos? Pregunta abierta, sin responder.
-2. Aplicar esa corrección y volver a correr `probar-vistas.mjs` hasta que dé
-   92/92 (verde).
-3. Enganchar `probar-vistas.mjs` a `.github/workflows/pruebas.yml`, junto a
-   los otros tres trabajos.
-4. Actualizar `pruebas/LEEME.md`: hoy documenta la invocación vieja ("Desde
-   la carpeta que contiene `biblionexo/`"), que ya no aplica.
-5. Commit de esta corrección, con diff mostrado antes de aplicarlo (como en
-   los pasos anteriores).
+2. **Conteos de pruebas y tabla de "qué ya está hecho" en
+   `PROMPT-produccion.md` corregidos** — estaban desactualizados (56→58,
+   90→98, faltaban tres suites completas en la lista). Ver sección 6 y la
+   nueva sección 12 de ese documento.
 
----
-
-## Pendientes (sin empezar), en el orden acordado
-
-- **C — `probar_librero.py` en entorno aislado.** Crear `.venv` con
-  `python -m venv .venv`, instalar ahí `pgserver` y `psycopg[binary]` (nunca
-  en el Python del sistema), correr las 90 comprobaciones de permisos del rol
-  librero contra PostgreSQL real. Si algo falla: explicar el permiso/política
-  RLS en juego y esperar visto bueno antes de tocar código — no corregir a
-  ciegas. Agregar `.venv/` a `.gitignore` si no está.
-- **D — cerrar el conteo de `probar-vistas.mjs`.** Una vez aplicada la
-  corrección del fallo (B), confirmar que queda en 92/92 y dejarlo asentado
-  (esto es continuación directa del paso "en curso" de arriba, no un punto
-  nuevo — lo separo solo porque lo nombraste aparte).
-- **E — diagnóstico offline/PWA (sin implementar).** Revisar `README.md`,
-  `CLAUDE.md`, el PRD y cualquier documento del repo buscando dónde se
-  promete comportamiento offline / offline-first / instalación como app —
-  recordatorio: el repo hoy no tiene `sw.js` ni `manifest.json`. Entregar dos
-  opciones con costo real: (a) reincorporar Service Worker + manifest, o (b)
-  corregir la documentación para que refleje lo que el sistema hace hoy. Sin
-  implementar ninguna.
-- **A — "caja de rutas"**: mencionado en el encargo de hoy, pero no
-  corresponde a nada que se haya establecido en esta sesión. No le inventé
-  contenido. Precísalo mañana antes de que lo trabaje.
-- **B — "checklist de migraciones"**: mismo caso — no aparece en el historial
-  de esta sesión. Lo más cercano que sí existe es la regla "no tocar ninguna
-  función RPC de `supabase/migrations/` sin avisar antes" (ver Decisiones más
-  abajo), pero eso ya está cubierto ahí, no parece ser esto. Precísalo mañana.
+3. **Análisis de estado completo** entregado al usuario y guardado en el
+   Proyecto de Claude (`claude/analisis-estado-2026-08-19.md`): checklist de
+   lo implementado, lo que falta pulir, y sugerencias de funcionalidades
+   nuevas.
 
 ---
 
-## Decisiones ya tomadas (no reabrir)
+## Lista de prioridades (detalle completo en PROMPT-produccion.md §12)
 
-- **`probar-vistas.mjs` se conserva.** Cubre terreno (RUT, accesibilidad WCAG,
-  ciclo completo del mesón, cumplimiento Ley 21.719, paginación, exportación)
-  que ninguna otra suite prueba. No se evalúa borrarla.
-- **No tocar `js/config.js` / `ADMIN_EMAILS`.** Es un respaldo client-side
-  deliberado y ya documentado (ver `js/modules/auth.js` y
-  `js/vistas/dashboard.js`), no una fuga.
-- **No tocar los colores/tipografías del sistema de diseño** de `CLAUDE.md`
-  ("Patrimonio de Futrono").
-- **Ninguna función RPC de `supabase/migrations/` se toca sin aviso previo**,
-  aunque una prueba la señale.
-- **Un commit por paso**, con diff mostrado antes de aplicarlo — seguir con
-  ese formato mañana.
+**Ahora — barato y con impacto real**
+1. Enganchar `probar-vistas.mjs`, `probar-migraciones.py` y
+   `probar-escaneo-remoto.mjs` a `.github/workflows/pruebas.yml`.
+2. Decidir qué hacer con la política RLS "de más" en `usuarios`.
+3. `migration repair` para las migraciones 012, 013 y 014 (requiere
+   aprobación antes de tocar producción).
+4. Alinear CI a `postgres:17` en los trabajos `base-de-datos` y
+   `reconstruccion`.
+
+**Después — más esfuerzo, sigue siendo importante**
+5. Fase 1 completa: funcionamiento sin conexión (service worker, IndexedDB,
+   cola de sincronización).
+6. `verificar_politicas()`: RLS y grants bajo el mismo patrón que
+   `verificar_definiciones()`.
+7. Terminar de partir `ui.js`/`ui-base.js` (catálogo, usuarios, préstamos,
+   escáner siguen mezclados en `ui-base.js`).
+
+**No es código, pero bloquea el cierre del proyecto igual**
+8. Asignar, por nombre, quién aprieta el botón de respaldo de Supabase.
+9. Designar Delegado de Protección de Datos y Encargado de Ciberseguridad,
+   firmar el encargo de tratamiento — antes del 1 de diciembre de 2026.
+
+**Pulido, no urgente**
+10. Portada del libro y lista de lo escaneado (con "deshacer") en el
+    escaneo remoto.
+11. Evaluar si conviene sumar el Tailwind CLI como paso de build, para que
+    el hallazgo de hoy (clases "invisibles" por no estar compiladas) deje de
+    ser un riesgo permanente.
 
 ---
 
-## Roto o a medio arreglar — dicho explícitamente
+## Pendiente inmediato, antes de tocar cualquier otra cosa
 
-- `pruebas/probar-vistas.mjs` **corre pero no está verde**: 1 de 92
-  comprobaciones falla (clasificada como B, ver arriba). No está enganchada a
-  `.github/workflows/pruebas.yml` todavía.
-- `pruebas/LEEME.md` sigue documentando la invocación vieja de
-  `probar-vistas.mjs` ("Desde la carpeta que contiene `biblionexo/`"), que ya
-  no es cierta desde el commit `105826c`. No se corrigió todavía — depende del
-  paso "En curso" de arriba.
-- `pruebas/probar_librero.py` no se ha corrido en esta ronda: sigue siendo
-  "requiere verificación manual" desde el informe original de la auditoría.
-- El diagnóstico offline/PWA (paso E) no se empezó: sigue siendo cierto que
-  no hay `sw.js` ni `manifest.json`, y no se ha revisado todavía qué
-  documentos del repo prometen lo contrario.
+- **Confirmar que el `git push` del arreglo visual (recuadro de la cámara)
+  ya se hizo** y que el deployment de Vercel correspondiente quedó "Ready".
+  Si no, es lo primero que hay que cerrar — todo lo demás de esta lista
+  puede esperar.
+- Ninguna de las 11 prioridades de arriba se empezó a trabajar todavía en
+  esta sesión — quedan para decidir en qué orden seguir.
+
+---
+
+## Decisiones que siguen en pie (heredadas, no reabrir)
+
+- **`probar-vistas.mjs` se conserva.** Cubre terreno que ninguna otra suite
+  prueba.
+- **No tocar `js/config.js` / `ADMIN_EMAILS`.** Respaldo client-side
+  deliberado y documentado.
+- **No tocar los colores/tipografías del sistema de diseño** de
+  `CLAUDE.md`/`PROMPT-produccion.md` ("Patrimonio de Futrono").
+- **Ninguna función RPC de `supabase/migrations/` se toca sin aviso
+  previo.**
+- **Cualquier clase de Tailwind nueva se verifica contra el resto del
+  proyecto antes de usarla** (nueva, de esta sesión — ver arriba).

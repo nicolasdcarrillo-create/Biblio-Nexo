@@ -98,18 +98,26 @@ function formatosDeBarras() {
 /** Dibuja el marco de escaneo propio: recuadro con esquinas y una línea
  *  animada, para que quede claro que la cámara SÍ está encendida y
  *  buscando un código — la librería, por su cuenta, no da ninguna pista
- *  visual de que está "viva" más allá del video en sí. */
+ *  visual de que está "viva" más allá del video en sí.
+ *
+ *  Clases propias, definidas en css/styles.css con CSS de verdad — no
+ *  clases de Tailwind sueltas. El proyecto no tiene paso de compilación:
+ *  vendor/css/tailwind.css es estático, así que una clase de Tailwind que
+ *  nunca se haya usado antes en ningún otro archivo (una relación de
+ *  aspecto, un color de marca en el borde, unas esquinas) no existe en ese
+ *  CSS aunque el nombre "se vea" válido — queda sin estilo, en silencio,
+ *  sin ningún error. Ver el comentario junto a estas clases en styles.css. */
 function pintarMarco(contenedor) {
   contenedor.innerHTML = `
-    <div class="relative w-full max-w-xs mx-auto aspect-[4/3] rounded-2xl overflow-hidden bg-stone-900 shadow-inner">
-      <div id="reader-video" class="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover"></div>
-      <div class="pointer-events-none absolute inset-5 border-2 border-white/60 rounded-xl">
-        <span class="absolute -top-0.5 -left-0.5 w-7 h-7 border-t-4 border-l-4 border-patrimonio-madera rounded-tl-lg"></span>
-        <span class="absolute -top-0.5 -right-0.5 w-7 h-7 border-t-4 border-r-4 border-patrimonio-madera rounded-tr-lg"></span>
-        <span class="absolute -bottom-0.5 -left-0.5 w-7 h-7 border-b-4 border-l-4 border-patrimonio-madera rounded-bl-lg"></span>
-        <span class="absolute -bottom-0.5 -right-0.5 w-7 h-7 border-b-4 border-r-4 border-patrimonio-madera rounded-br-lg"></span>
+    <div class="escaneo-marco">
+      <div id="reader-video" class="escaneo-marco__video"></div>
+      <div class="escaneo-marco__guia" aria-hidden="true">
+        <span class="escaneo-marco__esquina escaneo-marco__esquina--tl"></span>
+        <span class="escaneo-marco__esquina escaneo-marco__esquina--tr"></span>
+        <span class="escaneo-marco__esquina escaneo-marco__esquina--bl"></span>
+        <span class="escaneo-marco__esquina escaneo-marco__esquina--br"></span>
       </div>
-      <div class="linea-escaneo pointer-events-none absolute left-5 right-5"></div>
+      <div class="linea-escaneo" aria-hidden="true"></div>
     </div>`;
 }
 

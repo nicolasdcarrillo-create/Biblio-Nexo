@@ -470,19 +470,81 @@ textarea:focus-visible,
    fácil de pasar por alto —sobre todo en un celular ajeno, la primera vez
    que alguien abre el enlace de escaneo remoto— y daba la sensación de que
    "la cámara no abre" cuando en realidad el permiso nunca llegó a pedirse.
-   Ahora dibujamos nuestro propio recuadro (ver scanner.js, pintarMarco) y ya
-   no queda ningún texto de la librería que traducir. */
+   Ahora dibujamos nuestro propio recuadro (ver scanner.js, pintarMarco).
+
+   Ese recuadro se escribe en CSS de verdad, a mano, y NO con clases de
+   Tailwind — a propósito. Este proyecto no tiene paso de compilación:
+   vendor/css/tailwind.css es un archivo generado una sola vez, no un
+   compilador que corre en cada cambio. Cualquier clase de Tailwind que no se
+   haya usado ya en algún otro archivo del proyecto simplemente no existe en
+   ese CSS — no da ningún error, el elemento queda sin ese estilo y listo,
+   silenciosamente mal armado. Le pasó justo a la primera versión de este
+   recuadro (relación de aspecto, esquinas y color de marca): funcionaba en
+   la vista previa pero se veía roto en producción, porque esas clases nunca
+   se habían usado antes en ningún otro archivo. Por eso, para cualquier
+   estilo nuevo que no sea trivial (`hidden`, `flex`, `text-sm` y similares,
+   que sí están garantizados), lo más seguro es escribirlo aquí. */
+.escaneo-marco {
+    position: relative;
+    width: 100%;
+    max-width: 22rem;
+    margin: 0 auto;
+    aspect-ratio: 4 / 3;
+    border-radius: 1rem;
+    overflow: hidden;
+    background: #1c1917;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.escaneo-marco__video {
+    width: 100%;
+    height: 100%;
+}
+
+/* La librería inserta su propio <video> dentro de #reader-video; se le
+   fuerza a llenar el recuadro completo, recortando en vez de deformar. */
+.escaneo-marco__video video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.escaneo-marco__guia {
+    position: absolute;
+    inset: 1.25rem;
+    border: 2px solid rgba(255, 255, 255, 0.65);
+    border-radius: 0.75rem;
+    pointer-events: none;
+}
+
+.escaneo-marco__esquina {
+    position: absolute;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 0 solid var(--patrimonio-madera);
+    pointer-events: none;
+}
+
+.escaneo-marco__esquina--tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 0.5rem; }
+.escaneo-marco__esquina--tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 0.5rem; }
+.escaneo-marco__esquina--bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: 0.5rem; }
+.escaneo-marco__esquina--br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 0.5rem; }
 
 /* Línea animada que recorre el recuadro de la cámara de arriba hacia abajo,
    como pista visual de que la cámara SÍ está encendida y buscando un
    código — sin ella, un video quieto de la propia mano sosteniendo un libro
    no deja claro si el escáner está "vivo" o trabado. */
 .linea-escaneo {
+    position: absolute;
+    left: 1.25rem;
+    right: 1.25rem;
     height: 2px;
     top: 1.25rem;
     background: linear-gradient(90deg, transparent, #34d399 20%, #34d399 80%, transparent);
     box-shadow: 0 0 8px 2px rgba(52, 211, 153, 0.6);
     animation: recorrido-linea-escaneo 2.2s ease-in-out infinite;
+    pointer-events: none;
 }
 
 @keyframes recorrido-linea-escaneo {

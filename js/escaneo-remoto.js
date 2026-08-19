@@ -115,7 +115,7 @@ function sumarAlContador() {
 /** Pantalla principal: vence-en, cámara, entrada manual, resultado. */
 function pintarPrincipal(vence) {
     raiz().innerHTML = `
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl shadow-2xl p-6 space-y-5">
+      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl shadow-2xl p-6 space-y-4">
         <div class="text-center">
           <i aria-hidden="true" class="fas fa-barcode text-3xl text-patrimonio-madera"></i>
           <h1 class="font-serif text-xl font-bold text-stone-900 mt-2">Escaneo remoto de libros</h1>
@@ -127,15 +127,15 @@ function pintarPrincipal(vence) {
 
         <ol class="grid grid-cols-3 gap-2 text-center">
           <li class="bg-stone-50 border border-stone-200 rounded-xl px-2 py-3">
-            <span class="flex items-center justify-center w-6 h-6 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">1</span>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">1</span>
             <span class="text-[11px] text-stone-600 leading-tight block">Pulse «Iniciar cámara» y permita el acceso</span>
           </li>
           <li class="bg-stone-50 border border-stone-200 rounded-xl px-2 py-3">
-            <span class="flex items-center justify-center w-6 h-6 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">2</span>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">2</span>
             <span class="text-[11px] text-stone-600 leading-tight block">Apunte al código de barras del libro</span>
           </li>
           <li class="bg-stone-50 border border-stone-200 rounded-xl px-2 py-3">
-            <span class="flex items-center justify-center w-6 h-6 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">3</span>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">3</span>
             <span class="text-[11px] text-stone-600 leading-tight block">Suena un pitido y sigue con el próximo</span>
           </li>
         </ol>
@@ -231,7 +231,7 @@ async function manejarCodigo(codigo) {
           <div class="border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm">
             <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${accion} al catálogo</p>
             <p class="text-emerald-700 mt-1">${escapeHtml(fila.titulo || fila.isbn)}${fila.autor ? ` — ${escapeHtml(fila.autor)}` : ''}</p>
-            <p class="text-xs text-emerald-600 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
+            <p class="text-xs text-emerald-700 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
           </div>`;
         toast('Listo. Puede seguir escaneando.', 'success');
         sumarAlContador();

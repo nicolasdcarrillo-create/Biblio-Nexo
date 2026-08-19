@@ -6,46 +6,87 @@ retomar mañana. El detalle completo de lo de hoy (con el porqué de cada
 cosa) está en `PROMPT-produccion.md`, sección 12.
 
 **Fecha**: 2026-08-19 (última sesión)
-**Último commit local sin confirmar en Vercel al momento de escribir esto**:
-verificar en el panel de Vercel que el deployment más reciente corresponda
-al commit del arreglo visual del recuadro de la cámara, no a uno anterior.
-**Working tree**: revisar con `git status` — puede haber cambios sin subir
-si el `git push` del último arreglo (recuadro de la cámara) no se hizo
-todavía.
+**Working tree**: revisar con `git status` — hay cambios sin confirmar
+(`git add`/`git commit`/`git push`) correspondientes a la Fase 1.1, recién
+sincronizados a este equipo pero todavía no subidos.
 
 ---
 
 ## Completado esta sesión
 
 1. **Escaneo remoto sin sesión: cámara arreglada, dos bugs distintos.**
-   - La cámara no encendía con un clic porque `Html5QrcodeScanner` (interfaz
-     "enlatada" de `html5-qrcode`) pedía un segundo clic en un botón propio
-     de la librería, fácil de no ver. Se cambió a `Html5Qrcode` (API de bajo
-     nivel) en `js/modules/scanner.js` — un clic, permiso directo.
-   - El recuadro de la cámara se veía roto (video sin proporción, sin
-     esquinas de color, sin ancho máximo) porque el proyecto no tiene paso
-     de compilación de Tailwind: varias clases usadas en el primer diseño
-     nunca se habían usado antes en ningún otro archivo, así que no existían
-     en el `vendor/css/tailwind.css` estático — sin ningún error, solo sin
-     estilo. Se reescribió el recuadro en CSS de verdad en `css/styles.css`.
-   - Interfaz más amigable de regalo: pasos numerados, contador de libros
-     agregados en la sesión, mensajes de error específicos por causa
-     (permiso denegado / sin cámara / cámara ocupada / abierto desde una app
-     como WhatsApp en vez del navegador), la cámara se apaga sola si la
-     persona cambia de aplicación.
-   - Ambos arreglos probados con pruebas nuevas (9 en
-     `pruebas/probar-escaneo-remoto.mjs`, incluyendo el flujo de la cámara,
-     que antes no se probaba en absoluto) y confirmados en un celular real.
+   (Ver el detalle en la sección anterior de este archivo, o en
+   `PROMPT-produccion.md` §12 — no se repite aquí.) Confirmado en un celular
+   real; commit `a2009aa` ya subido.
 
-2. **Conteos de pruebas y tabla de "qué ya está hecho" en
+2. **Fase 1.1 — Funcionamiento sin conexión: cascarón de la app precargado.**
+   Alcance deliberadamente acotado: SOLO 1.1 (service worker + manifest +
+   precarga del cascarón), no 1.2/1.3/1.4 — siguiendo la regla del propio
+   `PROMPT-produccion.md` de no encadenar fases sin confirmación.
+
+   - **`sw.js`** (nuevo, en la raíz): precarga el cascarón (HTML, CSS, JS
+     propio, fuentes, Tailwind/FontAwesome compilados) para que la app pueda
+     ABRIR sin conexión. Cache-first para `/vendor/*`; network-first (con
+     reserva en caché) para todo lo demás del mismo origen; ignora por
+     completo lo que no sea GET y lo que no sea del mismo origen (Supabase,
+     Open Library nunca se cachean, para no servir datos de préstamos
+     desactualizados sin que nadie lo note). Deliberadamente NO precarga
+     `html5-qrcode.min.js`, `chart.umd.js` ni `qrcode.min.js` — siguen
+     cargándose bajo demanda, como ya funcionaba.
+   - **`manifest.json`** (nuevo): nombre, colores de Patrimonio de Futrono,
+     `display: standalone`. Trae solo el ícono de 192×192 que ya existía —
+     **falta uno de 512×512**, a propósito no se inventó ni se escaló (se
+     vería borroso); pendiente de que la biblioteca lo entregue.
+   - **`index.html`**: agrega `<link rel="manifest">` y `<meta
+     name="theme-color">`.
+   - **`js/main.js`**: registra el service worker después del evento `load`
+     (no compite por ancho de banda con el arranque) y nunca bloquea el
+     inicio de sesión si el registro falla — solo lo deja en el registro de
+     errores propio.
+   - **`vercel.json`**: `Cache-Control: no-cache, must-revalidate` para
+     `/sw.js` y `/manifest.json` (crítico para `sw.js`: si quedara con caché
+     larga, un cambio nuevo podría tardar en llegar a los navegadores).
+   - **33 comprobaciones nuevas** en `pruebas/probar-interfaz.mjs` (58 → 90):
+     estructura del service worker, contenido del manifest, que index.html
+     los enlace, que main.js registre sin bloquear, y que los tres archivos
+     pesados sigan fuera de la precarga.
+
+   **Qué falta todavía de "funcionamiento sin conexión" completo — NO se
+   tocó, es a propósito**: el cascarón abre sin conexión, pero *ninguna*
+   operación real (iniciar sesión, prestar, devolver) funciona todavía sin
+   internet — eso es Fase 1.2 (IndexedDB) y 1.3 (cola de sincronización),
+   sin empezar. El criterio de aceptación completo de la Fase 1 ("prestar un
+   libro en modo avión, que se sincronice solo al reconectar") sigue sin
+   cumplirse.
+
+3. **Conteos de pruebas y tabla de "qué ya está hecho" en
    `PROMPT-produccion.md` corregidos** — estaban desactualizados (56→58,
    90→98, faltaban tres suites completas en la lista). Ver sección 6 y la
-   nueva sección 12 de ese documento.
+   nueva sección 12 de ese documento. *(Pendiente: refrescar de nuevo con
+   58→90 tras lo de hoy.)*
 
-3. **Análisis de estado completo** entregado al usuario y guardado en el
+4. **Análisis de estado completo** entregado al usuario y guardado en el
    Proyecto de Claude (`claude/analisis-estado-2026-08-19.md`): checklist de
    lo implementado, lo que falta pulir, y sugerencias de funcionalidades
    nuevas.
+
+---
+
+## Cómo verificar la Fase 1.1 (antes de dar por cerrado este punto)
+
+1. `git add` / `git commit` / `git push` de: `sw.js`, `manifest.json`,
+   `index.html`, `js/main.js`, `vercel.json`,
+   `pruebas/probar-interfaz.mjs`.
+2. Ya en producción (Vercel), con el celular en modo avión: abrir
+   `https://biblio-nexo-fuckingkrio.vercel.app/` una vez CON conexión
+   (para que el service worker se instale y precargue el cascarón), después
+   activar modo avión y volver a abrir la misma URL — debería mostrar el
+   login o el panel, no un error de "sin conexión" del navegador.
+   *(Todavía NO debe intentar prestar/devolver sin conexión — eso fallará
+   hasta la Fase 1.2/1.3, como se explica arriba.)*
+3. En las herramientas de desarrollador del navegador (F12 → Application →
+   Service Workers) debería verse `sw.js` registrado y activo.
+4. `node pruebas/probar-interfaz.mjs` → 90 comprobaciones correctas.
 
 ---
 
@@ -61,8 +102,9 @@ todavía.
    `reconstruccion`.
 
 **Después — más esfuerzo, sigue siendo importante**
-5. Fase 1 completa: funcionamiento sin conexión (service worker, IndexedDB,
-   cola de sincronización).
+5. Fase 1 completa: funcionamiento sin conexión. **1.1 (service worker +
+   manifest) recién quedó lista hoy — falta 1.2 (IndexedDB), 1.3 (cola de
+   sincronización) y 1.4 (indicador de conexión).**
 6. `verificar_politicas()`: RLS y grants bajo el mismo patrón que
    `verificar_definiciones()`.
 7. Terminar de partir `ui.js`/`ui-base.js` (catálogo, usuarios, préstamos,
@@ -77,19 +119,22 @@ todavía.
 10. Portada del libro y lista de lo escaneado (con "deshacer") en el
     escaneo remoto.
 11. Evaluar si conviene sumar el Tailwind CLI como paso de build, para que
-    el hallazgo de hoy (clases "invisibles" por no estar compiladas) deje de
-    ser un riesgo permanente.
+    el hallazgo del bug de hoy (clases "invisibles" por no estar
+    compiladas) deje de ser un riesgo permanente.
+12. Conseguir un ícono de 512×512 de verdad para `manifest.json` (hoy solo
+    tiene el de 192×192).
 
 ---
 
 ## Pendiente inmediato, antes de tocar cualquier otra cosa
 
-- **Confirmar que el `git push` del arreglo visual (recuadro de la cámara)
-  ya se hizo** y que el deployment de Vercel correspondiente quedó "Ready".
-  Si no, es lo primero que hay que cerrar — todo lo demás de esta lista
-  puede esperar.
-- Ninguna de las 11 prioridades de arriba se empezó a trabajar todavía en
-  esta sesión — quedan para decidir en qué orden seguir.
+- **Confirmar `git add`/`commit`/`push` de los 6 archivos de la Fase 1.1**
+  (ver arriba) y verificar en un celular real, en modo avión, que el
+  cascarón abre.
+- **No seguir con la Fase 1.2 (IndexedDB) sin que el usuario lo pida
+  explícitamente** — es la siguiente fase natural, pero el proyecto tiene
+  la regla de no encadenar fases sin confirmación, y ya se siguió al pie de
+  la letra para 1.1 (solo 1.1, nada de 1.2/1.3/1.4 todavía).
 
 ---
 
@@ -104,4 +149,9 @@ todavía.
 - **Ninguna función RPC de `supabase/migrations/` se toca sin aviso
   previo.**
 - **Cualquier clase de Tailwind nueva se verifica contra el resto del
-  proyecto antes de usarla** (nueva, de esta sesión — ver arriba).
+  proyecto antes de usarla** (de la sesión anterior).
+- **El ícono de la app no se inventa ni se escala desde el de 192×192** — se
+  vería borroso. El de 512×512 lo tiene que entregar la biblioteca.
+- **El service worker nunca cachea nada que no sea del mismo origen ni nada
+  que no sea GET** — la cola de escrituras sin conexión es un diseño
+  aparte (Fase 1.3), no algo para improvisar dentro de `sw.js`.

@@ -315,6 +315,65 @@ comprobar('solo el rol admin ve Administración',
   CONFIG.VIEWS_BY_ROLE.admin.some(v => v.id === 'admin') &&
   !CONFIG.VIEWS_BY_ROLE.librero.some(v => v.id === 'admin'));
 
+console.log('\n10. Fase 1.1 — funcionamiento sin conexión (service worker, manifest)');
+comprobar('existe sw.js', fs.existsSync('sw.js'));
+const sw = fs.existsSync('sw.js') ? fs.readFileSync('sw.js', 'utf8') : '';
+comprobar('registra los tres eventos del ciclo de vida (install/activate/fetch)',
+  /addEventListener\(\s*['"]install['"]/.test(sw) &&
+  /addEventListener\(\s*['"]activate['"]/.test(sw) &&
+  /addEventListener\(\s*['"]fetch['"]/.test(sw));
+comprobar('los nombres de caché llevan versión (para poder invalidarlos)',
+  /CACHE_VERSION/.test(sw) && /CACHE_SHELL/.test(sw) && /CACHE_RUNTIME/.test(sw));
+comprobar('activate borra cachés de versiones anteriores',
+  /caches\.delete/.test(sw));
+comprobar('ignora peticiones que no son GET (la cola de escritura es Fase 1.3, no esto)',
+  /method\s*!==\s*['"]GET['"]/.test(sw));
+comprobar('ignora peticiones de otro origen (Supabase, Open Library nunca se cachean)',
+  /url\.origin\s*!==\s*self\.location\.origin/.test(sw));
+comprobar('/vendor/ usa cache-first',
+  /vendor\//.test(sw) && /cacheFirst/.test(sw));
+comprobar('el resto usa network-first (siempre se prefiere la red si hay)',
+  /networkFirst/.test(sw));
+for (const clave of ['/index.html', '/escaneo-remoto.html', '/manifest.json', '/icono-192x192.png', '/css/styles.css', '/js/main.js']) {
+  comprobar(`precarga ${clave}`, sw.includes(`'${clave}'`));
+}
+// Se mira solo el arreglo PRECACHE_URLS, no el archivo entero: los tres
+// nombres SÍ aparecen a propósito en el comentario que explica por qué se
+// excluyen, y buscarlos en todo el texto daría un falso fallo.
+const listaPrecarga = (sw.match(/PRECACHE_URLS\s*=\s*\[([\s\S]*?)\];/) || [])[1] || '';
+for (const pesado of ['html5-qrcode.min.js', 'chart.umd.js', 'qrcode.min.js']) {
+  comprobar(`NO precarga ${pesado} (se carga solo, bajo demanda, como hasta ahora)`,
+    !listaPrecarga.includes(pesado));
+}
+
+comprobar('existe manifest.json', fs.existsSync('manifest.json'));
+let manifest = {};
+comprobar('manifest.json es JSON válido', (() => {
+  try { manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8')); return true; }
+  catch { return false; }
+})());
+for (const campo of ['name', 'short_name', 'start_url', 'display', 'icons']) {
+  comprobar(`manifest.json trae "${campo}"`, campo in manifest);
+}
+comprobar('el manifest se abre en modo standalone (como una app, no una pestaña)',
+  manifest.display === 'standalone');
+comprobar('el manifest declara al menos un ícono de 192×192',
+  Array.isArray(manifest.icons) && manifest.icons.some(i => i.sizes === '192x192'));
+
+comprobar('index.html enlaza el manifest', html.includes('rel="manifest"'));
+comprobar('index.html declara theme-color', /name="theme-color"/.test(html));
+
+const mainJs = fs.readFileSync('js/main.js', 'utf8');
+comprobar('main.js registra el service worker',
+  /serviceWorker\.register\(\s*['"]\/sw\.js['"]/.test(mainJs));
+comprobar('el registro comprueba que el navegador lo soporte antes de intentarlo',
+  /['"]serviceWorker['"]\s*in\s*navigator/.test(mainJs));
+comprobar('un fallo del registro no interrumpe el arranque (solo se registra)',
+  /register\([^)]*\)\s*\.catch/.test(mainJs));
+
+comprobar('vercel.json manda Cache-Control: no-cache a sw.js (si no, el navegador podría tardar en ver una versión nueva)',
+  /"source":\s*"\/sw\.js"/.test(fs.readFileSync('vercel.json', 'utf8')));
+
 // ---------------------------------------------------------------------------
 console.log(`\n${'─'.repeat(60)}`);
 console.log(`${pasadas} comprobaciones correctas, ${fallidas} con fallo`);

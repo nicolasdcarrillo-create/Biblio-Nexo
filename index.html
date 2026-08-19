@@ -62,6 +62,14 @@
     <link rel="icon" href="icono-192x192.png" type="image/png" sizes="192x192">
     <link rel="apple-touch-icon" href="icono-192x192.png">
 
+    <!-- Fase 1.1 (funcionamiento sin conexión): permite "Agregar a inicio" en el
+         celular y declara los colores de la app. manifest.json solo trae el
+         ícono de 192×192 que ya existía — falta uno de 512×512 para que Android
+         no lo estire (se vería borroso si se inventa aquí); pendiente de que la
+         biblioteca lo entregue. -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#7A431D">
+
     <!-- Todo autoalojado: sin CDN externos ni filtración de IP a terceros -->
     <link rel="stylesheet" href="vendor/css/tailwind.css">
     <link rel="stylesheet" href="vendor/css/fonts.css">

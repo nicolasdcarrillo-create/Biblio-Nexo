@@ -1,30 +1,41 @@
 /**
- * Lector de códigos de barras del mesón.
+ * Lector de códigos de barras — compartido entre la vista Mesón (ui-base.js,
+ * con sesión) y la página de escaneo remoto sin sesión (escaneo-remoto.js).
  *
- * Dos correcciones importantes respecto de la versión anterior:
+ * Historial de correcciones importantes:
  *
- * 1) La cámara no volvía a encender. `clear()` desmonta la instancia de
- *    Html5QrcodeScanner y la deja inservible, pero se guardaba igual en
- *    `this.scanner`. Al volver a la vista Mesón y pulsar "Iniciar cámara", se
- *    llamaba `render()` sobre un objeto ya desmontado y no pasaba nada, sin
- *    mensaje de error. Para la persona del mesón el escáner simplemente dejaba
- *    de funcionar hasta recargar la página. Ahora la instancia se descarta.
+ * 1) La cámara no volvía a encender. `clear()` desmonta la instancia y la
+ *    deja inservible, pero se guardaba igual en `this.html5Qrcode`. Al volver
+ *    a la vista y pulsar "Iniciar cámara", se llamaba sobre un objeto ya
+ *    desmontado y no pasaba nada, sin mensaje de error. Ahora la instancia
+ *    se descarta siempre al detener.
  *
- * 2) El pitido apuntaba a `assets/sounds/beep.ogg`, un archivo que no existe en
- *    el proyecto. Cada lectura pedía un archivo inexistente. Se reemplaza por
- *    un tono generado con la API de audio del navegador: no hay archivo que
- *    falte, ni petición de red, ni problema con la política de seguridad.
+ * 2) El pitido apuntaba a un archivo de sonido que no existe en el proyecto.
+ *    Se reemplaza por un tono generado con la API de audio del navegador.
  *
- * 3) La librería de escaneo pesa 368 KB y se cargaba en el arranque, en todas
- *    las vistas. Quien nunca abre el Mesón la descargaba igual. Ahora se pide
- *    solo al encender la cámara, igual que se hace con Chart.js.
+ * 3) La librería pesa 368 KB y se carga solo al encender la cámara, no en
+ *    el arranque (igual que Chart.js).
+ *
+ * 4) (Este cambio) Se dejó de usar `Html5QrcodeScanner` — la interfaz
+ *    "enlatada" de la librería — por `Html5Qrcode`, su API de bajo nivel.
+ *    `Html5QrcodeScanner` dibuja su propia pantalla dentro de #reader con
+ *    un botón adicional ("Permitir el uso de la cámara") que hay que pulsar
+ *    APARTE del botón "Iniciar cámara" de esta aplicación: quien no repara
+ *    en ese segundo botón —muy fácil en un celular ajeno, la primera vez
+ *    que abre el enlace— tiene la sensación de que "la cámara no abre",
+ *    aunque técnicamente el permiso nunca llegó a pedirse. Con la API de
+ *    bajo nivel, un solo clic en nuestro botón pide el permiso del
+ *    navegador de inmediato y la cámara se enciende sin pasos intermedios.
+ *    De regalo, ya no hace falta traducir a mano por CSS la interfaz en
+ *    inglés de la librería (ver css/styles.css) porque ahora dibujamos la
+ *    nuestra.
  */
 
 // Carga diferida de html5-qrcode. Se guarda la promesa para que dos llamadas
 // seguidas no inserten el script dos veces.
 let promesaLibreria = null;
 function cargarLibreria() {
-  if (typeof window.Html5QrcodeScanner === 'function') return Promise.resolve();
+  if (typeof window.Html5Qrcode === 'function') return Promise.resolve();
   if (promesaLibreria) return promesaLibreria;
   promesaLibreria = new Promise((resolver, rechazar) => {
     const script = document.createElement('script');
@@ -38,9 +49,73 @@ function cargarLibreria() {
   });
   return promesaLibreria;
 }
+
+/**
+ * Mensajes de error del navegador al pedir la cámara (nombres estándar de
+ * DOMException para getUserMedia), traducidos y con una salida clara para
+ * cada caso — no hay dos motivos iguales para "la cámara no funciona".
+ */
+const MENSAJES_ERROR_CAMARA = {
+  NotAllowedError: 'El navegador no tiene permiso para usar la cámara. Revise el candado o los ajustes del sitio y permita el acceso a la cámara, luego intente de nuevo.',
+  PermissionDeniedError: 'El navegador no tiene permiso para usar la cámara. Revise el candado o los ajustes del sitio y permita el acceso a la cámara, luego intente de nuevo.',
+  NotFoundError: 'No se encontró ninguna cámara en este dispositivo.',
+  DevicesNotFoundError: 'No se encontró ninguna cámara en este dispositivo.',
+  NotReadableError: 'La cámara está siendo usada por otra aplicación. Ciérrela e intente de nuevo.',
+  TrackStartError: 'La cámara está siendo usada por otra aplicación. Ciérrela e intente de nuevo.',
+  SecurityError: 'El navegador bloqueó el acceso a la cámara en este sitio.',
+  AbortError: 'No se pudo encender la cámara. Intente de nuevo.'
+};
+
+function mensajeErrorCamara(e) {
+  const nombre = e?.name || '';
+  if (MENSAJES_ERROR_CAMARA[nombre]) return MENSAJES_ERROR_CAMARA[nombre];
+  const texto = String(e?.message || e || '');
+  // Algunos navegadores (sobre todo dentro de apps como WhatsApp o
+  // Instagram, que abren los enlaces en su propio visor en vez del
+  // navegador) ni siquiera exponen la cámara: no hay DOMException con
+  // nombre, solo un mensaje genérico. Se detecta por el texto para dar una
+  // salida útil en vez de "error desconocido".
+  if (/permission|constraint|overconstrained/i.test(texto)) {
+    return 'No se pudo acceder a la cámara con la configuración pedida.';
+  }
+  return 'No se pudo encender la cámara. Si abrió este enlace desde WhatsApp u otra aplicación, intente abrirlo en su navegador (Chrome o Safari).';
+}
+
+/** Formatos de código de barras típicos de libros, más QR por si acaso.
+ *  Restringir los formatos acelera la lectura y evita falsos positivos.
+ *  Se arma con cautela: si el enum no trae alguno de estos nombres (por
+ *  ejemplo, una versión distinta de la librería), se descarta la lista
+ *  entera antes que fallar — sin restricción, la librería igual reconoce
+ *  todos los formatos que soporta. */
+function formatosDeBarras() {
+  const Formatos = window.Html5QrcodeSupportedFormats;
+  if (!Formatos) return undefined;
+  const nombres = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'CODABAR', 'ITF', 'QR_CODE'];
+  const lista = nombres.map(n => Formatos[n]).filter(v => v !== undefined);
+  return lista.length === nombres.length ? lista : undefined;
+}
+
+/** Dibuja el marco de escaneo propio: recuadro con esquinas y una línea
+ *  animada, para que quede claro que la cámara SÍ está encendida y
+ *  buscando un código — la librería, por su cuenta, no da ninguna pista
+ *  visual de que está "viva" más allá del video en sí. */
+function pintarMarco(contenedor) {
+  contenedor.innerHTML = `
+    <div class="relative w-full max-w-xs mx-auto aspect-[4/3] rounded-2xl overflow-hidden bg-stone-900 shadow-inner">
+      <div id="reader-video" class="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover"></div>
+      <div class="pointer-events-none absolute inset-5 border-2 border-white/60 rounded-xl">
+        <span class="absolute -top-0.5 -left-0.5 w-7 h-7 border-t-4 border-l-4 border-patrimonio-madera rounded-tl-lg"></span>
+        <span class="absolute -top-0.5 -right-0.5 w-7 h-7 border-t-4 border-r-4 border-patrimonio-madera rounded-tr-lg"></span>
+        <span class="absolute -bottom-0.5 -left-0.5 w-7 h-7 border-b-4 border-l-4 border-patrimonio-madera rounded-bl-lg"></span>
+        <span class="absolute -bottom-0.5 -right-0.5 w-7 h-7 border-b-4 border-r-4 border-patrimonio-madera rounded-br-lg"></span>
+      </div>
+      <div class="linea-escaneo pointer-events-none absolute left-5 right-5"></div>
+    </div>`;
+}
+
 class ScannerManager {
     constructor() {
-        this.scanner = null;
+        this.html5Qrcode = null;
         this.activo = false;
         this._audioCtx = null;
     }
@@ -70,6 +145,20 @@ class ScannerManager {
         }
     }
 
+    /**
+     * Descarga la librería por adelantado, SIN encender la cámara. Se llama
+     * apenas se sabe que puede hacer falta (token válido en escaneo-remoto.js,
+     * vista Mesón abierta), para que al pulsar "Iniciar cámara" la librería
+     * ya esté lista. Importa sobre todo en celulares: en Safari de iPhone, un
+     * permiso de cámara pedido después de una espera de red ya no cuenta
+     * como gesto directo de la persona usuaria y el navegador lo bloquea sin
+     * avisar. El error real (si la descarga falla) se muestra recién al
+     * pulsar el botón, no aquí.
+     */
+    precargar() {
+        cargarLibreria().catch(() => {});
+    }
+
     async start(onSuccess, onError) {
         const contenedor = document.getElementById('reader');
         if (!contenedor) return onError?.('El área de la cámara no está lista.');
@@ -84,40 +173,65 @@ class ScannerManager {
         // La vista pudo cambiar mientras se descargaba la librería
         if (!document.getElementById('reader')) return;
 
+        pintarMarco(contenedor);
+        const config = {
+            fps: 10,
+            qrbox: (anchoVisor, altoVisor) => {
+                const lado = Math.floor(Math.min(anchoVisor, altoVisor) * 0.75);
+                return { width: lado, height: Math.floor(lado * 0.5) };
+            },
+            formatsToSupport: formatosDeBarras()
+        };
+
+        const intentarEncender = camara => this.html5Qrcode.start(
+            camara,
+            config,
+            texto => { this._pitido(); onSuccess(texto); },
+            // Se llama en cada cuadro sin código detectado: no es un error real
+            () => {}
+        );
+
         try {
-            this.scanner = new window.Html5QrcodeScanner(
-                'reader',
-                { fps: 10, qrbox: { width: 250, height: 100 } },
-                false
-            );
+            this.html5Qrcode = new window.Html5Qrcode('reader-video', /* verbose */ false);
             this.activo = true;
-            this.scanner.render(
-                text => {
-                    this._pitido();
-                    onSuccess(text);
-                },
-                // Se llama en cada cuadro sin código detectado: no es un error real
-                () => {}
-            );
+            try {
+                await intentarEncender({ facingMode: 'environment' });
+            } catch (e) {
+                // Algunos computadores y tablets solo tienen cámara frontal: si la
+                // trasera no existe, se reintenta con la que haya en vez de fallar.
+                if (e?.name === 'OverconstrainedError') {
+                    await intentarEncender({ facingMode: 'user' });
+                } else {
+                    throw e;
+                }
+            }
         } catch (e) {
             this.activo = false;
-            this.scanner = null;
-            onError?.('No se pudo encender la cámara: ' + (e?.message || 'error desconocido'));
+            const instancia = this.html5Qrcode;
+            this.html5Qrcode = null;
+            try { await instancia?.clear(); } catch { /* ya estaba desmontada */ }
+            contenedor.innerHTML = '';
+            onError?.(mensajeErrorCamara(e));
         }
     }
 
     stop() {
-        if (!this.scanner) return;
-        const instancia = this.scanner;
-        // Se descarta ANTES de limpiar, para que un fallo de clear() no deje
-        // una instancia muerta bloqueando el próximo encendido.
-        this.scanner = null;
+        if (!this.html5Qrcode) return;
+        const instancia = this.html5Qrcode;
+        this.html5Qrcode = null;
         this.activo = false;
+        // Se descarta ANTES de limpiar, para que un fallo de stop()/clear() no
+        // deje una instancia muerta bloqueando el próximo encendido.
+        const terminar = () => instancia.clear().catch(() => {});
         try {
-            instancia.clear().catch(() => {});
+            const promesaParo = instancia.stop();
+            if (promesaParo?.then) promesaParo.then(terminar, terminar);
+            else terminar();
         } catch {
-            /* la instancia ya estaba desmontada */
+            terminar();
         }
+        const contenedor = document.getElementById('reader');
+        if (contenedor) contenedor.innerHTML = '';
     }
 }
 

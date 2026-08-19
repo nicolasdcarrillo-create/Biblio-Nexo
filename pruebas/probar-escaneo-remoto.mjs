@@ -219,6 +219,80 @@ await prueba('un enlace que expira a mitad de sesión corta el escaneo con un av
   assert(/expiró|no es válido/i.test(resultado), `no avisó que el enlace ya no sirve: ${resultado}`);
 });
 
+console.log('\n=== La cámara: un solo clic, y mensajes claros cuando falla ===');
+// scanner.js dejó de usar Html5QrcodeScanner (la interfaz "enlatada" de la
+// librería, con un botón de permiso APARTE del nuestro) por Html5Qrcode, su
+// API de bajo nivel — ver el comentario al inicio de scanner.js. Se mockea
+// ese global, no el anterior.
+
+await prueba('con permiso concedido, la cámara se enciende con un solo clic', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  window.Html5Qrcode = class {
+    start() { return Promise.resolve(); }
+    stop() { return Promise.resolve(); }
+    clear() { return Promise.resolve(); }
+  };
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  document.getElementById('er-start').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const bloqueCamara = document.getElementById('er-camara-encendida');
+  assert(bloqueCamara && !bloqueCamara.classList.contains('hidden'),
+    'no mostró el recuadro de la cámara tras encenderla con un solo clic');
+  assert(document.getElementById('reader-video'), 'no dibujó el visor de video propio');
+  assert(document.getElementById('er-start').classList.contains('hidden'),
+    'el botón «Iniciar cámara» debería ocultarse mientras la cámara está encendida');
+
+  // Se apaga para no dejar encendida la cámara del módulo (es un singleton
+  // compartido) de cara a la próxima prueba de este archivo.
+  document.getElementById('er-stop').click();
+  await new Promise(r => setTimeout(r, 10));
+});
+
+await prueba('si el navegador niega el permiso, avisa con un mensaje claro y deja reintentar', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  window.Html5Qrcode = class {
+    start() { return Promise.reject(Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' })); }
+    stop() { return Promise.resolve(); }
+    clear() { return Promise.resolve(); }
+  };
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  document.getElementById('er-start').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const texto = document.getElementById('er-toast').textContent;
+  assert(/permiso/i.test(texto), `no avisó con un mensaje sobre el permiso de la cámara: ${texto}`);
+  assert(!/error desconocido/i.test(texto), 'debería mostrar el motivo real, no un mensaje genérico');
+  assert(!document.getElementById('er-start').classList.contains('hidden'),
+    'el botón «Iniciar cámara» debe seguir visible para poder reintentar (era el fallo: se escondía igual)');
+  assert(document.getElementById('er-camara-encendida').classList.contains('hidden'),
+    'no debería quedar mostrando un recuadro de cámara que nunca encendió');
+});
+
+await prueba('si no hay ninguna cámara en el dispositivo, lo dice explícitamente', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  window.Html5Qrcode = class {
+    start() { return Promise.reject(Object.assign(new Error('Requested device not found'), { name: 'NotFoundError' })); }
+    stop() { return Promise.resolve(); }
+    clear() { return Promise.resolve(); }
+  };
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  document.getElementById('er-start').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const texto = document.getElementById('er-toast').textContent;
+  assert(/no se encontró ninguna cámara/i.test(texto), `no distinguió la falta de cámara de otros errores: ${texto}`);
+});
+
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

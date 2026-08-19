@@ -205,9 +205,13 @@ comprobar('no se dibujaron las pestañas de administración',
 console.log('\n7. Escaneo: la cámara debe poder apagarse y volver a encender');
 const Scanner = (await import('../js/modules/scanner.js')).default;
 let instanciasCreadas = 0;
-window.Html5QrcodeScanner = class {
+// Se mockea Html5Qrcode (la API de bajo nivel), no Html5QrcodeScanner: desde
+// que scanner.js dejó de usar la interfaz "enlatada" de la librería (ver el
+// comentario al inicio de scanner.js), es esta la que se instancia.
+window.Html5Qrcode = class {
   constructor() { instanciasCreadas++; }
-  render() {}
+  start() { return Promise.resolve(); }
+  stop() { return Promise.resolve(); }
   clear() { return Promise.resolve(); }
 };
 await uiManager.switchView('scanner');
@@ -217,7 +221,7 @@ await Scanner.start(() => {}, () => {});
 comprobar('la cámara enciende la primera vez', instanciasCreadas === 1,
   `se crearon ${instanciasCreadas}`);
 Scanner.stop();
-comprobar('al detener se descarta la instancia', Scanner.scanner === null);
+comprobar('al detener se descarta la instancia', Scanner.html5Qrcode === null);
 await Scanner.start(() => {}, () => {});
 comprobar('la cámara vuelve a encender después de detenerla (era el fallo)',
   instanciasCreadas === 2, `se crearon ${instanciasCreadas} instancias`);

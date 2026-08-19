@@ -97,34 +97,73 @@ function toast(mensaje, tipo = 'success') {
     toast._t = setTimeout(() => { if (contenedor) contenedor.innerHTML = ''; }, 5000);
 }
 
+/** Cuántos libros se agregaron o repusieron en esta visita. Es solo para
+ *  darle a la persona una sensación de avance mientras escanea uno tras
+ *  otro — no se guarda en ningún lado, se pierde si recarga la página. */
+let contadorSesion = 0;
+function sumarAlContador() {
+    contadorSesion++;
+    const nodo = document.getElementById('er-contador');
+    if (nodo) {
+        nodo.textContent = contadorSesion === 1
+            ? '1 libro agregado en esta sesión'
+            : `${contadorSesion} libros agregados en esta sesión`;
+        nodo.classList.remove('hidden');
+    }
+}
+
 /** Pantalla principal: vence-en, cámara, entrada manual, resultado. */
 function pintarPrincipal(vence) {
     raiz().innerHTML = `
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl shadow-2xl p-6 space-y-4">
+      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl shadow-2xl p-6 space-y-5">
         <div class="text-center">
-          <i aria-hidden="true" class="fas fa-barcode text-2xl text-patrimonio-madera"></i>
-          <h1 class="font-serif text-lg font-bold text-stone-900 mt-1">Escaneo remoto de libros</h1>
-          <p class="text-xs text-stone-500 mt-1">
+          <i aria-hidden="true" class="fas fa-barcode text-3xl text-patrimonio-madera"></i>
+          <h1 class="font-serif text-xl font-bold text-stone-900 mt-2">Escaneo remoto de libros</h1>
+          <p class="text-xs text-stone-500 mt-1.5 leading-relaxed">
             Sin iniciar sesión. Solo agrega o suma ejemplares al catálogo — nada más.
             ${vence ? `Este enlace vence a las ${escapeHtml(vence)}.` : ''}
           </p>
         </div>
+
+        <ol class="grid grid-cols-3 gap-2 text-center">
+          <li class="bg-stone-50 border border-stone-200 rounded-xl px-2 py-3">
+            <span class="flex items-center justify-center w-6 h-6 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">1</span>
+            <span class="text-[11px] text-stone-600 leading-tight block">Pulse «Iniciar cámara» y permita el acceso</span>
+          </li>
+          <li class="bg-stone-50 border border-stone-200 rounded-xl px-2 py-3">
+            <span class="flex items-center justify-center w-6 h-6 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">2</span>
+            <span class="text-[11px] text-stone-600 leading-tight block">Apunte al código de barras del libro</span>
+          </li>
+          <li class="bg-stone-50 border border-stone-200 rounded-xl px-2 py-3">
+            <span class="flex items-center justify-center w-6 h-6 rounded-full bg-patrimonio-madera text-white text-xs font-bold mx-auto mb-1.5">3</span>
+            <span class="text-[11px] text-stone-600 leading-tight block">Suena un pitido y sigue con el próximo</span>
+          </li>
+        </ol>
+
         <div id="er-toast"></div>
-        <div class="flex gap-3">
-          <button id="er-start" class="btn-madera flex-1 text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm">
-            <i aria-hidden="true" class="fas fa-camera mr-1.5"></i>Iniciar cámara
-          </button>
-          <button id="er-stop" class="bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl font-medium px-4 py-2 text-sm">
-            Detener
+
+        <button id="er-start" class="btn-madera w-full text-white font-sans font-bold rounded-xl shadow px-4 py-3.5 text-base">
+          <i aria-hidden="true" class="fas fa-camera mr-2"></i>Iniciar cámara
+        </button>
+        <div id="er-camara-encendida" class="hidden space-y-3">
+          <div id="reader" class="w-full"></div>
+          <button id="er-stop" class="w-full bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl font-medium px-4 py-2.5 text-sm">
+            <i aria-hidden="true" class="fas fa-stop mr-1.5"></i>Detener cámara
           </button>
         </div>
-        <div id="reader" class="w-full"></div>
-        <div class="flex gap-3">
-          <input id="er-manual" inputmode="numeric" aria-label="Escribir el ISBN manualmente"
-            placeholder="O ingrese el ISBN manualmente"
-            class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
-          <button id="er-buscar" class="bg-patrimonio-lago hover:bg-[#14303c] text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm">Agregar</button>
-        </div>
+
+        <p id="er-contador" class="hidden text-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-2"></p>
+
+        <details class="text-center">
+          <summary class="text-xs text-stone-500 cursor-pointer select-none py-1">¿Prefiere escribir el código a mano?</summary>
+          <div class="flex gap-2 mt-2">
+            <input id="er-manual" inputmode="numeric" aria-label="Escribir el ISBN manualmente"
+              placeholder="Ingrese el ISBN"
+              class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            <button id="er-buscar" class="bg-patrimonio-lago hover:bg-[#14303c] text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm">Agregar</button>
+          </div>
+        </details>
+
         <div id="er-resultado"></div>
       </div>`;
 
@@ -132,18 +171,33 @@ function pintarPrincipal(vence) {
         const boton = e.currentTarget;
         const original = boton.innerHTML;
         boton.disabled = true;
-        boton.textContent = 'Preparando cámara…';
+        boton.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Preparando cámara…';
+        document.getElementById('er-camara-encendida')?.classList.remove('hidden');
         try {
             await Scanner.start(
                 codigo => { if (!esRepetido(codigo)) manejarCodigo(codigo); },
-                mensaje => toast(mensaje, 'error')
+                mensaje => {
+                    toast(mensaje, 'error');
+                    boton.classList.remove('hidden');
+                    document.getElementById('er-camara-encendida')?.classList.add('hidden');
+                }
             );
+            // Scanner.start() no relanza el error: lo entrega por el segundo
+            // parámetro (arriba) y esta promesa igual se resuelve. Por eso se
+            // comprueba Scanner.activo en vez de asumir éxito por no haber
+            // caído en un catch — si no, este botón se volvería a esconder
+            // justo después de que el aviso de error lo mostrara de nuevo.
+            if (Scanner.activo) boton.classList.add('hidden');
         } finally {
             boton.disabled = false;
             boton.innerHTML = original;
         }
     });
-    document.getElementById('er-stop').addEventListener('click', () => Scanner.stop());
+    document.getElementById('er-stop').addEventListener('click', () => {
+        Scanner.stop();
+        document.getElementById('er-camara-encendida')?.classList.add('hidden');
+        document.getElementById('er-start')?.classList.remove('hidden');
+    });
 
     const buscarManual = () => {
         const campo = document.getElementById('er-manual');
@@ -180,6 +234,7 @@ async function manejarCodigo(codigo) {
             <p class="text-xs text-emerald-600 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
           </div>`;
         toast('Listo. Puede seguir escaneando.', 'success');
+        sumarAlContador();
     } catch (err) {
         const mensaje = err.message || 'No se pudo completar la operación.';
         resultado.innerHTML = `<p class="text-rose-700 text-sm font-bold"><i aria-hidden="true" class="fas fa-circle-exclamation mr-1.5"></i>${escapeHtml(mensaje)}</p>`;
@@ -235,6 +290,7 @@ async function mostrarFormularioDatos(resultado, codigo) {
                 <p class="text-emerald-700 mt-1">${escapeHtml(fila?.titulo || titulo)}</p>
               </div>`;
             toast('Listo. Puede seguir escaneando.', 'success');
+            sumarAlContador();
         } catch (err) {
             toast(err.message || 'No se pudo agregar el libro.', 'error');
             boton.disabled = false;
@@ -286,6 +342,21 @@ export async function iniciar() {
         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     }) : '';
     pintarPrincipal(vence);
+
+    // Se descarga el módulo de la cámara por adelantado, apenas se sabe que
+    // el enlace es válido — así, al pulsar "Iniciar cámara" el permiso se
+    // pide de inmediato en vez de después de una espera de red (en Safari de
+    // iPhone eso es la diferencia entre que la cámara abra o no: ver
+    // scanner.js, precargar()).
+    Scanner.precargar();
+
+    // Si la persona cambia de aplicación con la cámara encendida (para
+    // revisar algo en WhatsApp, por ejemplo), se apaga sola: nadie se da
+    // cuenta de dejarla prendida y el celular no se calienta ni gasta
+    // batería de más mientras el enlace sigue vigente.
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) Scanner.stop();
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

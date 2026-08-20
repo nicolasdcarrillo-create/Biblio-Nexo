@@ -72,6 +72,45 @@ proyecto no tiene `package.json` (a propósito, ver `.gitignore`), cada
 puede desinstalar silenciosamente lo que ya tenías. Ya pasó una vez armando
 esta prueba: instalar `fake-indexeddb` solo se llevó `jsdom` por delante.
 
+### `probar-sync-queue.mjs` — la cola de sincronización y el respaldo sin conexión (Fase 1.3)
+
+Prueba la clase `SyncQueue` de `js/modules/db.js` (la cola de escrituras
+pendientes: préstamo, devolución, renovación) y el respaldo sin conexión de
+`estadoLector()`/`consultarLibro()`, que se apoya en la copia local de la
+Fase 1.2. Usa IndexedDB en memoria (igual que `probar-persistencia.mjs`) más
+un Supabase falso con control total sobre qué responde cada llamada RPC —
+así se puede simular, a voluntad, un fallo de red, un rechazo real del
+servidor, o una migración que falta.
+
+Cubre lo que exige `PROMPT-produccion.md`, sección 7 (1.3): que un fallo de
+RED se encole y nunca se pierda; que un rechazo REAL del servidor (con
+código) se lance tal cual y jamás se encole; que la cola reproduzca la
+MISMA llamada que se habría hecho con conexión, sin reinventar ninguna
+lógica de negocio; la espera exponencial y el aviso visible, tanto en un
+rechazo real al reintentar como al acumular varios fallos de red seguidos;
+y que `estadoLector()`/`consultarLibro()` caigan a la copia local sin
+inventar nunca un "no existe" que no se pueda comprobar sin conexión.
+
+```bash
+npm install jsdom fake-indexeddb --no-save
+node pruebas/probar-sync-queue.mjs
+```
+
+### `probar-estado-conexion.mjs` — el indicador de conexión (Fase 1.4)
+
+Prueba `js/modules/estado-conexion.js`: que junte bien las tres señales (en
+línea/sin conexión del navegador, "sincronizando" mientras `colaSync`
+reintenta, y cuántas operaciones quedan pendientes) y avise a quien esté
+suscrito en el momento correcto, por empuje (push) y no por encuesta
+(polling). No repite ninguna prueba de `probar-sync-queue.mjs`: aquí no
+importa SI un reintento tiene éxito o fracasa, solo que el indicador nunca
+se quede "pegado" en `sincronizando:true` pase lo que pase.
+
+```bash
+npm install jsdom fake-indexeddb --no-save
+node pruebas/probar-estado-conexion.mjs
+```
+
 ### Sección 10 de `probar-interfaz.mjs` — el service worker y el manifest (Fase 1.1)
 
 No es un archivo aparte: son comprobaciones estructurales agregadas a
@@ -195,16 +234,61 @@ misma simulación de sesión que usa el resto del script. No hay, en el código,
 un camino sin esa guarda para estas cinco funciones.
 
 Mientras no se corra `preparar_timezone_pgserver.py` (sección anterior), un
-resultado de `probar_librero.py` en Windows de 84 comprobaciones correctas,
+resultado de `probar_librero.py` en Windows de 85 comprobaciones correctas,
 0 con fallo y 13 omitidas es el esperado, no una regresión. (Antes de la
-Fase 1.2 —lápidas de eliminación, migración 015— era 78 y 12: la sección
-nueva agrega 7 comprobaciones, una de ellas sensible al mismo huso horario
-que las demás omitidas en Windows.)
+Fase 1.2 —lápidas de eliminación, migración 015— era 78 y 12: esa sección
+agregó 7 comprobaciones, una de ellas sensible al mismo huso horario que las
+demás omitidas en Windows. La comprobación nueva del ítem 11 —que el
+anónimo no puede deshacer un escaneo con un token inventado— no depende del
+huso horario, así que solo sube el conteo de correctas.)
 
 Al inspeccionar el paquete directamente (no en la salida de la suite), la
 carencia se manifiesta como `could not open directory
 ".../pgserver/pginstall/share/postgresql/timezone"`. Es la pista útil para
 quien tenga que depurar el paquete a mano.
+
+## Pruebas agregadas en esta ronda (ítems 11-13, "pulido, no urgente")
+
+### `probar-escaneo-remoto.mjs` — la lista de lo escaneado, con portada y "deshacer" (ítem 11)
+
+Cuatro comprobaciones nuevas, al final del archivo: que escanear agregue una
+fila a `#er-escaneados` con su portada de Open Library (miniatura por ISBN,
+igual que el panel del personal — ver `js/modules/portadas.js`); que
+"Deshacer" sobre un libro repuesto reste exactamente lo que esa acción sumó,
+sin tocar nada más; que "Deshacer" sobre un libro recién creado lo elimine
+del catálogo; y que, si el servidor rechaza el deshacer, el botón se
+reactive y la fila NO desaparezca (para poder reintentar o entender por qué).
+
+El simulador de RPC (`respuestaRpc`) ganó una rama para
+`deshacer_libro_remoto`, con la misma convención que ya usaba
+`agregar_libro_remoto`: `libro_id` es la posición (1-indexada) del libro en
+el arreglo `libros` de prueba.
+
+**Nota para quien agregue más pruebas a este archivo:** tanto `libros` como
+la lista `escaneados` (dentro de `js/escaneo-remoto.js`) son estado en
+memoria que persiste entre pruebas del mismo archivo — igual que ya pasaba
+con `libros`. Las comprobaciones sobre la lista de escaneados usan
+conteos relativos ("una fila menos", no "cero filas"), no absolutos, por eso.
+
+### `probar-migraciones.py` — `deshacer_libro_remoto()` contra PostgreSQL real
+
+Cinco comprobaciones nuevas en la sección "Escaneo remoto sin sesión": que
+deshacer un `'creado'` elimine el libro; que deshacer un `'incrementado'`
+reste exactamente lo agregado; que NO reste ejemplares que ya se prestaron
+(nunca deja `stock` por debajo de cero ni `copias_totales` por debajo de las
+copias en uso); que NO elimine un libro que ya tiene algún préstamo asociado
+(aunque el "estado" fuera `'creado'`, para no dejar un préstamo apuntando a
+un libro inexistente); y que rechace un token inventado, igual que las demás
+funciones del escaneo remoto.
+
+### `probar_librero.py` — permisos de `anon` y el conteo del manifiesto
+
+Una comprobación nueva: el anónimo no puede llamar a `deshacer_libro_remoto`
+con un token inventado (la única barrera sigue siendo el token, nunca el
+rol). Los dos conteos hardcodeados del manifiesto (`verificar_definiciones()`)
+subieron de 40 a 41 funciones, por la función nueva.
+
+---
 
 ## Integración continua
 
@@ -213,7 +297,7 @@ quien tenga que depurar el paquete a mano.
 | Trabajo | Qué hace |
 |---|---|
 | `consolidacion` | Lee los archivos SQL, segundos |
-| `interfaz` | DOM simulado con jsdom (`probar-interfaz.mjs`) + IndexedDB en memoria con fake-indexeddb (`probar-persistencia.mjs`, Fase 1.2) |
+| `interfaz` | DOM simulado con jsdom (`probar-interfaz.mjs`) + IndexedDB en memoria con fake-indexeddb (`probar-persistencia.mjs`, Fase 1.2; `probar-sync-queue.mjs`, Fase 1.3; `probar-estado-conexion.mjs`, Fase 1.4) |
 | `base-de-datos` | PostgreSQL 16 real |
 | `reconstruccion` | Rehace la base con el CLI de Supabase desde cero |
 

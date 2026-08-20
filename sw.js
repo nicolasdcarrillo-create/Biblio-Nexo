@@ -39,7 +39,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v3'; // ítems 11 y 13: se agregaron icono-512x512.png y js/modules/portadas.js a PRECACHE_URLS
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 
@@ -56,6 +56,7 @@ const PRECACHE_URLS = [
   '/escaneo-remoto.html',
   '/manifest.json',
   '/icono-192x192.png',
+  '/icono-512x512.png',
   '/css/styles.css',
   '/vendor/css/tailwind.css',
   '/vendor/css/fonts.css',
@@ -81,8 +82,10 @@ const PRECACHE_URLS = [
   '/js/modules/auth.js',
   '/js/modules/db.js',
   '/js/modules/errores.js',
+  '/js/modules/estado-conexion.js',
   '/js/modules/libros-externos.js',
   '/js/modules/persistencia.js',
+  '/js/modules/portadas.js',
   '/js/modules/qr.js',
   '/js/modules/scanner.js',
   '/js/modules/ui-base.js',

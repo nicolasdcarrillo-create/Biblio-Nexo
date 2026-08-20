@@ -157,7 +157,7 @@ def main():
         # el token de un solo objetivo, que cada una valida por su cuenta
         # contra su huella SHA-256 en enlaces_escaneo_remoto — ver 010,
         # sección «ESCANEO REMOTO SIN SESIÓN».
-        'validar_enlace_escaneo', 'agregar_libro_remoto',
+        'validar_enlace_escaneo', 'agregar_libro_remoto', 'deshacer_libro_remoto',
     }
     bloques = re.split(r'(?=create or replace function public\.)', texto_consolidado)
     definer_sin_guarda = []

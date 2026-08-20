@@ -444,7 +444,7 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-comprobar('el manifiesto cubre 40 funciones', len(filas) == 40, f'cubre {len(filas)}')
+comprobar('el manifiesto cubre 41 funciones', len(filas) == 41, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -612,6 +612,11 @@ comprobar('el anónimo no puede agregar un libro con un token inventado',
 comprobar('...y ese ISBN inventado no quedó en el catálogo',
           valor("select count(*) from public.libros where isbn = '000-inventado';") == 0)
 
+ok, r = como_anonimo(
+    "select * from public.deshacer_libro_remoto('token-inventado', 1, 'creado', 1)")
+comprobar('el anónimo no puede deshacer un escaneo con un token inventado',
+          not ok, f'se ejecutó y devolvió: {texto(r)[:100]}')
+
 # Y lo que sí debe seguir funcionando para el personal
 if TIMEZONE_OK:
     ok, out = como(LIBRERO, "select nombre from public.estado_lector('12345678-5');")
@@ -622,7 +627,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 40,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 41,
           texto(out)[-150:])
 
 

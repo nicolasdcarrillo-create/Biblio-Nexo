@@ -13,17 +13,19 @@
       y agregar o reponer libros con él.
 
       Misma Política de Seguridad de Contenido que index.html — ver ese
-      archivo para la explicación completa. Aquí no hace falta img-src hacia
-      Open Library (esta página no muestra portadas), pero sí connect-src
-      hacia Supabase y Open Library: la primera para validar el token y
-      escribir el libro, la segunda para completar título y autor por ISBN.
+      archivo para la explicación completa. connect-src hacia Supabase y
+      Open Library: la primera para validar el token y escribir el libro, la
+      segunda para completar título y autor por ISBN. img-src hacia
+      covers.openlibrary.org (ítem 11, "pulido, no urgente"): la lista de lo
+      escaneado en esta página SÍ muestra la portada de cada libro, igual que
+      el panel del personal — ver js/modules/portadas.js.
     -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
       script-src 'self';
       style-src 'self' 'unsafe-inline';
       font-src 'self';
-      img-src 'self' data:;
+      img-src 'self' data: https://covers.openlibrary.org;
       connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org;
       base-uri 'self';
       form-action 'self';
@@ -34,6 +36,7 @@
     <meta name="description" content="Escaneo remoto de libros — Biblioteca Pública Municipal de Futrono.">
 
     <link rel="icon" href="icono-192x192.png" type="image/png" sizes="192x192">
+    <link rel="icon" href="icono-512x512.png" type="image/png" sizes="512x512">
     <link rel="apple-touch-icon" href="icono-192x192.png">
 
     <link rel="stylesheet" href="vendor/css/tailwind.css">

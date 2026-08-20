@@ -179,24 +179,30 @@ Verificado el 27 de julio de 2026. Confírmalo tú mismo antes de asumirlo.
 | Consolidación de funciones SQL | Migración 010, con manifiesto verificable |
 | Integración continua | `.github/workflows/pruebas.yml`, 4 trabajos — **no cubre todas las suites, ver sección 12** |
 | Contraste WCAG | `pruebas/probar-contraste.mjs` |
-| Escaneo remoto sin sesión (QR temporal, sin login) | Migración 014 + funciones en 010; `escaneo-remoto.html` + `js/escaneo-remoto.js`; probado en celular real |
+| Escaneo remoto sin sesión (QR temporal, sin login) | Migración 014 + funciones en 010; `escaneo-remoto.html` + `js/escaneo-remoto.js`; con portada y lista de lo escaneado con "deshacer" (ítem 11); probado en celular real |
+| Ícono de la app (192×192 y 512×512, en `manifest.json`) | Ambos tamaños, mismo diseño (ítem 13) |
 
 **Suites de prueba existentes** — ejecútalas antes y después de cada cambio
-(conteos verificados el 20 de agosto de 2026; corren todas en verde):
+(conteos verificados el 20 de agosto de 2026, tras los ítems 11-13 de
+"pulido, no urgente"; corren todas en verde):
 
-    python3 pruebas/verificar_consolidacion.py   → regla de la consolidación
-    node pruebas/probar-interfaz.mjs             → 98 comprobaciones, DOM simulado
+    python3 pruebas/verificar_consolidacion.py   → regla de la consolidación (41 funciones en el manifiesto)
+    node pruebas/probar-interfaz.mjs             → 124 comprobaciones, DOM simulado
     node pruebas/probar-vistas.mjs               → 106 comprobaciones, DOM simulado
-    node pruebas/probar-escaneo-remoto.mjs       → 9 comprobaciones, DOM simulado (página sin sesión)
-    node pruebas/probar-persistencia.mjs         → 25 comprobaciones, IndexedDB en memoria (Fase 1.2)
-    python3 pruebas/probar_librero.py            → 105 comprobaciones, PostgreSQL real (84 en Windows sin tzdata, ver LEEME.md)
-    python3 pruebas/probar-migraciones.py        → 120 comprobaciones, PostgreSQL real (dos escenarios de esquema)
+    node pruebas/probar-escaneo-remoto.mjs       → 13 comprobaciones, DOM simulado (página sin sesión)
+    node pruebas/probar-persistencia.mjs         → 37 comprobaciones, IndexedDB en memoria (Fase 1.2 y 1.3)
+    node pruebas/probar-sync-queue.mjs           → 37 comprobaciones, IndexedDB en memoria + Supabase falso controlable (Fase 1.3)
+    node pruebas/probar-estado-conexion.mjs      → 18 comprobaciones, IndexedDB en memoria (Fase 1.4)
+    python3 pruebas/probar_librero.py            → 106 comprobaciones, PostgreSQL real (85 en Windows sin tzdata, ver LEEME.md)
+    python3 pruebas/probar-migraciones.py        → 130 comprobaciones, PostgreSQL real (dos escenarios de esquema)
 
-De las siete, corren en CI hoy: `verificar_consolidacion.py` y
+De las nueve, corren en CI hoy: `verificar_consolidacion.py` y
 `probar-interfaz.mjs` (trabajo `interfaz`, que desde la Fase 1.2 también
-corre `probar-persistencia.mjs` en el mismo trabajo), más `probar_librero.py`
-y una reconstrucción completa de migraciones (trabajos `base-de-datos` y
-`reconstruccion`). Las dos restantes (`probar-vistas.mjs`,
+corre `probar-persistencia.mjs`, desde la Fase 1.3 también
+`probar-sync-queue.mjs`, y desde la Fase 1.4 también
+`probar-estado-conexion.mjs`, todas en el mismo trabajo), más
+`probar_librero.py` y una reconstrucción completa de migraciones (trabajos
+`base-de-datos` y `reconstruccion`). Las dos restantes (`probar-vistas.mjs`,
 `probar-migraciones.py`) solo corren si alguien se acuerda de hacerlo a
 mano — ver sección 12. (`probar-escaneo-remoto.mjs` también sigue sin
 engancharse; queda igual de pendiente que antes de esta fase.)
@@ -225,7 +231,7 @@ desde cero.
 - Catálogo y lectores en local, con sincronización en segundo plano
 - Delta sync por `updated_at` para no traer todo cada vez
 
-**1.3 — Cola de sincronización**
+**1.3 — Cola de sincronización — hecho, ver sección 14**
 - Clase `SyncQueue` en `db.js`
 - Toda escritura que falle por red entra en cola persistente, con reintento
   exponencial. La cola sobrevive al cierre del navegador.
@@ -233,7 +239,7 @@ desde cero.
   stock es el dato en disputa y que dos mesones simultáneos son improbables aquí.
 - Fallo permanente: aviso visible al administrador, no silencioso.
 
-**1.4 — Estado de conexión**
+**1.4 — Estado de conexión — hecho, ver sección 15**
 - Indicador permanente: en línea / sin conexión / sincronizando / N pendientes
 
 **Criterio de aceptación:** con modo avión activado se registra un préstamo; al
@@ -662,3 +668,380 @@ local mientras no se haya purgado (hasta 30 días para un lector sin
 actividad). No se intentó resolver desde el código porque no se puede: es
 una decisión y una acción sobre el equipo físico, fuera del alcance de este
 repositorio.
+
+---
+
+## 14. Estado al 20 de agosto de 2026 (más tarde el mismo día) — Fase 1.3
+
+### Cola de sincronización: hecha
+
+`js/modules/db.js`, clase `SyncQueue` (exportada como `colaSync`). Alcance
+exactamente el de la sección 7 (1.3), más un respaldo de LECTURA sin
+conexión que no estaba en la letra de la especificación pero resultó
+indispensable en la práctica: sin poder consultar un libro ni ver la
+situación de un lector sin conexión, el flujo de préstamo nunca llega al
+punto de intentar la escritura que la cola existe para salvar. Se scopeó
+adentro por esa razón, no por generalizar de más.
+
+**Qué resuelve.** `prestar_libro`, `devolver_prestamo` y `renovar_prestamo`
+son funciones RPC del servidor — sin conexión no hay forma de llamarlas.
+Antes de esta fase, un fallo de red ahí terminaba igual que cualquier otro
+error: un mensaje y nada más, sin ninguna forma de recuperar la operación
+intentada.
+
+**Cómo distingue un fallo de red de un rechazo real.** `esFalloDeRed(error)`
+en `db.js`: todo error que de verdad viene de Postgres/PostgREST trae un
+`.code` (confirmado contra el patrón ya existente de `esFuncionInexistente`,
+que compara `error.code === '42883'`); un error SIN `.code` es, por
+eliminación, algo que pasó ANTES de llegar al servidor — el error sintético
+de `conTiempoLimite` al agotar el tiempo de espera, o una excepción real del
+navegador al no poder ni siquiera abrir la conexión. Esta distinción es el
+eje de todo el diseño: un fallo de red se reintenta (puede que la próxima
+vez funcione); un rechazo real no (reintentarlo no cambia por qué el
+servidor lo rechazó).
+
+**Qué hace cuando detecta un fallo de red.** Guarda la intención en el
+almacén local (`persistencia.js`, almacén nuevo `colaSync` — sobrevive a
+cerrar el navegador) y la reintenta sola: al recuperar la conexión (evento
+`online`, al que `colaSync` se suscribe por su cuenta dentro de `db.js`, sin
+depender de que `main.js` se acuerde de hacerlo), y mientras tanto con
+espera exponencial (30 s → 1 → 2 → 4 → 8 min... hasta un tope de 30 min). Al
+quinto intento seguido sin éxito, además de seguir reintentando, deja un
+aviso en el registro de errores propio (visible en Administración →
+Diagnóstico) — nunca se pierde en silencio, aunque quien originó la
+operación ya se haya ido del mesón.
+
+**Estrategia de conflictos — la decisión que pedía la sección 7, con su
+porqué.** Ninguna lógica de resolución a mano. La cola se limita a repetir
+la MISMA llamada RPC que se habría hecho con conexión, y esa función ya
+revalida todo del lado del servidor (stock con `FOR UPDATE`, límite de
+préstamos, bloqueos) en el momento real del reintento, no con el dato que
+había cuando se encoló. El stock es el dato en disputa que señala la
+sección 7, y ya está cubierto: si dos mesones sin conexión intentaran
+prestar el último ejemplar y ambos quedaran en cola, al reconectar uno de
+los dos RPC fallaría por falta de stock de verdad — un rechazo real (con
+`.code`), no un fallo de red: no se reintenta, se avisa. Dos mesones sin
+conexión al mismo tiempo, en esta biblioteca, se consideró suficientemente
+improbable como para no justificar más que esto — tal como invitaba a
+considerar la propia sección 7.
+
+**El respaldo de lectura sin conexión, y la regla que no se negocia ahí.**
+`consultarLibro()` cae al catálogo local (Fase 1.2) sin ningún reparo de
+privacidad: se replica entero. `estadoLector()` cae a la copia PARCIAL de
+lectores (Fase 1.2) — y ahí, a diferencia del catálogo, hay una regla que no
+es negociable: si el RUT no está en la copia local, **nunca** se responde
+`existe:false`. Eso abriría en la interfaz el flujo de "lector nuevo" y
+terminaría creando un duplicado al reconectar, porque ese lector bien puede
+existir en el servidor y simplemente no haberse tocado nunca desde este
+equipo (las dos únicas vías de entrada de un lector al almacén local siguen
+siendo las de la Fase 1.2: consultado antes, o con préstamo activo). Se
+lanza un error claro en su lugar. `puede_prestar`, sin conexión, se calcula
+de forma conservadora: solo por el bloqueo manual, el único dato guardado
+localmente que no se desactualiza con el paso del tiempo — el límite de
+préstamos activos y los atrasados no se pueden revisar sin hablar con el
+servidor, así que no se intenta.
+
+**Enganche en la interfaz.** Los cinco lugares de `ui-base.js` que escriben
+(botones de renovar y devolver en la vista Préstamos, los mismos dos en la
+ficha de circulación del mesón, y el botón de confirmar préstamo) ahora
+comprueban `resultado?.encolado` y muestran un aviso distinto ("se guardó y
+se completará sola") en vez del de éxito normal, para no decirle a la
+persona del mesón que algo ya se completó cuando en realidad quedó
+pendiente. Deliberadamente **sin** ningún badge visual de "sin conexión"
+aparte — el aviso mismo ya deja claro que no fue el flujo normal, y un
+indicador permanente de conexión es exactamente el trabajo de la Fase 1.4,
+todavía sin empezar.
+
+**Un hallazgo fuera de alcance, corregido igual.** Escribiendo las pruebas
+de esta fase se detectó que `buscarLectorLocalPorRut()` y
+`buscarLibroLocalPorCodigo()` —ambas escritas hoy mismo, más temprano, en la
+Fase 1.2— podían devolver `undefined` en vez de `null` en un cache-miss
+(`IDBObjectStore.get()` resuelve así cuando no hay coincidencia). No rompía
+nada en la práctica (`db.js` compara con `!lector`/`!libro`, que cubre
+ambos), pero era una inconsistencia real. Se corrigió normalizando las dos
+funciones a `null` explícito, con un comentario explicando por qué.
+
+**Pruebas nuevas o ampliadas**, las nueve corriendo en verde:
+- `pruebas/probar-sync-queue.mjs` (nuevo, 37 comprobaciones): IndexedDB en
+  memoria más un Supabase falso con control total sobre cada llamada RPC
+  (para poder simular a voluntad un fallo de red, un rechazo real, o una
+  migración faltante). Cubre las cuatro reglas de arriba una por una, más el
+  cálculo exacto de la espera exponencial (con tolerancia de milisegundos) y
+  el aviso al quinto intento.
+- `pruebas/probar-persistencia.mjs`: +12 comprobaciones (25 → 37) — las
+  búsquedas locales y el CRUD puro del almacén `colaSync`.
+- `pruebas/probar-interfaz.mjs`: +12 comprobaciones (98 → 110) — el
+  enganche (no la lógica, que ya prueba `probar-sync-queue.mjs`): que
+  `db.js` defina `SyncQueue`/`colaSync`, que las tres escrituras y las dos
+  lecturas usen la infraestructura nueva, que `main.js` la reintente al
+  iniciar sesión y en el ciclo, y que `ui-base.js` distinga `encolado` en
+  los cinco lugares que escriben.
+
+Ningún cambio de esquema esta vez — la Fase 1.3 es enteramente del lado del
+cliente.
+
+Conteos actualizados hoy, ya reflejados en la tabla de la sección 6:
+`probar-interfaz.mjs` 98 → 110, `probar-persistencia.mjs` 25 → 37, más
+`probar-sync-queue.mjs`, nueva, con 37. `probar_librero.py` y
+`probar-migraciones.py` sin cambios (esta fase no tocó ninguna migración).
+
+### Con esto, la Fase 1 (funcionamiento sin conexión) queda funcionalmente completa
+
+1.1 (abre sin red), 1.2 (catálogo y lectores replicados) y 1.3 (se puede
+prestar y devolver sin conexión, y se sincroniza solo al volver) ya están
+hechas y probadas. El criterio de aceptación de la sección 7 — "con modo
+avión activado se registra un préstamo; al reconectar se sincroniza solo,
+sin pérdida y sin duplicar" — ya se puede cumplir de punta a punta, aunque
+falta confirmarlo en producción real, no solo en las pruebas simuladas (ver
+"Cómo verificar" en `ESTADO.md`). Solo queda 1.4 (indicador de conexión
+visible), que es pulido de interfaz sobre una base que ya funciona, no un
+bloqueador funcional.
+
+---
+
+## 15. Estado al 20 de agosto de 2026 (más tarde el mismo día) — Fase 1.4
+
+### Indicador de conexión: hecho
+
+`js/modules/estado-conexion.js` (nuevo módulo pequeño) más un indicador
+visible en la franja de título del mesón (`js/modules/ui-base.js`,
+`renderShell`). Con esto, la Fase 1 completa —1.1, 1.2, 1.3 y 1.4— queda
+funcionalmente terminada: la persona del mesón puede ver, sin adivinar,
+si el equipo está en línea, sin conexión, sincronizando ahora mismo, o con
+operaciones pendientes.
+
+**Las cuatro situaciones que pedía la sección 7**, con prioridad de arriba
+a abajo cuando coinciden más de una: "Sin conexión" (con el conteo de
+pendientes al lado si hay alguno — no se oculta), "Sincronizando…",
+"N pendientes", y "En línea" como estado tranquilo por defecto. Cada una
+trae su propio ícono y su propio texto, nunca solo un color (ver
+`design:accessibility-review` — WCAG no permite que el color sea la única
+señal).
+
+**Cómo se arma, sin inventar ninguna fuente de verdad nueva.** Las tres
+señales que junta ya existían, dispersas, desde las Fases 1.2 y 1.3:
+`navigator.onLine` más los eventos `online`/`offline` del navegador (si
+ESTE equipo tiene red — no si el préstamo ya llegó al servidor);
+`colaSync` (Fase 1.3) reintentando ahora mismo; y cuántas operaciones
+quedan en su cola. `estado-conexion.js` no decide nada ni duplica ninguna
+lógica de sincronización — solo escucha lo que ya pasa y reenvía el estado
+a quien esté suscrito, por empuje (push), no por encuesta (polling).
+
+**Un cambio pequeño en `db.js` que lo hizo posible sin polling.** `SyncQueue`
+ya tenía `estado()` desde la Fase 1.3, pero nada avisaba cuando ese número
+cambiaba — había que preguntar. Se le agregó un pub-sub mínimo
+(`alCambiar(fn)`, que devuelve una función para des-suscribirse) y tres
+llamadas a un `_avisar()` interno: al encolar una operación nueva, y al
+empezar y al terminar `reintentarPendientes()` (dos veces, no una — así el
+indicador puede mostrar "Sincronizando…" DURANTE el reintento, no solo
+enterarse después de que ya terminó).
+
+**Por qué "sincronizando" no incluye la sincronización de catálogo de la
+Fase 1.2.** `persistencia.sincronizarTodo()` corre sola cada 5 minutos y es
+demasiado frecuente y silenciosa como para que valga la pena interrumpir a
+nadie con un aviso cada vez — mostrar "Sincronizando…" cada 5 minutos por
+un refresco de catálogo habría sido más ruido que ayuda. "Sincronizando"
+significa específicamente "`colaSync` está tratando de terminar de guardar
+algo ahora mismo", que es lo que de verdad le importa a la persona del
+mesón.
+
+**Dónde vive el indicador, y por qué ahí.** En la franja de título
+(`franja-titulo`), que está montada en TODA vista del mesón, no solo en
+una — así no hay que ir a buscarlo a un panel de administración para
+saber si conviene esperar antes de cerrar la pestaña. `renderShell` se
+des-suscribe primero y vuelve a suscribirse cada vez que se llama (cerrar
+sesión y volver a entrar sin recargar la página) para no acumular
+escuchadores de más sobre el mismo elemento.
+
+**Pruebas nuevas**, las diez corriendo en verde:
+- `pruebas/probar-estado-conexion.mjs` (nuevo, 18 comprobaciones): que
+  `iniciar()` sea idempotente, que `suscribir()` avise de inmediato con el
+  estado actual, que los eventos del navegador se reflejen sin
+  polling, que encolar una operación actualice "pendientes" sin que nadie
+  pregunte, que "sincronizando" pase a `true` DURANTE el reintento (no solo
+  al final) y vuelva a `false` tanto si el reintento tiene éxito como si
+  termina en un rechazo real, que des-suscribirse detenga los avisos, y que
+  varios suscriptores reciban el mismo estado de forma independiente. No
+  repite ninguna prueba de `probar-sync-queue.mjs` — aquí no importa SI un
+  reintento tiene éxito, solo que el indicador nunca se quede "pegado".
+- `pruebas/probar-interfaz.mjs`: +14 comprobaciones (110 → 124) — el
+  enganche estructural (existe el módulo, `sw.js` lo precarga, `db.js`
+  expone `alCambiar()` y avisa en los tres puntos correctos, `main.js` lo
+  inicia, `ui-base.js` monta el elemento y se suscribe, y el indicador
+  cubre las cuatro situaciones sin depender solo del color).
+
+Sin cambios de esquema — igual que la Fase 1.3, esto es enteramente del
+lado del cliente. `sw.js` subió de `CACHE_VERSION` `v1` a `v2` porque se
+agregó `estado-conexion.js` a `PRECACHE_URLS` (la propia lista de
+`sw.js` documenta que hay que subir la versión en cada cambio ahí).
+
+Conteos actualizados hoy, ya reflejados en la tabla de la sección 6:
+`probar-interfaz.mjs` 110 → 124, más `probar-estado-conexion.mjs`, nueva,
+con 18. `probar_librero.py` y `probar-migraciones.py` sin cambios (esta
+fase tampoco tocó ninguna migración).
+
+### Con esto, la Fase 1 (funcionamiento sin conexión) queda completa de punta a punta
+
+Las cuatro sub-fases —1.1, 1.2, 1.3 y 1.4— están hechas y probadas. El
+criterio de aceptación completo de la sección 7 se puede cumplir de
+principio a fin: con modo avión activado se puede registrar un préstamo, la
+persona del mesón lo ve reflejado en el indicador ("Sin conexión ·
+1 pendiente"), y al reconectar se sincroniza solo, sin pérdida y sin
+duplicar, con el indicador volviendo a "En línea" apenas termina. Falta
+confirmarlo en producción real, no solo en las pruebas simuladas — ver
+"Cómo verificar" en `ESTADO.md`. La Fase 2 (integración con Aleph 500) es
+el siguiente bloque de trabajo real, cuando se decida empezarlo.
+
+---
+
+## 16. Estado al 20 de agosto de 2026 (más tarde el mismo día) — ítems 11, 12 y 13 de "pulido, no urgente"
+
+No es una fase nueva del plan de la sección 7 — son los tres pendientes de
+menor prioridad que quedaban en `ESTADO.md`. Se hicieron los tres juntos
+porque el usuario los pidió juntos, no porque estuvieran relacionados entre
+sí más allá de compartir la etiqueta "pulido, no urgente".
+
+### Ítem 11 — Portada del libro y lista de lo escaneado, con "deshacer": hecho
+
+**Portada.** La CSP propia de `escaneo-remoto.html` decía explícitamente
+"esta página no muestra portadas" y por eso no incluía
+`covers.openlibrary.org` en `img-src` — aunque el CSP *global* de
+`vercel.json` ya lo permitía para todo el sitio. Se amplió la CSP de la
+página (con permiso explícito del usuario) para que coincida, y se actualizó
+el comentario que ya no era cierto.
+
+**Portada, la lógica.** Ya existía en `ui-base.js` (`_portadaUrl`/
+`_portadaHtml`/`_vigilarPortadas`, para el panel del personal), pero
+`escaneo-remoto.html` no importa `ui-base.js` a propósito (es la página SIN
+sesión). En vez de copiar la lógica, se extrajo a un módulo nuevo y
+compartido, `js/modules/portadas.js`, y `ui-base.js` quedó con envoltorios
+finos que delegan ahí. Un solo lugar para arreglar si el día de mañana
+cambia cómo se resuelve una portada.
+
+**Lista de lo escaneado.** `contadorSesion` (un número simple) se reemplazó
+por `escaneados`, un arreglo en memoria con lo necesario para poder
+deshacer cada entrada: `libroId`, `isbn`, `titulo`, `autor`, `accion`
+('creado' o 'incrementado', tal cual lo devuelve `agregar_libro_remoto`) y
+`cantidad`. Se renderiza como una lista con la miniatura de portada de cada
+libro y un botón "Deshacer" por fila.
+
+**"Deshacer", la función nueva.** `public.deshacer_libro_remoto(p_token,
+p_libro_id, p_accion, p_cantidad)`, en `010_consolidacion.sql` (no en una
+migración numerada nueva: no cambia el esquema, solo agrega una función,
+igual que las otras cinco del escaneo remoto). Revalida el token igual que
+`agregar_libro_remoto` — nunca confía en que el celular ya lo comprobó
+antes. Dos ramas, según lo que confirmó el usuario:
+
+- `'creado'`: **elimina la fila entera** del libro (no se deja "cero
+  ejemplares" colgando). Salvo que ya exista un préstamo de ese libro —en
+  ese caso se niega y avisa el motivo, para no dejar un préstamo apuntando
+  a un libro que ya no existe.
+- `'incrementado'`: resta `p_cantidad` de `stock` y de `copias_totales` —lo
+  mismo que sumó `agregar_libro_remoto`, en reversa— pero nunca más de lo
+  que sigue disponible ahora mismo. Si alguno de los ejemplares recién
+  agregados ya se prestó mientras tanto, ese no se toca.
+
+Se agregó al manifiesto de `verificar_definiciones()` (41 funciones ahora,
+antes 40) y a `SIN_GUARDA_JUSTIFICADO` en
+`pruebas/verificar_consolidacion.py` (no lleva `es_admin()`/`es_personal()`
+a propósito, por el mismo motivo que las otras dos funciones del escaneo
+remoto sin sesión). Grant a `anon` agregado junto a las otras dos, con el
+mismo comentario explícito de por qué es una excepción deliberada.
+
+**Pruebas nuevas, las 21 corriendo en verde:**
+- `pruebas/probar-escaneo-remoto.mjs`: +4 (9 → 13) — la fila se agrega con
+  su portada, "Deshacer" sobre un repuesto resta exactamente lo agregado,
+  "Deshacer" sobre un creado elimina el libro, y si el servidor rechaza el
+  deshacer el botón se reactiva sin perder la fila.
+- `pruebas/probar-migraciones.py`: +10 (120 → 130, en los dos escenarios de
+  esquema) — contra PostgreSQL real: elimina un 'creado', resta exactamente
+  lo agregado en un 'incrementado', nunca resta más de lo disponible, nunca
+  borra un libro con préstamos, y rechaza un token inventado.
+- `pruebas/probar_librero.py`: +1 (105 → 106) — el anónimo no puede
+  deshacer un escaneo con un token inventado. Los dos conteos hardcodeados
+  del manifiesto subieron de 40 a 41.
+
+### Ítem 12 — Evaluar el Tailwind CLI como paso de build: evaluado, se recomienda NO adoptarlo
+
+**Recomendación: no.** Agregar el Tailwind CLI (o cualquier paso de build)
+contradiría una decisión ya deliberada y documentada del proyecto —no tener
+`package.json` ni build step, ver `.gitignore` y este mismo archivo— y el
+problema real que lo motiva se puede atajar con una comprobación mucho más
+barata, sin tocar el flujo de despliegue.
+
+**El problema es real, no hipotético — y hoy tiene tres ejemplos, no uno.**
+Una clase de Tailwind usada en el código pero ausente de
+`vendor/css/tailwind.css` (el archivo estático, generado una sola vez, que
+sirve todo el sitio) no da ningún error: el navegador simplemente ignora la
+clase que no reconoce y el elemento queda sin ese estilo, en silencio. Ya
+había un caso documentado (el escáner de cámara del personal). Al escribir
+la lista de lo escaneado del ítem 11 aparecieron varias más al verificar
+cada clase nueva a mano contra el CSS compilado (`disabled:cursor-wait`,
+`hover:bg-rose-50`, `p-2.5`, entre otras — corregidas antes de entregar). Y
+al hacerlo se encontraron, de regalo, dos bugs silenciosos **preexistentes**
+que no se tocaron por estar fuera de este pedido, pero vale dejarlos
+anotados: `mx-auto` en los círculos numerados de `escaneo-remoto.js`
+(pantalla principal) y `hover:bg-rose-100` en el botón de cerrar sesión de
+`perfil.js` — ninguna de las dos clases existe en el CSS compilado, así que
+ese `mx-auto` no centra nada y ese hover no cambia de color. Ninguno rompe
+la funcionalidad, ambos son puramente estéticos, pero son la prueba de que
+el problema no es teórico.
+
+**Por qué no obstante un build step.** El Tailwind CLI resolvería esto
+generando el CSS a partir del código en vez de a mano, pero a cambio: (a)
+exige `package.json` y `node_modules`, que el proyecto evita a propósito
+hoy (deploy 100% estático, sin paso de build en `vercel.json`); (b) mueve el
+"¿esta clase existe?" de un problema detectable a "hay que acordarse de
+correr el build antes de cada despliegue", que es exactamente el tipo de
+paso manual que ya falló una vez (el bug del escáner); (c) es una migración
+de flujo de trabajo real, no una tarea de una tarde, y el propio pendiente
+original ya lo advertía ("cambio de flujo de trabajo más grande — no
+decidirlo a la ligera").
+
+**Alternativa recomendada, si se quiere cerrar el riesgo de verdad: un
+script de verificación estático**, en el espíritu de
+`pruebas/verificar_consolidacion.py` — lee los archivos HTML/JS del
+proyecto, extrae las clases de cada `class="..."` (con cuidado de las
+plantillas literales con `${...}` en medio), y falla si alguna no aparece
+ya en `vendor/css/tailwind.css`. Sin build step, sin `package.json`, un
+archivo Python más para correr junto a los demás (y engancharlo a
+`.github/workflows/pruebas.yml` cuando se decida). Sirvió, de hecho, como
+comprobación manual ad-hoc para limpiar el ítem 11 antes de esta entrega —
+formalizarlo es el siguiente paso natural, pero no se hizo en esta ronda
+porque no se pidió explícitamente. Queda anotado como pendiente nuevo si se
+quiere retomar.
+
+### Ítem 13 — Ícono de 512×512 para el manifest: hecho
+
+El ícono anterior (192×192, diseño plano con monograma "BN") no se reutilizó
+ni se escaló —seguía la regla de siempre—: el usuario trajo un logo propio,
+generado con IA, de 512×512 real (verificado: RGBA, sin escalar). Como ese
+logo tiene un estilo muy distinto al ícono anterior (una escena tallada en
+madera, mucho más detallada, contra un diseño plano simple), se le preguntó
+al usuario cómo prefería resolver la inconsistencia visual entre tamaños;
+eligió reemplazar también el 192×192 con el mismo diseño nuevo, reducido con
+un filtro de calidad (Lanczos) — no generado aparte, así ambos tamaños son
+consistentes entre sí.
+
+`manifest.json` ahora declara los dos tamaños. `index.html` y
+`escaneo-remoto.html` ganaron el `<link rel="icon" sizes="512x512">`
+correspondiente (el `apple-touch-icon` se dejó en 192×192, que es lo que ya
+usaba y sigue siendo válido). `sw.js` precarga el nuevo archivo;
+`CACHE_VERSION` subió de `v2` a `v3` (por el ícono nuevo y por
+`js/modules/portadas.js`, del ítem 11 — un solo salto de versión cubre
+ambos cambios de esta ronda).
+
+### Archivos para subir en esta ronda (ítems 11-13)
+
+Nuevos: `js/modules/portadas.js`, `icono-512x512.png` (reemplaza también a
+`icono-192x192.png`, mismo nombre de archivo).
+
+Modificados: `escaneo-remoto.html`, `js/escaneo-remoto.js`,
+`js/modules/ui-base.js`, `manifest.json`, `index.html`, `sw.js`,
+`supabase/migrations/010_consolidacion.sql`,
+`pruebas/verificar_consolidacion.py`, `pruebas/probar-escaneo-remoto.mjs`,
+`pruebas/probar-migraciones.py`, `pruebas/probar_librero.py`,
+`pruebas/LEEME.md`, `PROMPT-produccion.md`, `ESTADO.md`.
+
+No hay migración numerada nueva: `deshacer_libro_remoto` se agregó directo
+en `010_consolidacion.sql`, sin cambios de esquema.

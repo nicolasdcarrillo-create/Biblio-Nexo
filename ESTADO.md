@@ -2,114 +2,102 @@
 
 No es documentación permanente del proyecto — se borra o se vacía cuando esta
 ronda de trabajo termine. Mientras tanto, es el punto de partida para
-retomar mañana. El detalle completo de lo de hoy (con el porqué de cada
-cosa) está en `PROMPT-produccion.md`, sección 13 (Fase 1.2) y sección 12
-(Fase 1.1 y lo de ayer).
+retomar mañana. El detalle completo de hoy (con el porqué de cada cosa) está
+en `PROMPT-produccion.md`, sección 16.
 
 **Fecha**: 2026-08-20
 **Working tree**: revisar con `git status` — hay cambios sin confirmar
-(`git add`/`git commit`/`git push`) correspondientes a la Fase 1.2, recién
-sincronizados a este equipo pero todavía no subidos.
+(`git add`/`git commit`/`git push`) correspondientes a los ítems 11, 12 y 13
+de "pulido, no urgente", recién sincronizados a este equipo pero todavía no
+subidos. (Si las Fases 1.2, 1.3 y/o 1.4 tampoco se subieron todavía, ver sus
+listas de archivos en `PROMPT-produccion.md` §13, §14 y §15.)
 
 ---
 
-## Completado hoy: Fase 1.2 — Persistencia local en IndexedDB
+## Completado hoy: ítems 11, 12 y 13 ("pulido, no urgente")
 
-Alcance: exactamente lo que pide `PROMPT-produccion.md` §7 (1.2) — ni más ni
-menos. Ninguna pantalla lee todavía de este almacén; eso es trabajo de la
-Fase 1.3, cuando de verdad haga falta operar sin conexión.
+### 11 — Portada del libro y lista de lo escaneado, con "deshacer", en el escaneo remoto
 
-- **`js/modules/persistencia.js`** (nuevo): clase `PersistentStorage` sobre
-  IndexedDB. Catálogo completo, con delta sync por `actualizado_en`
-  (migración 011, ya existía). Lectores **nunca en bloque** — solo por dos
-  vías acotadas (consultado por RUT en el mesón, o con préstamo activo ahora
-  mismo), con purga automática a los 30 días sin actividad.
-- **`supabase/migrations/015_lapidas_eliminaciones.sql`** (nueva, schema):
-  tabla `elementos_eliminados` + disparador `AFTER DELETE` en `libros` y
-  `lectores`, con RLS (`es_personal()`). Sin esto, el derecho de supresión no
-  llegaría a la copia local del mesón — un lector borrado en el servidor
-  seguiría con sus datos en el disco indefinidamente. Exigido por
-  `CUMPLIMIENTO-LEGAL.md` §9 bis, no una decisión libre.
-- **`supabase/migrations/010_consolidacion.sql`** (editada, no nueva —
-  regla del proyecto): `verificar_rls()` ahora también revisa
-  `elementos_eliminados` (7 → 8 tablas).
-- **`js/modules/db.js`**: `estadoLector()` guarda el resultado en el almacén
-  local (una de las dos vías de entrada de lectores).
-- **`js/main.js`**: arranca `persistencia.sincronizarTodo()` al iniciar
-  sesión, cada 5 minutos mientras la pestaña siga abierta, y al recuperar la
-  conexión. Nunca bloquea nada — cada paso atrapa sus propios errores.
-- **`sw.js`**: precarga también `persistencia.js` (si no, se rompería el
-  import en el arranque sin conexión).
+- CSP de `escaneo-remoto.html` ampliada para permitir portadas de
+  `covers.openlibrary.org` (con permiso explícito del usuario).
+- Lógica de portada extraída a un módulo nuevo compartido,
+  `js/modules/portadas.js` (antes vivía solo en `ui-base.js`, que
+  `escaneo-remoto.js` no puede importar por ser la página sin sesión).
+- La lista de lo escaneado reemplaza al contador simple de antes: cada fila
+  trae portada, título/autor y un botón "Deshacer".
+- Función SQL nueva, `public.deshacer_libro_remoto()`, en
+  `010_consolidacion.sql` (sin migración numerada nueva: no cambia el
+  esquema). Elimina el libro si la acción fue "creado" (salvo que ya tenga
+  un préstamo — ahí se niega), o resta exactamente lo agregado si fue
+  "incrementado", nunca más de lo que sigue disponible.
 
-**Pruebas nuevas o ampliadas**, las siete corriendo en verde ahora mismo:
-- `pruebas/probar-persistencia.mjs` (nueva, 25 comprobaciones, IndexedDB en
-  memoria con `fake-indexeddb`): las cuatro reglas de privacidad, una por
-  una — catálogo completo, lectores nunca en bloque, lápidas purgan la copia
-  local, purga por antigüedad.
-- `pruebas/probar-interfaz.mjs`: +8 comprobaciones (90 → 98) — el enganche
-  (sw.js precarga persistencia.js, db.js y main.js lo importan donde
-  correspondía), no la lógica interna.
-- `pruebas/probar_librero.py`: +7 comprobaciones (97 → 105; 78 → 84 en
-  Windows sin tzdata) — la única suite que cambia de ROL de Postgres de
-  verdad (`set role authenticated`/`anon`), así que es la que de verdad
-  prueba que un anónimo no ve ninguna lápida y el personal sí.
-- `pruebas/probar-migraciones.py`: +6 comprobaciones (114 → 120) — que
-  borrar un lector o un libro deja lápida, en los dos escenarios de esquema.
+### 12 — Evaluar el Tailwind CLI como paso de build
 
-**CI**: `pruebas/probar-persistencia.mjs` quedó enganchada al job `interfaz`
-de `.github/workflows/pruebas.yml` de una vez (instala `fake-indexeddb`
-junto con `jsdom`, en el mismo comando — ver la nota en
-`pruebas/LEEME.md` sobre por qué deben instalarse juntas sin
-`package.json`). No se dejó como una suite nueva sin conectar: sería repetir
-el mismo hallazgo #1 de la lista de prioridades.
+Evaluado — **recomendación: no adoptarlo**. Contradiría la decisión ya
+documentada de no tener `package.json` ni build step. El problema real que
+lo motiva (una clase de Tailwind nueva que no está en el CSS compilado no da
+ningún error, solo queda sin estilo) tiene una alternativa más barata: un
+script de verificación estático, sin build, en el espíritu de
+`verificar_consolidacion.py`. No se implementó ese script en esta ronda —no
+se pidió explícitamente— pero queda anotado como pendiente nuevo si se
+quiere retomar. Detalle completo, con los ejemplos reales encontrados hoy
+(incluidos dos bugs preexistentes de este tipo, sin corregir por estar fuera
+de pedido), en `PROMPT-produccion.md` §16.
 
-**Riesgo documentado, no corregido, no es del código**: el disco del equipo
-del mesón sigue sin cifrar (`CUMPLIMIENTO-LEGAL.md` §9 bis ya lo señala como
-pendiente de la organización). Sin cifrado de disco y bloqueo de sesión del
-sistema operativo, cualquiera con acceso físico alcanza la copia local
-mientras no se haya purgado (hasta 30 días para un lector sin actividad).
+### 13 — Ícono de 512×512 real para el manifest
+
+El usuario trajo su propio logo, generado con IA, de 512×512 real (no
+escalado). Por el cambio de estilo respecto al ícono anterior, se le
+preguntó cómo resolverlo: eligió reemplazar también el 192×192 con el mismo
+diseño, reducido con un filtro de calidad. `manifest.json`, `index.html` y
+`escaneo-remoto.html` actualizados; `sw.js` precarga el ícono nuevo.
+
+**Pruebas nuevas o ampliadas**, todas corriendo en verde:
+- `pruebas/probar-escaneo-remoto.mjs`: 9 → 13 comprobaciones.
+- `pruebas/probar-migraciones.py`: 120 → 130 (dos escenarios de esquema).
+- `pruebas/probar_librero.py`: 105 → 106 (85 en Windows sin tzdata).
+- `pruebas/verificar_consolidacion.py`: 41 funciones en el manifiesto (antes 40).
+
+`sw.js` `CACHE_VERSION` subió de `v2` a `v3` (ícono nuevo + `portadas.js`).
 
 ---
 
-## Cómo verificar la Fase 1.2
+## Cómo verificar lo de hoy
 
 1. `git add` / `git commit` / `git push` de los archivos de abajo.
-2. `node pruebas/probar-persistencia.mjs` → 25 comprobaciones correctas.
-3. `python3 pruebas/probar_librero.py` → 105 comprobaciones correctas (o 84
-   + 13 omitidas en Windows sin tzdata — normal, ver `pruebas/LEEME.md`).
-4. `python3 pruebas/probar-migraciones.py` → 120 comprobaciones correctas.
-5. `node pruebas/probar-interfaz.mjs` → 98 comprobaciones correctas.
-6. En Supabase (SQL Editor o CLI), aplicar `015_lapidas_eliminaciones.sql` —
-   es idempotente, se puede correr más de una vez sin problema. Confirmar
-   con `select * from public.verificar_rls() where tabla =
-   'elementos_eliminados';` → `rls_activo = true`, `politicas >= 1`,
-   `diagnostico = 'Correcto'`.
-7. Ya en producción, con sesión iniciada: dejar pasar unos segundos y
-   revisar en las herramientas de desarrollador (Application → IndexedDB →
-   `biblionexo-local`) que aparecen los almacenes `libros`, `lectores` y
-   `meta`, con datos adentro.
+2. `node pruebas/probar-escaneo-remoto.mjs` → 13 comprobaciones correctas.
+3. `python3 pruebas/probar-migraciones.py` → 130 comprobaciones correctas.
+4. `python3 pruebas/probar_librero.py` → 106 comprobaciones correctas.
+5. `python3 pruebas/verificar_consolidacion.py` → consolidación intacta.
+6. En producción: abrir un enlace de escaneo remoto, escanear un libro ya
+   existente y uno nuevo — deben aparecer en la lista con su portada. Probar
+   "Deshacer" en ambos casos y confirmar que el catálogo vuelve a quedar
+   como antes. Confirmar que el ícono nuevo se ve al instalar la app
+   ("Agregar a inicio").
 
 ---
 
-## Archivos para subir en esta ronda (Fase 1.2)
+## Archivos para subir en esta ronda (ítems 11-13)
 
-Nuevos: `supabase/migrations/015_lapidas_eliminaciones.sql`,
-`js/modules/persistencia.js`, `pruebas/probar-persistencia.mjs`.
+Nuevos: `js/modules/portadas.js`, `icono-512x512.png` (reemplaza también a
+`icono-192x192.png`, mismo nombre de archivo).
 
-Modificados: `supabase/migrations/010_consolidacion.sql`, `js/modules/db.js`,
-`js/main.js`, `sw.js`, `pruebas/probar-interfaz.mjs`,
+Modificados: `escaneo-remoto.html`, `js/escaneo-remoto.js`,
+`js/modules/ui-base.js`, `manifest.json`, `index.html`, `sw.js`,
+`supabase/migrations/010_consolidacion.sql`,
+`pruebas/verificar_consolidacion.py`, `pruebas/probar-escaneo-remoto.mjs`,
 `pruebas/probar-migraciones.py`, `pruebas/probar_librero.py`,
-`pruebas/LEEME.md`, `.github/workflows/pruebas.yml`, `PROMPT-produccion.md`,
-este archivo.
+`pruebas/LEEME.md`, `PROMPT-produccion.md`, este archivo.
 
 ---
 
 ## Lista de prioridades (detalle completo en PROMPT-produccion.md §12)
 
 **Ahora — barato y con impacto real**
-1. Enganchar `probar-vistas.mjs` y `probar-migraciones.py` a
-   `.github/workflows/pruebas.yml` (`probar-persistencia.mjs` ya quedó
-   enganchada hoy; `probar-escaneo-remoto.mjs` sigue pendiente también).
+1. Enganchar `probar-vistas.mjs`, `probar-migraciones.py` y
+   `probar-escaneo-remoto.mjs` a `.github/workflows/pruebas.yml`
+   (`probar-persistencia.mjs`, `probar-sync-queue.mjs` y
+   `probar-estado-conexion.mjs` ya quedaron enganchadas).
 2. Decidir qué hacer con la política RLS "de más" en `usuarios`.
 3. `migration repair` para las migraciones 012, 013 y 014 (requiere
    aprobación antes de tocar producción).
@@ -117,30 +105,30 @@ este archivo.
    `reconstruccion`.
 
 **Después — más esfuerzo, sigue siendo importante**
-5. Fase 1: **faltan 1.3 (cola de sincronización) y 1.4 (indicador de
-   conexión)**. Sin ellas, todavía no se puede prestar ni devolver sin
-   conexión — solo abrir la app y tener el catálogo/lectores replicados para
-   consulta. El criterio de aceptación completo de la Fase 1 sigue sin
-   cumplirse.
+5. **Fase 1 completa** (1.1, 1.2, 1.3, 1.4) — terminada. El siguiente bloque
+   de trabajo real es la Fase 2 (integración con Aleph 500) — ver
+   `PROMPT-produccion.md` §7, cuando se decida empezarlo.
 6. `verificar_politicas()`: RLS y grants bajo el mismo patrón que
    `verificar_definiciones()`.
 7. Terminar de partir `ui.js`/`ui-base.js`.
+8. (Nuevo, de hoy) Script de verificación estático para clases de Tailwind
+   no compiladas — ver ítem 12 arriba. Dos ejemplos preexistentes ya
+   encontrados y sin corregir: `mx-auto` en los círculos numerados de
+   `escaneo-remoto.js` y `hover:bg-rose-100` en el botón de cerrar sesión de
+   `perfil.js` (ambos puramente estéticos, ninguno rompe funcionalidad).
 
 **No es código, pero bloquea el cierre del proyecto igual**
-8. Asignar, por nombre, quién aprieta el botón de respaldo de Supabase.
-9. Designar Delegado de Protección de Datos y Encargado de Ciberseguridad,
-   firmar el encargo de tratamiento — antes del 1 de diciembre de 2026.
-10. **Cifrado de disco y bloqueo de sesión en el equipo del mesón** — ahora
-    más urgente que antes: desde hoy ese disco de verdad guarda una copia
-    (acotada, purgada) de datos de lectores. Ver `CUMPLIMIENTO-LEGAL.md`
-    §9 bis.
+9. Asignar, por nombre, quién aprieta el botón de respaldo de Supabase.
+10. Designar Delegado de Protección de Datos y Encargado de
+    Ciberseguridad, firmar el encargo de tratamiento — antes del 1 de
+    diciembre de 2026.
+11. **Cifrado de disco y bloqueo de sesión en el equipo del mesón** —
+    urgente desde la Fase 1.2, sin cambios. Ver `CUMPLIMIENTO-LEGAL.md` §9 bis.
 
 **Pulido, no urgente**
-11. Portada del libro y lista de lo escaneado (con "deshacer") en el
-    escaneo remoto.
-12. Evaluar si conviene sumar el Tailwind CLI como paso de build.
-13. Conseguir un ícono de 512×512 real para `manifest.json` (hoy solo tiene
-    el de 192×192).
+
+Sin pendientes nuevos en esta categoría — los tres de ayer (11, 12, 13) se
+cerraron hoy.
 
 ---
 
@@ -155,16 +143,31 @@ este archivo.
 - **Ninguna función RPC de `supabase/migrations/` se toca sin aviso
   previo.**
 - **Cualquier clase de Tailwind nueva se verifica contra el resto del
-  proyecto antes de usarla.**
-- **El ícono de la app no se inventa ni se escala desde el de 192×192.**
+  proyecto antes de usarla** — ver ítem 12 de hoy para el porqué (dos bugs
+  silenciosos más encontrados, sin corregir por no pedirse).
+- **El ícono de la app no se inventa ni se escala desde uno más chico.**
+  Cerrado hoy con un ícono real de 512×512, del usuario — no reabrir salvo
+  que cambie el diseño de nuevo.
 - **El service worker nunca cachea nada que no sea del mismo origen ni nada
   que no sea GET.**
 - **La copia local de lectores nunca es un volcado completo del padrón**
-  (nueva, de hoy) — solo consultados o con préstamo activo, con purga por
+  (Fase 1.2) — solo consultados o con préstamo activo, con purga por
   antigüedad y por lápida de borrado. Ver `js/modules/persistencia.js` y
   `CUMPLIMIENTO-LEGAL.md` §9 bis antes de tocar esa lógica.
 - **Cambios de esquema (tablas, columnas, índices) van en una migración
-  numerada nueva; cambios a funciones ya consolidadas van directo en la 010**
-  (nueva, de hoy — es la regla que ya regía, aplicada con
-  `015_lapidas_eliminaciones.sql` + la edición de `verificar_rls()` en la
-  010, cada cosa en el archivo que correspondía).
+  numerada nueva; cambios a funciones ya consolidadas —o funciones nuevas—
+  van directo en la 010** (confirmado de nuevo hoy con
+  `deshacer_libro_remoto`, que no tocó el esquema).
+- **`estadoLector()` sin conexión nunca devuelve `existe:false` en un
+  cache-miss** (Fase 1.3). Ver `estadoLectorSinConexion()` en `js/modules/db.js`.
+- **La cola de sincronización nunca reimplementa la lógica de negocio de
+  préstamo/devolución/renovación** (Fase 1.3): siempre repite la MISMA
+  llamada RPC que se habría hecho con conexión.
+- **"Sincronizando", en el indicador de conexión, es solo la cola de
+  escrituras pendientes (`colaSync`), nunca la sincronización de catálogo**
+  (Fase 1.4).
+- **El indicador de conexión nunca depende solo del color** (Fase 1.4, por
+  WCAG): cada estado trae su propio ícono y su propio texto.
+- **`deshacer_libro_remoto()` nunca resta más ejemplares de los que siguen
+  disponibles, y nunca elimina un libro con préstamos** (nuevo, de hoy) — ver
+  ítem 11 arriba y el comentario de la función en `010_consolidacion.sql`.

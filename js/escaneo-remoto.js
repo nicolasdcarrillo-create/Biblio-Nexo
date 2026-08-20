@@ -16,6 +16,7 @@
 import { CONFIG } from './config.js';
 import { escapeHtml } from './modules/utilidades.js';
 import { buscarPorIsbnExterno } from './modules/libros-externos.js';
+import { portadaHtml, vigilarPortadas } from './modules/portadas.js';
 import Scanner from './modules/scanner.js';
 
 const ESPERA_MS = 15000;
@@ -97,18 +98,85 @@ function toast(mensaje, tipo = 'success') {
     toast._t = setTimeout(() => { if (contenedor) contenedor.innerHTML = ''; }, 5000);
 }
 
-/** Cuántos libros se agregaron o repusieron en esta visita. Es solo para
- *  darle a la persona una sensación de avance mientras escanea uno tras
- *  otro — no se guarda en ningún lado, se pierde si recarga la página. */
-let contadorSesion = 0;
-function sumarAlContador() {
-    contadorSesion++;
-    const nodo = document.getElementById('er-contador');
-    if (nodo) {
-        nodo.textContent = contadorSesion === 1
-            ? '1 libro agregado en esta sesión'
-            : `${contadorSesion} libros agregados en esta sesión`;
-        nodo.classList.remove('hidden');
+/**
+ * Lo que se agregó o repuso en esta visita (ítem 11, "pulido, no urgente").
+ * En memoria nomás — no se guarda en ningún lado, se pierde si recarga la
+ * página, igual que el contador simple que reemplaza. Cada entrada trae lo
+ * necesario para deshacerla: libroId + accion + cantidad son justo los
+ * parámetros que espera deshacer_libro_remoto().
+ */
+let escaneados = [];
+let siguienteIdEscaneado = 1;
+
+function agregarAlaLista({ libroId, isbn, titulo, autor, accion, cantidad }) {
+    escaneados.unshift({
+        id: siguienteIdEscaneado++,
+        libroId, isbn, titulo, autor, accion, cantidad,
+        deshaciendo: false
+    });
+    renderListaEscaneados();
+}
+
+function renderListaEscaneados() {
+    const nodo = document.getElementById('er-escaneados');
+    if (!nodo) return;
+
+    if (escaneados.length === 0) {
+        nodo.innerHTML = '';
+        return;
+    }
+
+    const filas = escaneados.map(item => `
+      <li class="flex items-center gap-3 bg-white border border-stone-200 rounded-xl p-3" data-id="${item.id}">
+        ${portadaHtml({ isbn: item.isbn, titulo: item.titulo })}
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-bold text-stone-800 truncate">${escapeHtml(item.titulo || item.isbn)}</p>
+          <p class="text-[11px] text-stone-500 truncate">${item.autor ? escapeHtml(item.autor) + ' — ' : ''}${item.accion === 'creado' ? 'Agregado' : `Repuesto ×${item.cantidad}`}</p>
+        </div>
+        <button data-deshacer="${item.id}" ${item.deshaciendo ? 'disabled' : ''}
+          class="shrink-0 text-[11px] font-bold text-rose-700 hover:underline disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1.5 rounded-lg">
+          ${item.deshaciendo
+            ? '<i aria-hidden="true" class="fas fa-spinner fa-spin"></i>'
+            : '<i aria-hidden="true" class="fas fa-rotate-left mr-1"></i>Deshacer'}
+        </button>
+      </li>`).join('');
+
+    nodo.innerHTML = `
+      <p class="text-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-2">
+        ${escaneados.length === 1 ? '1 libro agregado en esta sesión' : `${escaneados.length} libros agregados en esta sesión`}
+      </p>
+      <ul class="space-y-2 mt-2">${filas}</ul>`;
+
+    nodo.querySelectorAll('[data-deshacer]').forEach(boton => {
+        boton.addEventListener('click', () => deshacerEscaneo(Number(boton.dataset.deshacer)));
+    });
+}
+
+/** Revierte una entrada de la lista llamando a deshacer_libro_remoto(). */
+async function deshacerEscaneo(id) {
+    const item = escaneados.find(e => e.id === id);
+    if (!item || item.deshaciendo) return;
+
+    item.deshaciendo = true;
+    renderListaEscaneados();
+    try {
+        const filas = await rpc('deshacer_libro_remoto', {
+            p_token: token(), p_libro_id: item.libroId, p_accion: item.accion, p_cantidad: item.cantidad
+        });
+        const fila = filas?.[0];
+        if (!fila?.deshecho) {
+            toast(fila?.motivo || 'No se pudo deshacer.', 'error');
+            item.deshaciendo = false;
+            renderListaEscaneados();
+            return;
+        }
+        escaneados = escaneados.filter(e => e.id !== id);
+        renderListaEscaneados();
+        toast('Deshecho.', 'success');
+    } catch (err) {
+        toast(err.message || 'No se pudo deshacer.', 'error');
+        item.deshaciendo = false;
+        renderListaEscaneados();
     }
 }
 
@@ -152,7 +220,7 @@ function pintarPrincipal(vence) {
           </button>
         </div>
 
-        <p id="er-contador" class="hidden text-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-2"></p>
+        <div id="er-escaneados"></div>
 
         <details class="text-center">
           <summary class="text-xs text-stone-500 cursor-pointer select-none py-1">¿Prefiere escribir el código a mano?</summary>
@@ -234,7 +302,10 @@ async function manejarCodigo(codigo) {
             <p class="text-xs text-emerald-700 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
           </div>`;
         toast('Listo. Puede seguir escaneando.', 'success');
-        sumarAlContador();
+        agregarAlaLista({
+            libroId: fila.libro_id, isbn: fila.isbn, titulo: fila.titulo, autor: fila.autor,
+            accion: fila.estado, cantidad: 1
+        });
     } catch (err) {
         const mensaje = err.message || 'No se pudo completar la operación.';
         resultado.innerHTML = `<p class="text-rose-700 text-sm font-bold"><i aria-hidden="true" class="fas fa-circle-exclamation mr-1.5"></i>${escapeHtml(mensaje)}</p>`;
@@ -290,7 +361,12 @@ async function mostrarFormularioDatos(resultado, codigo) {
                 <p class="text-emerald-700 mt-1">${escapeHtml(fila?.titulo || titulo)}</p>
               </div>`;
             toast('Listo. Puede seguir escaneando.', 'success');
-            sumarAlContador();
+            if (fila) {
+                agregarAlaLista({
+                    libroId: fila.libro_id, isbn: fila.isbn, titulo: fila.titulo || titulo, autor: fila.autor,
+                    accion: fila.estado, cantidad
+                });
+            }
         } catch (err) {
             toast(err.message || 'No se pudo agregar el libro.', 'error');
             boton.disabled = false;
@@ -342,6 +418,7 @@ export async function iniciar() {
         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     }) : '';
     pintarPrincipal(vence);
+    vigilarPortadas();
 
     // Se descarga el módulo de la cámara por adelantado, apenas se sabe que
     // el enlace es válido — así, al pulsar "Iniciar cámara" el permiso se

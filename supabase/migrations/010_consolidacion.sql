@@ -941,14 +941,14 @@ grant execute on function public.eliminar_personal(uuid) to authenticated;
 --      entradas de catálogo — nunca leer datos de personas ni mover un
 --      préstamo.
 --
--- validar_enlace_escaneo y agregar_libro_remoto NO llevan la guarda
--- es_admin()/es_personal(): las llama, a propósito, un celular sin sesión.
--- Están en SIN_GUARDA_JUSTIFICADO en pruebas/verificar_consolidacion.py, con
--- el motivo escrito ahí. Su única barrera es el token, y por eso
--- agregar_libro_remoto lo vuelve a validar por su cuenta —nunca confía en que
--- el celular ya llamó a validar_enlace_escaneo antes— para que un enlace que
--- expira justo entre la comprobación y el guardado no alcance a escribir
--- nada.
+-- validar_enlace_escaneo, agregar_libro_remoto y deshacer_libro_remoto NO
+-- llevan la guarda es_admin()/es_personal(): las llama, a propósito, un
+-- celular sin sesión. Están en SIN_GUARDA_JUSTIFICADO en
+-- pruebas/verificar_consolidacion.py, con el motivo escrito ahí. Su única
+-- barrera es el token, y por eso las dos últimas lo vuelven a validar por su
+-- cuenta —nunca confían en que el celular ya llamó a validar_enlace_escaneo
+-- antes— para que un enlace que expira justo entre la comprobación y la
+-- escritura no alcance a hacer nada.
 
 -- ── crear_enlace_escaneo ── (nueva)
 --
@@ -1161,6 +1161,117 @@ begin
 end;
 $$;
 grant execute on function public.agregar_libro_remoto(text, text, text, text, text, text, int) to authenticated;
+
+-- ── deshacer_libro_remoto ── (nueva, ítem 11 de "pulido, no urgente")
+--
+-- Revierte UNA acción de agregar_libro_remoto, para el botón "Deshacer" de la
+-- lista de lo escaneado en la propia pantalla del celular — pensado para el
+-- caso típico de escanear el código equivocado o repetir uno por error.
+--
+-- p_accion viene tal cual lo devolvió agregar_libro_remoto ('creado' o
+-- 'incrementado'), porque el celular ya lo sabe y así esta función no tiene
+-- que adivinarlo a partir del estado actual del libro (que además pudo
+-- cambiar desde entonces si alguien más ya prestó un ejemplar).
+--
+--   · 'creado': el libro no existía antes de esa acción, así que se elimina
+--     la fila entera (decisión explícita: no se deja "cero ejemplares"
+--     colgando en el catálogo). Si ya se prestó algún ejemplar de ese libro
+--     desde que se creó, no se borra — se avisa en vez de romper el
+--     préstamo, que quedaría apuntando a un libro inexistente.
+--   · 'incrementado': se resta p_cantidad de stock Y de copias_totales —lo
+--     mismo que sumó agregar_libro_remoto, en reversa—, pero nunca más de lo
+--     que sigue disponible ahora mismo (greatest/least de abajo). Si mientras
+--     tanto ya se prestó alguno de los ejemplares recién agregados, esos NO
+--     se tocan: solo se deshace lo que todavía sigue en el estante.
+--
+-- Misma revalidación de token que agregar_libro_remoto, por el mismo motivo:
+-- nunca confiar en que el celular ya lo comprobó antes.
+drop function if exists public.deshacer_libro_remoto(text, bigint, text, int);
+create or replace function public.deshacer_libro_remoto(
+  p_token    text,
+  p_libro_id bigint,
+  p_accion   text,
+  p_cantidad int default 1
+)
+returns table (deshecho boolean, motivo text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_enlace_id        bigint;
+  v_enlace_revocado  boolean;
+  v_enlace_expira    timestamptz;
+  v_creado_por       uuid;
+  v_creado_por_email text;
+  v_libro            public.libros;
+  v_cantidad         int := greatest(1, coalesce(p_cantidad, 1));
+  v_a_quitar         int;
+begin
+  select enlaces_escaneo_remoto.id, revocado, enlaces_escaneo_remoto.expira_en,
+         creado_por, creado_por_email
+    into v_enlace_id, v_enlace_revocado, v_enlace_expira, v_creado_por, v_creado_por_email
+    from public.enlaces_escaneo_remoto
+   where token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex')
+   for update;
+
+  if not found or v_enlace_revocado or v_enlace_expira < now() then
+    raise exception 'Este enlace no es válido o ya expiró.' using errcode = 'P0001';
+  end if;
+
+  if p_accion not in ('creado', 'incrementado') then
+    raise exception 'Acción de deshacer desconocida.' using errcode = 'P0001';
+  end if;
+
+  select * into v_libro from public.libros where libros.id = p_libro_id for update;
+  if not found then
+    return query select false, 'Ese libro ya no está en el catálogo.'::text;
+    return;
+  end if;
+
+  if p_accion = 'creado' then
+    if exists (select 1 from public.prestamos where prestamos.libro_id = v_libro.id) then
+      return query select false,
+        'No se puede deshacer: ya se registró un préstamo de este libro.'::text;
+      return;
+    end if;
+
+    delete from public.libros where libros.id = v_libro.id;
+
+    insert into public.auditoria (tabla, registro_id, accion, usuario_id, usuario_email, datos_antes)
+    values ('libros', v_libro.id::text, 'DELETE', v_creado_por, v_creado_por_email,
+            jsonb_build_object('operacion', 'deshacer_escaneo_remoto', 'enlace_id', v_enlace_id,
+                                'isbn', v_libro.isbn, 'titulo', v_libro.titulo));
+  else
+    -- Nunca se resta más de lo que sigue disponible ahora mismo: si ya se
+    -- prestó alguno de los ejemplares recién agregados, ese queda intacto.
+    v_a_quitar := least(v_cantidad, v_libro.stock);
+    if v_a_quitar <= 0 then
+      return query select false,
+        'No queda ningún ejemplar disponible de esta acción para deshacer (puede estar prestado).'::text;
+      return;
+    end if;
+
+    update public.libros
+       set copias_totales = v_libro.copias_totales - v_a_quitar,
+           stock = v_libro.stock - v_a_quitar
+     where libros.id = v_libro.id
+    returning * into v_libro;
+
+    insert into public.auditoria (tabla, registro_id, accion, usuario_id, usuario_email, datos_despues)
+    values ('libros', v_libro.id::text, 'UPDATE', v_creado_por, v_creado_por_email,
+            jsonb_build_object('operacion', 'deshacer_escaneo_remoto', 'enlace_id', v_enlace_id,
+                                'ejemplares_quitados', v_a_quitar, 'copias_totales', v_libro.copias_totales));
+  end if;
+
+  update public.enlaces_escaneo_remoto
+     set ultimo_uso_en = now()
+   where enlaces_escaneo_remoto.id = v_enlace_id;
+
+  return query select true, null::text;
+end;
+$$;
+grant execute on function public.deshacer_libro_remoto(text, bigint, text, int) to authenticated;
 
 -- ── listar_enlaces_escaneo ── (nueva)
 --
@@ -1844,6 +1955,7 @@ as $manifiesto$
     ('crear_enlace_escaneo', true),
     ('validar_enlace_escaneo', true),
     ('agregar_libro_remoto', true),
+    ('deshacer_libro_remoto', true),
     ('listar_enlaces_escaneo', true),
     ('revocar_enlace_escaneo', true),
     ('actualizar_contacto_lector', true),
@@ -2012,7 +2124,7 @@ $permisos$;
 revoke all on function public.registrar_auditoria() from public, anon;
 revoke all on function public.marcar_actualizacion() from public, anon;
 
--- Escaneo remoto sin sesión: dos funciones SÍ deben quedar abiertas a `anon`,
+-- Escaneo remoto sin sesión: tres funciones SÍ deben quedar abiertas a `anon`,
 -- porque quien escanea desde el enlace nunca inicia sesión. El bloque de
 -- arriba ya les quitó el permiso a `anon` (alcanza a toda función del
 -- manifiesto); se restituye aquí, aparte y a propósito, para que quede visible
@@ -2022,3 +2134,4 @@ revoke all on function public.marcar_actualizacion() from public, anon;
 -- «ESCANEO REMOTO SIN SESIÓN»).
 grant execute on function public.validar_enlace_escaneo(text) to anon;
 grant execute on function public.agregar_libro_remoto(text, text, text, text, text, text, int) to anon;
+grant execute on function public.deshacer_libro_remoto(text, bigint, text, int) to anon;

@@ -6,6 +6,8 @@ import { CONFIG } from '../config.js';
 import { escapeHtml, html } from './utilidades.js';
 import { buscarPorIsbnExterno } from './libros-externos.js';
 import { generarSvgQr } from './qr.js';
+import estadoConexion from './estado-conexion.js';
+import { portadaUrl, portadaHtml, vigilarPortadas } from './portadas.js';
 
 // Instancias de Chart.js activas, indexadas por id de canvas. Se destruyen
 // antes de volver a dibujar para no acumular gráficos huérfanos en memoria.
@@ -549,58 +551,19 @@ class UIManager {
     });
   }
 
-  // Devuelve la URL de portada de un libro, o null si no hay ninguna disponible.
-  // Prioridad:
-  //   1. portada_url cargada a mano (para obras locales y patrimoniales que no
-  //      aparecen en catálogos internacionales).
-  //   2. Open Library, buscando por ISBN. Es gratuita y no necesita clave.
-  //      El parámetro default=false hace que responda 404 cuando no tiene
-  //      portada, en vez de devolver una imagen de 1 píxel.
+  // Portada de un libro: lógica compartida con el escaneo remoto (ítem 11),
+  // ver js/modules/portadas.js. Se mantienen estos métodos como envoltorios
+  // finos para no tocar cada punto de la clase que ya los llama.
   _portadaUrl(libro) {
-    if (libro.portada_url) return libro.portada_url;
-    const isbn = (libro.isbn || '').replace(/[^0-9Xx]/g, '');
-    if (isbn.length !== 10 && isbn.length !== 13) return null;
-    return `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false`;
+    return portadaUrl(libro);
   }
 
-  // Miniatura de portada. Si la imagen falla (sin conexión, o el libro no está
-  // en Open Library) se reemplaza por un lomo dibujado con las iniciales, para
-  // que la fila nunca quede con un ícono roto.
   _portadaHtml(libro) {
-    const url = this._portadaUrl(libro);
-    const inicial = escapeHtml((libro.titulo || '?').trim().charAt(0).toUpperCase());
-    const respaldo = `<div class="portada-respaldo w-10 h-14 rounded shrink-0 flex items-center justify-center font-serif font-bold text-white text-lg select-none">${inicial}</div>`;
-
-    if (!url) return respaldo;
-
-    // Sin onerror en línea: la Política de Seguridad de Contenido ya no permite
-    // scripts incrustados. La caída se maneja con un único escuchador global
-    // (ver _vigilarPortadas), que atrapa el fallo en fase de captura porque el
-    // evento 'error' de una imagen no burbujea.
-    return `
-      <div class="relative w-10 h-14 shrink-0">
-        ${respaldo}
-        <img src="${escapeHtml(url)}" alt="" loading="lazy" class="portada-img absolute inset-0 w-10 h-14 object-cover rounded shadow-sm" />
-      </div>`;
+    return portadaHtml(libro);
   }
 
-  /**
-   * Quita las portadas que no cargaron, para que quede a la vista el lomo
-   * dibujado que hay debajo en vez de un ícono roto.
-   *
-   * Se instala una sola vez y en fase de captura: los eventos 'error' de las
-   * imágenes no burbujean, así que un escuchador normal en document nunca los
-   * vería.
-   */
   _vigilarPortadas() {
-    if (this._portadasVigiladas) return;
-    this._portadasVigiladas = true;
-    document.addEventListener('error', evento => {
-      const el = evento.target;
-      if (el instanceof HTMLImageElement && el.classList.contains('portada-img')) {
-        el.remove();
-      }
-    }, true);
+    vigilarPortadas();
   }
 
   /**
@@ -1309,6 +1272,7 @@ class UIManager {
             </button>
             <span class="w-1.5 h-4 bg-patrimonio-madera rounded-sm hidden sm:block"></span>
             <h2 id="page-title" class="font-serif font-semibold text-stone-800 text-base">Dashboard</h2>
+            <span id="estado-conexion" class="ml-auto shrink-0"></span>
           </div>
 
           <main id="views-container" tabindex="-1" aria-label="Contenido principal" class="flex-1 overflow-y-auto p-4 md:p-6"></main>
@@ -1336,12 +1300,61 @@ class UIManager {
     registroErrores.iniciar(() => this.currentView);
     this._vigilarPortadas();
 
+    // Indicador de conexión (Fase 1.4): se des-suscribe primero por si
+    // renderShell se está corriendo de nuevo (cerrar sesión y volver a
+    // entrar sin recargar la página) — si no, cada vuelta dejaría un
+    // escuchador de más, todos escribiendo sobre el mismo elemento actual.
+    this._detenerEstadoConexion?.();
+    this._detenerEstadoConexion = estadoConexion.suscribir(estado => this._renderIndicadorConexion(estado));
+
     await this.cargarParametros();
     if (!this._controlInactividadActivo) this.iniciarControlDeInactividad();
     await this.updateUserInfo(user);
     this.renderNavMenu();
 
     await this.switchView(this._vistaInicial(this.currentUserRole));
+  }
+
+  /**
+   * Dibuja el indicador de conexión de la franja de título (Fase 1.4), con
+   * las cuatro situaciones que pide PROMPT-produccion.md §7: en línea, sin
+   * conexión, sincronizando, N pendientes. Prioridad de arriba a abajo
+   * cuando hay más de una a la vez — "sin conexión" es lo más urgente que
+   * la persona del mesón necesita saber, y se combina con el conteo de
+   * pendientes si hay alguno, en vez de ocultarlo.
+   *
+   * No depende solo del color (ver WCAG en `design:accessibility-review`):
+   * cada estado trae su propio ícono y texto, nunca solo un punto de color.
+   */
+  _renderIndicadorConexion({ enLinea, sincronizando, pendientes } = {}) {
+    const el = document.getElementById('estado-conexion');
+    if (!el) return; // la franja de título no está montada (por ejemplo, en pantallas de login)
+
+    const plural = pendientes === 1 ? 'pendiente' : 'pendientes';
+    let clase, icono, texto;
+
+    if (!enLinea) {
+      clase = 'bg-rose-100 text-rose-800';
+      icono = 'fa-triangle-exclamation';
+      texto = pendientes > 0 ? `Sin conexión · ${pendientes} ${plural}` : 'Sin conexión';
+    } else if (sincronizando) {
+      clase = 'bg-patrimonio-lago/10 text-patrimonio-lago';
+      icono = 'fa-arrows-rotate fa-spin';
+      texto = 'Sincronizando…';
+    } else if (pendientes > 0) {
+      clase = 'bg-amber-100 text-amber-800';
+      icono = 'fa-clock';
+      texto = `${pendientes} ${plural}`;
+    } else {
+      clase = 'bg-emerald-100 text-emerald-800';
+      icono = 'fa-circle-check';
+      texto = 'En línea';
+    }
+
+    el.className = `ml-auto shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${clase}`;
+    el.innerHTML = `<i aria-hidden="true" class="fas ${icono}"></i><span>${escapeHtml(texto)}</span>`;
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-label', `Estado de conexión: ${texto}`);
   }
 
   /**
@@ -2109,8 +2122,15 @@ class UIManager {
         btn.disabled = true;
         try {
           const r = await db.renovarPrestamo(btn.dataset.id);
-          const nueva = r?.nueva_fecha ? this._fechaLegible(r.nueva_fecha) : 'la nueva fecha';
-          this.showToast(`Préstamo renovado hasta el ${nueva}.`, 'success');
+          // Fase 1.3: sin conexión, db.js encola la operación en vez de
+          // lanzar — no hay "nueva fecha" que mostrar todavía, solo el
+          // aviso de que quedó pendiente.
+          if (r?.encolado) {
+            this.showToast(r.mensaje, 'info');
+          } else {
+            const nueva = r?.nueva_fecha ? this._fechaLegible(r.nueva_fecha) : 'la nueva fecha';
+            this.showToast(`Préstamo renovado hasta el ${nueva}.`, 'success');
+          }
           this.renderLoans();
         } catch (err) {
           this.showToast(err.message || 'No se pudo renovar.', 'error');
@@ -2122,8 +2142,12 @@ class UIManager {
     container.querySelectorAll('.return-loan-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         try {
-          await db.devolverPrestamo(btn.dataset.id);
-          this.showToast('Préstamo devuelto.', 'success');
+          const r = await db.devolverPrestamo(btn.dataset.id);
+          if (r?.encolado) {
+            this.showToast(r.mensaje, 'info');
+          } else {
+            this.showToast('Préstamo devuelto.', 'success');
+          }
           this.renderLoans();
         } catch (err) {
           this.showToast(err.message || 'No se pudo registrar la devolución.', 'error');
@@ -2574,8 +2598,12 @@ class UIManager {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          await db.devolverPrestamo(btn.dataset.devolver);
-          this.showToast('Devolución registrada.', 'success');
+          const r = await db.devolverPrestamo(btn.dataset.devolver);
+          if (r?.encolado) {
+            this.showToast(r.mensaje, 'info');
+          } else {
+            this.showToast('Devolución registrada.', 'success');
+          }
           recargar();
         } catch (err) {
           this.showToast(err.message || 'No se pudo registrar la devolución.', 'error');
@@ -2589,7 +2617,11 @@ class UIManager {
         btn.disabled = true;
         try {
           const r = await db.renovarPrestamo(btn.dataset.renovar);
-          this.showToast(`Renovado hasta el ${this._fechaLegible(r?.nueva_fecha)}.`, 'success');
+          if (r?.encolado) {
+            this.showToast(r.mensaje, 'info');
+          } else {
+            this.showToast(`Renovado hasta el ${this._fechaLegible(r?.nueva_fecha)}.`, 'success');
+          }
           recargar();
         } catch (err) {
           this.showToast(err.message || 'No se pudo renovar.', 'error');
@@ -2709,9 +2741,17 @@ class UIManager {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        await db.registrarPrestamo(libroId, rut);
+        const r = await db.registrarPrestamo(libroId, rut);
         cerrar();
-        this.showToast('Préstamo registrado.', 'success');
+        // Fase 1.3: sin conexión, db.js encoló el préstamo en vez de
+        // lanzar — se avisa que quedó pendiente, no que ya se completó
+        // (deliberadamente sin un badge visual de "sin conexión" aparte;
+        // el aviso mismo ya deja claro que no fue el flujo normal).
+        if (r?.encolado) {
+          this.showToast(r.mensaje, 'info');
+        } else {
+          this.showToast('Préstamo registrado.', 'success');
+        }
         alTerminar?.();
       } catch (err) {
         this.showToast(err.message || 'No se pudo registrar el préstamo.', 'error');

@@ -68,6 +68,28 @@ function respuestaRpc(nombre, cuerpo) {
     libros.push(nuevo);
     return { ok: true, datos: [{ estado: 'creado', libro_id: libros.length, ...nuevo }] };
   }
+  if (nombre === 'deshacer_libro_remoto') {
+    if (cuerpo.p_token !== ENLACE_VALIDO.token) {
+      return { ok: false, datos: { message: 'Este enlace no es válido o ya expiró. Pide uno nuevo.' } };
+    }
+    // Misma convención que arriba: libro_id es la posición (1-indexada) en
+    // el arreglo `libros` simulado — así devuelve agregar_libro_remoto() acá.
+    const libro = libros[cuerpo.p_libro_id - 1];
+    if (!libro) {
+      return { ok: true, datos: [{ deshecho: false, motivo: 'Ese libro ya no está en el catálogo.' }] };
+    }
+    if (cuerpo.p_accion === 'creado') {
+      libros.splice(cuerpo.p_libro_id - 1, 1);
+      return { ok: true, datos: [{ deshecho: true, motivo: null }] };
+    }
+    const aQuitar = Math.min(cuerpo.p_cantidad ?? 1, libro.stock);
+    if (aQuitar <= 0) {
+      return { ok: true, datos: [{ deshecho: false, motivo: 'No queda ningún ejemplar disponible de esta acción para deshacer (puede estar prestado).' }] };
+    }
+    libro.stock -= aQuitar;
+    libro.copias_totales -= aQuitar;
+    return { ok: true, datos: [{ deshecho: true, motivo: null }] };
+  }
   return { ok: false, datos: { message: `RPC no simulada: ${nombre}` } };
 }
 
@@ -291,6 +313,110 @@ await prueba('si no hay ninguna cámara en el dispositivo, lo dice explícitamen
 
   const texto = document.getElementById('er-toast').textContent;
   assert(/no se encontró ninguna cámara/i.test(texto), `no distinguió la falta de cámara de otros errores: ${texto}`);
+});
+
+console.log('\n=== Lista de lo escaneado, con portada y "deshacer" (ítem 11) ===');
+
+await prueba('escanear agrega el libro a la lista, con su portada de Open Library', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
+  document.getElementById('er-buscar').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const lista = document.getElementById('er-escaneados');
+  assert(lista.querySelector('li'), 'no agregó ninguna fila a la lista de lo escaneado');
+  assert(new RegExp(LIBRO_EXISTENTE.titulo).test(lista.textContent), `la fila no muestra el título: ${lista.textContent}`);
+  const img = lista.querySelector('img.portada-img');
+  assert(img, 'no dibujó la miniatura de portada');
+  assert(img.src.includes('covers.openlibrary.org') && img.src.includes(LIBRO_EXISTENTE.isbn),
+    `la portada no apunta a Open Library con el ISBN correcto: ${img.src}`);
+  assert(lista.querySelector('[data-deshacer]'), 'no ofreció el botón «Deshacer»');
+});
+
+await prueba('«Deshacer» sobre un libro repuesto le resta exactamente lo que se agregó', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  const antes = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
+  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
+  document.getElementById('er-buscar').click();
+  await new Promise(r => setTimeout(r, 30));
+  assert(libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock === antes + 1, 'no sumó el ejemplar antes de poder deshacerlo');
+
+  // El arreglo `escaneados` es un módulo con estado en memoria que persiste
+  // entre pruebas de este archivo (igual que `libros`, arriba): la fila que
+  // acaba de agregar ESTA prueba queda primera (unshift), así que el primer
+  // botón «Deshacer» del documento siempre corresponde a ella. Por eso la
+  // comprobación de abajo es "una fila menos", no "cero filas": puede haber
+  // filas de pruebas anteriores conviviendo en la misma lista.
+  const filasAntes = document.getElementById('er-escaneados').querySelectorAll('li').length;
+  document.getElementById('er-escaneados').querySelector('[data-deshacer]').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const despues = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
+  assert(despues === antes, `«Deshacer» no dejó el stock como estaba: antes=${antes} después=${despues}`);
+  const filasDespues = document.getElementById('er-escaneados').querySelectorAll('li').length;
+  assert(filasDespues === filasAntes - 1, `la fila deshecha debería desaparecer de la lista: antes=${filasAntes} después=${filasDespues}`);
+});
+
+await prueba('«Deshacer» sobre un libro recién creado lo elimina del catálogo', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch({ openLibraryOk: false }); // sin ayuda de Open Library, para no depender de esa ruta acá
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  const isbnNuevo = '1111111111';
+  document.getElementById('er-manual').value = isbnNuevo;
+  document.getElementById('er-buscar').click();
+  await new Promise(r => setTimeout(r, 60)); // agregar_libro_remoto() responde "falta_info" + buscarPorIsbnExterno()
+
+  document.getElementById('er-nuevo-titulo').value = 'Libro Para Deshacer';
+  document.getElementById('er-nuevo-guardar').click();
+  await new Promise(r => setTimeout(r, 30));
+  assert(libros.some(l => l.isbn === isbnNuevo), 'el libro nuevo no quedó creado antes de poder deshacerlo');
+
+  const filasAntes = document.getElementById('er-escaneados').querySelectorAll('li').length;
+  document.getElementById('er-escaneados').querySelector('[data-deshacer]').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  assert(!libros.some(l => l.isbn === isbnNuevo), 'el libro debería haberse eliminado del catálogo al deshacer un "creado"');
+  const filasDespues = document.getElementById('er-escaneados').querySelectorAll('li').length;
+  assert(filasDespues === filasAntes - 1, `la fila deshecha debería desaparecer de la lista: antes=${filasAntes} después=${filasDespues}`);
+});
+
+await prueba('si «Deshacer» falla, el botón se reactiva y la fila no desaparece', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
+  document.getElementById('er-buscar').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const fetchAnterior = global.fetch;
+  global.fetch = async (url, opciones) => {
+    if (String(url).includes('/rpc/deshacer_libro_remoto')) {
+      return { ok: true, json: async () => [{ deshecho: false, motivo: 'Ese ejemplar ya está prestado.' }] };
+    }
+    return fetchAnterior(url, opciones);
+  };
+
+  const boton = document.getElementById('er-escaneados').querySelector('[data-deshacer]');
+  boton.click();
+  await new Promise(r => setTimeout(r, 30));
+
+  assert(document.getElementById('er-escaneados').querySelector('li'), 'la fila no debería desaparecer si el servidor rechazó el deshacer');
+  const botonDespues = document.getElementById('er-escaneados').querySelector('[data-deshacer]');
+  assert(!botonDespues.disabled, 'el botón «Deshacer» debería reactivarse tras un rechazo, para poder reintentar');
+  const toastTexto = document.getElementById('er-toast').textContent;
+  assert(/prestado/i.test(toastTexto), `no avisó del motivo del rechazo: ${toastTexto}`);
 });
 
 } finally {

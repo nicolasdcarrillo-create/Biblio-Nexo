@@ -1706,7 +1706,10 @@ grant execute on function public.purgar_errores(int) to authenticated;
 -- AUTODIAGNÓSTICO
 -- ============================================================================
 
--- ── verificar_rls ── (última versión: 009_registro_de_errores.sql)
+-- ── verificar_rls ── (última versión: 009_registro_de_errores.sql; lista de
+-- tablas ampliada en 015_lapidas_eliminaciones.sql para incluir
+-- elementos_eliminados — la función vive aquí igual, según la regla del
+-- proyecto de que los cambios a funciones van en este archivo, no en uno nuevo)
 drop function if exists public.verificar_rls();
 create or replace function public.verificar_rls()
 returns table (
@@ -1742,7 +1745,7 @@ select
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public'
     and c.relkind = 'r'
-    and c.relname in ('libros', 'lectores', 'prestamos', 'usuarios', 'auditoria', 'parametros', 'errores')
+    and c.relname in ('libros', 'lectores', 'prestamos', 'usuarios', 'auditoria', 'parametros', 'errores', 'elementos_eliminados')
   order by c.relrowsecurity, c.relname;
 end;
 $$;

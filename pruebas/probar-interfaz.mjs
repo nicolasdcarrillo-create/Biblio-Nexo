@@ -374,6 +374,28 @@ comprobar('un fallo del registro no interrumpe el arranque (solo se registra)',
 comprobar('vercel.json manda Cache-Control: no-cache a sw.js (si no, el navegador podría tardar en ver una versión nueva)',
   /"source":\s*"\/sw\.js"/.test(fs.readFileSync('vercel.json', 'utf8')));
 
+console.log('\n11. Fase 1.2 — persistencia local (IndexedDB): el enganche, no la lógica interna');
+// La lógica de persistencia.js (delta sync, lápidas, purga por antigüedad)
+// tiene su propia prueba dedicada: pruebas/probar-persistencia.mjs. Aquí solo
+// se comprueba que quedó ENGANCHADA donde debía, no que funcione — para eso
+// hace falta IndexedDB de verdad, que jsdom no trae.
+comprobar('existe js/modules/persistencia.js', fs.existsSync('js/modules/persistencia.js'));
+comprobar('sw.js precarga persistencia.js (si no, se rompería el import bajo IndexedDB sin conexión)',
+  listaPrecarga.includes('/js/modules/persistencia.js'));
+
+const dbJs = fs.readFileSync('js/modules/db.js', 'utf8');
+comprobar('db.js importa persistencia.js', /import\s+persistencia\s+from\s+['"]\.\/persistencia\.js['"]/.test(dbJs));
+comprobar('estadoLector() guarda el resultado en el almacén local (para poder mostrarlo si se corta la conexión justo después)',
+  /estadoLector\(rut\)[\s\S]*?persistencia\.guardarLectorConsultado\(resultado\)/.test(dbJs));
+
+comprobar('main.js importa persistencia.js', /import\s+persistencia\s+from\s+['"]\.\/modules\/persistencia\.js['"]/.test(mainJs));
+comprobar('main.js arranca la sincronización en segundo plano después de iniciar sesión (no antes: sin sesión, RLS no deja leer nada)',
+  /renderShell\([^)]*\)[\s\S]{0,80}iniciarSincronizacionEnSegundoPlano\(\)/.test(mainJs));
+comprobar('la sincronización en segundo plano se repite sola mientras la pestaña sigue abierta',
+  /setInterval\(\s*\(\)\s*=>\s*persistencia\.sincronizarTodo\(\)/.test(mainJs));
+comprobar('también se reintenta al recuperar la conexión (evento "online")',
+  /addEventListener\(\s*['"]online['"][\s\S]{0,60}sincronizarTodo/.test(mainJs));
+
 // ---------------------------------------------------------------------------
 console.log(`\n${'─'.repeat(60)}`);
 console.log(`${pasadas} comprobaciones correctas, ${fallidas} con fallo`);

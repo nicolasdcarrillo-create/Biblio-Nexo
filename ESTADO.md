@@ -3,98 +3,113 @@
 No es documentación permanente del proyecto — se borra o se vacía cuando esta
 ronda de trabajo termine. Mientras tanto, es el punto de partida para
 retomar mañana. El detalle completo de lo de hoy (con el porqué de cada
-cosa) está en `PROMPT-produccion.md`, sección 12.
+cosa) está en `PROMPT-produccion.md`, sección 13 (Fase 1.2) y sección 12
+(Fase 1.1 y lo de ayer).
 
-**Fecha**: 2026-08-19 (última sesión)
+**Fecha**: 2026-08-20
 **Working tree**: revisar con `git status` — hay cambios sin confirmar
-(`git add`/`git commit`/`git push`) correspondientes a la Fase 1.1, recién
+(`git add`/`git commit`/`git push`) correspondientes a la Fase 1.2, recién
 sincronizados a este equipo pero todavía no subidos.
 
 ---
 
-## Completado esta sesión
+## Completado hoy: Fase 1.2 — Persistencia local en IndexedDB
 
-1. **Escaneo remoto sin sesión: cámara arreglada, dos bugs distintos.**
-   (Ver el detalle en la sección anterior de este archivo, o en
-   `PROMPT-produccion.md` §12 — no se repite aquí.) Confirmado en un celular
-   real; commit `a2009aa` ya subido.
+Alcance: exactamente lo que pide `PROMPT-produccion.md` §7 (1.2) — ni más ni
+menos. Ninguna pantalla lee todavía de este almacén; eso es trabajo de la
+Fase 1.3, cuando de verdad haga falta operar sin conexión.
 
-2. **Fase 1.1 — Funcionamiento sin conexión: cascarón de la app precargado.**
-   Alcance deliberadamente acotado: SOLO 1.1 (service worker + manifest +
-   precarga del cascarón), no 1.2/1.3/1.4 — siguiendo la regla del propio
-   `PROMPT-produccion.md` de no encadenar fases sin confirmación.
+- **`js/modules/persistencia.js`** (nuevo): clase `PersistentStorage` sobre
+  IndexedDB. Catálogo completo, con delta sync por `actualizado_en`
+  (migración 011, ya existía). Lectores **nunca en bloque** — solo por dos
+  vías acotadas (consultado por RUT en el mesón, o con préstamo activo ahora
+  mismo), con purga automática a los 30 días sin actividad.
+- **`supabase/migrations/015_lapidas_eliminaciones.sql`** (nueva, schema):
+  tabla `elementos_eliminados` + disparador `AFTER DELETE` en `libros` y
+  `lectores`, con RLS (`es_personal()`). Sin esto, el derecho de supresión no
+  llegaría a la copia local del mesón — un lector borrado en el servidor
+  seguiría con sus datos en el disco indefinidamente. Exigido por
+  `CUMPLIMIENTO-LEGAL.md` §9 bis, no una decisión libre.
+- **`supabase/migrations/010_consolidacion.sql`** (editada, no nueva —
+  regla del proyecto): `verificar_rls()` ahora también revisa
+  `elementos_eliminados` (7 → 8 tablas).
+- **`js/modules/db.js`**: `estadoLector()` guarda el resultado en el almacén
+  local (una de las dos vías de entrada de lectores).
+- **`js/main.js`**: arranca `persistencia.sincronizarTodo()` al iniciar
+  sesión, cada 5 minutos mientras la pestaña siga abierta, y al recuperar la
+  conexión. Nunca bloquea nada — cada paso atrapa sus propios errores.
+- **`sw.js`**: precarga también `persistencia.js` (si no, se rompería el
+  import en el arranque sin conexión).
 
-   - **`sw.js`** (nuevo, en la raíz): precarga el cascarón (HTML, CSS, JS
-     propio, fuentes, Tailwind/FontAwesome compilados) para que la app pueda
-     ABRIR sin conexión. Cache-first para `/vendor/*`; network-first (con
-     reserva en caché) para todo lo demás del mismo origen; ignora por
-     completo lo que no sea GET y lo que no sea del mismo origen (Supabase,
-     Open Library nunca se cachean, para no servir datos de préstamos
-     desactualizados sin que nadie lo note). Deliberadamente NO precarga
-     `html5-qrcode.min.js`, `chart.umd.js` ni `qrcode.min.js` — siguen
-     cargándose bajo demanda, como ya funcionaba.
-   - **`manifest.json`** (nuevo): nombre, colores de Patrimonio de Futrono,
-     `display: standalone`. Trae solo el ícono de 192×192 que ya existía —
-     **falta uno de 512×512**, a propósito no se inventó ni se escaló (se
-     vería borroso); pendiente de que la biblioteca lo entregue.
-   - **`index.html`**: agrega `<link rel="manifest">` y `<meta
-     name="theme-color">`.
-   - **`js/main.js`**: registra el service worker después del evento `load`
-     (no compite por ancho de banda con el arranque) y nunca bloquea el
-     inicio de sesión si el registro falla — solo lo deja en el registro de
-     errores propio.
-   - **`vercel.json`**: `Cache-Control: no-cache, must-revalidate` para
-     `/sw.js` y `/manifest.json` (crítico para `sw.js`: si quedara con caché
-     larga, un cambio nuevo podría tardar en llegar a los navegadores).
-   - **33 comprobaciones nuevas** en `pruebas/probar-interfaz.mjs` (58 → 90):
-     estructura del service worker, contenido del manifest, que index.html
-     los enlace, que main.js registre sin bloquear, y que los tres archivos
-     pesados sigan fuera de la precarga.
+**Pruebas nuevas o ampliadas**, las siete corriendo en verde ahora mismo:
+- `pruebas/probar-persistencia.mjs` (nueva, 25 comprobaciones, IndexedDB en
+  memoria con `fake-indexeddb`): las cuatro reglas de privacidad, una por
+  una — catálogo completo, lectores nunca en bloque, lápidas purgan la copia
+  local, purga por antigüedad.
+- `pruebas/probar-interfaz.mjs`: +8 comprobaciones (90 → 98) — el enganche
+  (sw.js precarga persistencia.js, db.js y main.js lo importan donde
+  correspondía), no la lógica interna.
+- `pruebas/probar_librero.py`: +7 comprobaciones (97 → 105; 78 → 84 en
+  Windows sin tzdata) — la única suite que cambia de ROL de Postgres de
+  verdad (`set role authenticated`/`anon`), así que es la que de verdad
+  prueba que un anónimo no ve ninguna lápida y el personal sí.
+- `pruebas/probar-migraciones.py`: +6 comprobaciones (114 → 120) — que
+  borrar un lector o un libro deja lápida, en los dos escenarios de esquema.
 
-   **Qué falta todavía de "funcionamiento sin conexión" completo — NO se
-   tocó, es a propósito**: el cascarón abre sin conexión, pero *ninguna*
-   operación real (iniciar sesión, prestar, devolver) funciona todavía sin
-   internet — eso es Fase 1.2 (IndexedDB) y 1.3 (cola de sincronización),
-   sin empezar. El criterio de aceptación completo de la Fase 1 ("prestar un
-   libro en modo avión, que se sincronice solo al reconectar") sigue sin
-   cumplirse.
+**CI**: `pruebas/probar-persistencia.mjs` quedó enganchada al job `interfaz`
+de `.github/workflows/pruebas.yml` de una vez (instala `fake-indexeddb`
+junto con `jsdom`, en el mismo comando — ver la nota en
+`pruebas/LEEME.md` sobre por qué deben instalarse juntas sin
+`package.json`). No se dejó como una suite nueva sin conectar: sería repetir
+el mismo hallazgo #1 de la lista de prioridades.
 
-3. **Conteos de pruebas y tabla de "qué ya está hecho" en
-   `PROMPT-produccion.md` corregidos** — estaban desactualizados (56→58,
-   90→98, faltaban tres suites completas en la lista). Ver sección 6 y la
-   nueva sección 12 de ese documento. *(Pendiente: refrescar de nuevo con
-   58→90 tras lo de hoy.)*
-
-4. **Análisis de estado completo** entregado al usuario y guardado en el
-   Proyecto de Claude (`claude/analisis-estado-2026-08-19.md`): checklist de
-   lo implementado, lo que falta pulir, y sugerencias de funcionalidades
-   nuevas.
+**Riesgo documentado, no corregido, no es del código**: el disco del equipo
+del mesón sigue sin cifrar (`CUMPLIMIENTO-LEGAL.md` §9 bis ya lo señala como
+pendiente de la organización). Sin cifrado de disco y bloqueo de sesión del
+sistema operativo, cualquiera con acceso físico alcanza la copia local
+mientras no se haya purgado (hasta 30 días para un lector sin actividad).
 
 ---
 
-## Cómo verificar la Fase 1.1 (antes de dar por cerrado este punto)
+## Cómo verificar la Fase 1.2
 
-1. `git add` / `git commit` / `git push` de: `sw.js`, `manifest.json`,
-   `index.html`, `js/main.js`, `vercel.json`,
-   `pruebas/probar-interfaz.mjs`.
-2. Ya en producción (Vercel), con el celular en modo avión: abrir
-   `https://biblio-nexo-fuckingkrio.vercel.app/` una vez CON conexión
-   (para que el service worker se instale y precargue el cascarón), después
-   activar modo avión y volver a abrir la misma URL — debería mostrar el
-   login o el panel, no un error de "sin conexión" del navegador.
-   *(Todavía NO debe intentar prestar/devolver sin conexión — eso fallará
-   hasta la Fase 1.2/1.3, como se explica arriba.)*
-3. En las herramientas de desarrollador del navegador (F12 → Application →
-   Service Workers) debería verse `sw.js` registrado y activo.
-4. `node pruebas/probar-interfaz.mjs` → 90 comprobaciones correctas.
+1. `git add` / `git commit` / `git push` de los archivos de abajo.
+2. `node pruebas/probar-persistencia.mjs` → 25 comprobaciones correctas.
+3. `python3 pruebas/probar_librero.py` → 105 comprobaciones correctas (o 84
+   + 13 omitidas en Windows sin tzdata — normal, ver `pruebas/LEEME.md`).
+4. `python3 pruebas/probar-migraciones.py` → 120 comprobaciones correctas.
+5. `node pruebas/probar-interfaz.mjs` → 98 comprobaciones correctas.
+6. En Supabase (SQL Editor o CLI), aplicar `015_lapidas_eliminaciones.sql` —
+   es idempotente, se puede correr más de una vez sin problema. Confirmar
+   con `select * from public.verificar_rls() where tabla =
+   'elementos_eliminados';` → `rls_activo = true`, `politicas >= 1`,
+   `diagnostico = 'Correcto'`.
+7. Ya en producción, con sesión iniciada: dejar pasar unos segundos y
+   revisar en las herramientas de desarrollador (Application → IndexedDB →
+   `biblionexo-local`) que aparecen los almacenes `libros`, `lectores` y
+   `meta`, con datos adentro.
+
+---
+
+## Archivos para subir en esta ronda (Fase 1.2)
+
+Nuevos: `supabase/migrations/015_lapidas_eliminaciones.sql`,
+`js/modules/persistencia.js`, `pruebas/probar-persistencia.mjs`.
+
+Modificados: `supabase/migrations/010_consolidacion.sql`, `js/modules/db.js`,
+`js/main.js`, `sw.js`, `pruebas/probar-interfaz.mjs`,
+`pruebas/probar-migraciones.py`, `pruebas/probar_librero.py`,
+`pruebas/LEEME.md`, `.github/workflows/pruebas.yml`, `PROMPT-produccion.md`,
+este archivo.
 
 ---
 
 ## Lista de prioridades (detalle completo en PROMPT-produccion.md §12)
 
 **Ahora — barato y con impacto real**
-1. Enganchar `probar-vistas.mjs`, `probar-migraciones.py` y
-   `probar-escaneo-remoto.mjs` a `.github/workflows/pruebas.yml`.
+1. Enganchar `probar-vistas.mjs` y `probar-migraciones.py` a
+   `.github/workflows/pruebas.yml` (`probar-persistencia.mjs` ya quedó
+   enganchada hoy; `probar-escaneo-remoto.mjs` sigue pendiente también).
 2. Decidir qué hacer con la política RLS "de más" en `usuarios`.
 3. `migration repair` para las migraciones 012, 013 y 014 (requiere
    aprobación antes de tocar producción).
@@ -102,39 +117,30 @@ sincronizados a este equipo pero todavía no subidos.
    `reconstruccion`.
 
 **Después — más esfuerzo, sigue siendo importante**
-5. Fase 1 completa: funcionamiento sin conexión. **1.1 (service worker +
-   manifest) recién quedó lista hoy — falta 1.2 (IndexedDB), 1.3 (cola de
-   sincronización) y 1.4 (indicador de conexión).**
+5. Fase 1: **faltan 1.3 (cola de sincronización) y 1.4 (indicador de
+   conexión)**. Sin ellas, todavía no se puede prestar ni devolver sin
+   conexión — solo abrir la app y tener el catálogo/lectores replicados para
+   consulta. El criterio de aceptación completo de la Fase 1 sigue sin
+   cumplirse.
 6. `verificar_politicas()`: RLS y grants bajo el mismo patrón que
    `verificar_definiciones()`.
-7. Terminar de partir `ui.js`/`ui-base.js` (catálogo, usuarios, préstamos,
-   escáner siguen mezclados en `ui-base.js`).
+7. Terminar de partir `ui.js`/`ui-base.js`.
 
 **No es código, pero bloquea el cierre del proyecto igual**
 8. Asignar, por nombre, quién aprieta el botón de respaldo de Supabase.
 9. Designar Delegado de Protección de Datos y Encargado de Ciberseguridad,
    firmar el encargo de tratamiento — antes del 1 de diciembre de 2026.
+10. **Cifrado de disco y bloqueo de sesión en el equipo del mesón** — ahora
+    más urgente que antes: desde hoy ese disco de verdad guarda una copia
+    (acotada, purgada) de datos de lectores. Ver `CUMPLIMIENTO-LEGAL.md`
+    §9 bis.
 
 **Pulido, no urgente**
-10. Portada del libro y lista de lo escaneado (con "deshacer") en el
+11. Portada del libro y lista de lo escaneado (con "deshacer") en el
     escaneo remoto.
-11. Evaluar si conviene sumar el Tailwind CLI como paso de build, para que
-    el hallazgo del bug de hoy (clases "invisibles" por no estar
-    compiladas) deje de ser un riesgo permanente.
-12. Conseguir un ícono de 512×512 de verdad para `manifest.json` (hoy solo
-    tiene el de 192×192).
-
----
-
-## Pendiente inmediato, antes de tocar cualquier otra cosa
-
-- **Confirmar `git add`/`commit`/`push` de los 6 archivos de la Fase 1.1**
-  (ver arriba) y verificar en un celular real, en modo avión, que el
-  cascarón abre.
-- **No seguir con la Fase 1.2 (IndexedDB) sin que el usuario lo pida
-  explícitamente** — es la siguiente fase natural, pero el proyecto tiene
-  la regla de no encadenar fases sin confirmación, y ya se siguió al pie de
-  la letra para 1.1 (solo 1.1, nada de 1.2/1.3/1.4 todavía).
+12. Evaluar si conviene sumar el Tailwind CLI como paso de build.
+13. Conseguir un ícono de 512×512 real para `manifest.json` (hoy solo tiene
+    el de 192×192).
 
 ---
 
@@ -149,9 +155,16 @@ sincronizados a este equipo pero todavía no subidos.
 - **Ninguna función RPC de `supabase/migrations/` se toca sin aviso
   previo.**
 - **Cualquier clase de Tailwind nueva se verifica contra el resto del
-  proyecto antes de usarla** (de la sesión anterior).
-- **El ícono de la app no se inventa ni se escala desde el de 192×192** — se
-  vería borroso. El de 512×512 lo tiene que entregar la biblioteca.
+  proyecto antes de usarla.**
+- **El ícono de la app no se inventa ni se escala desde el de 192×192.**
 - **El service worker nunca cachea nada que no sea del mismo origen ni nada
-  que no sea GET** — la cola de escrituras sin conexión es un diseño
-  aparte (Fase 1.3), no algo para improvisar dentro de `sw.js`.
+  que no sea GET.**
+- **La copia local de lectores nunca es un volcado completo del padrón**
+  (nueva, de hoy) — solo consultados o con préstamo activo, con purga por
+  antigüedad y por lápida de borrado. Ver `js/modules/persistencia.js` y
+  `CUMPLIMIENTO-LEGAL.md` §9 bis antes de tocar esa lógica.
+- **Cambios de esquema (tablas, columnas, índices) van en una migración
+  numerada nueva; cambios a funciones ya consolidadas van directo en la 010**
+  (nueva, de hoy — es la regla que ya regía, aplicada con
+  `015_lapidas_eliminaciones.sql` + la edición de `verificar_rls()` en la
+  010, cada cosa en el archivo que correspondía).

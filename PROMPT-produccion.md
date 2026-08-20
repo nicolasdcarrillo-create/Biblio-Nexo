@@ -182,20 +182,24 @@ Verificado el 27 de julio de 2026. Confírmalo tú mismo antes de asumirlo.
 | Escaneo remoto sin sesión (QR temporal, sin login) | Migración 014 + funciones en 010; `escaneo-remoto.html` + `js/escaneo-remoto.js`; probado en celular real |
 
 **Suites de prueba existentes** — ejecútalas antes y después de cada cambio
-(conteos verificados el 19 de agosto de 2026; corren todas en verde):
+(conteos verificados el 20 de agosto de 2026; corren todas en verde):
 
     python3 pruebas/verificar_consolidacion.py   → regla de la consolidación
-    node pruebas/probar-interfaz.mjs             → 58 comprobaciones, DOM simulado
+    node pruebas/probar-interfaz.mjs             → 98 comprobaciones, DOM simulado
     node pruebas/probar-vistas.mjs               → 106 comprobaciones, DOM simulado
     node pruebas/probar-escaneo-remoto.mjs       → 9 comprobaciones, DOM simulado (página sin sesión)
-    python3 pruebas/probar_librero.py            → 98 comprobaciones, PostgreSQL real
-    python3 pruebas/probar-migraciones.py        → 112 comprobaciones, PostgreSQL real (dos escenarios de esquema)
+    node pruebas/probar-persistencia.mjs         → 25 comprobaciones, IndexedDB en memoria (Fase 1.2)
+    python3 pruebas/probar_librero.py            → 105 comprobaciones, PostgreSQL real (84 en Windows sin tzdata, ver LEEME.md)
+    python3 pruebas/probar-migraciones.py        → 120 comprobaciones, PostgreSQL real (dos escenarios de esquema)
 
-Solo las primeras dos corren en CI hoy (trabajos `consolidacion` e
-`interfaz`) más `probar_librero.py` y una reconstrucción completa de
-migraciones (trabajos `base-de-datos` y `reconstruccion`). Las tres restantes
-(`probar-vistas.mjs`, `probar-escaneo-remoto.mjs`, `probar-migraciones.py`)
-solo corren si alguien se acuerda de hacerlo a mano — ver sección 12.
+De las siete, corren en CI hoy: `verificar_consolidacion.py` y
+`probar-interfaz.mjs` (trabajo `interfaz`, que desde la Fase 1.2 también
+corre `probar-persistencia.mjs` en el mismo trabajo), más `probar_librero.py`
+y una reconstrucción completa de migraciones (trabajos `base-de-datos` y
+`reconstruccion`). Las dos restantes (`probar-vistas.mjs`,
+`probar-migraciones.py`) solo corren si alguien se acuerda de hacerlo a
+mano — ver sección 12. (`probar-escaneo-remoto.mjs` también sigue sin
+engancharse; queda igual de pendiente que antes de esta fase.)
 
 ---
 
@@ -528,7 +532,12 @@ qué seguir.
 5. **Fase 1 completa (funcionamiento sin conexión).** El propio documento ya
    la marca como "el trabajo más valioso que queda" — service worker,
    manifiesto, IndexedDB y cola de sincronización. Multi-semana, no un
-   parche.
+   parche. **1.1 (service worker + manifest) y 1.2 (persistencia local en
+   IndexedDB) quedaron listas el 20 de agosto de 2026 — ver sección 13.
+   Faltan 1.3 (cola de sincronización) y 1.4 (indicador de conexión); sin
+   ellas, el criterio de aceptación completo de la Fase 1 —prestar un libro
+   en modo avión y que se sincronice solo al reconectar— sigue sin
+   cumplirse.**
 6. **`verificar_politicas()`**: extender el patrón de
    `verificar_definiciones()` a políticas RLS y a `grant`/`revoke`, para que
    una deriva de permisos como la del 26 de julio no vuelva a pasar diez días
@@ -556,3 +565,100 @@ qué seguir.
     desplegar, para que el hallazgo de esta sesión (clases "invisibles" por
     no estar compiladas) deje de ser un riesgo permanente. Cambio de flujo de
     trabajo más grande — no decidirlo a la ligera.
+12. Conseguir un ícono de 512×512 real para `manifest.json` — hoy solo tiene
+    el de 192×192 que ya existía. No se inventa ni se escala: se vería
+    borroso. Lo tiene que entregar la biblioteca.
+13. **Enganchar `probar-persistencia.mjs` (Fase 1.2, nueva) también a
+    `.github/workflows/pruebas.yml` en un trabajo aparte del job `interfaz`**,
+    si en algún momento crece lo suficiente como para no querer que un fallo
+    ahí bloquee `probar-interfaz.mjs`. Por ahora corre en el mismo job — ver
+    sección 13.
+
+---
+
+## 13. Estado al 20 de agosto de 2026
+
+### Fase 1.1 — Service worker y manifiesto: hecha, confirmada en producción
+
+`sw.js` (cascarón precargado: HTML, CSS, JS propio, fuentes,
+Tailwind/FontAwesome compilados) y `manifest.json` (con el ícono de 192×192
+existente — falta el de 512×512, ver prioridad 12 de arriba). Cache-first
+para `/vendor/*`, network-first con reserva en caché para el resto,
+ignorando por completo lo que no sea GET o no sea del mismo origen (Supabase
+y Open Library nunca se cachean). El usuario confirmó el `git push`
+(`e1d4114..8183ecf`) y probó en un celular real, en modo avión: el cascarón
+abre. **Todavía no funciona ninguna operación real sin conexión** —eso es
+1.2 (parcial) y 1.3— pero el objetivo puntual de 1.1 (que la app ABRA sin
+red) está cumplido y verificado, no solo "debería funcionar".
+
+### Fase 1.2 — Persistencia local en IndexedDB: hecha
+
+`js/modules/persistencia.js`, clase `PersistentStorage` sobre IndexedDB.
+Alcance deliberadamente el de la especificación de la sección 7, ni un paso
+más: replicación del catálogo con sincronización en segundo plano y delta
+sync por `actualizado_en`. Ningún dato se lee todavía desde este almacén en
+pantalla — eso queda para cuando 1.3 lo necesite de verdad; esta fase deja el
+almacén poblado y confiable, no conectado a la interfaz.
+
+**El punto que no era negociable, y que motivó una migración de esquema
+nueva:** `CUMPLIMIENTO-LEGAL.md`, sección "9 bis" (escrita el 30 de julio de
+2026, exactamente para este momento), exige que la copia local de lectores
+nunca sea un volcado completo del padrón, y que el derecho de supresión
+llegue hasta el disco del equipo del mesón. Concretamente:
+
+- **El catálogo se replica entero** (no tiene datos personales) — delta por
+  `actualizado_en` (migración 011), no todo de nuevo cada vez.
+- **Los lectores NUNCA se replican en bloque.** Solo entran al almacén local
+  por dos vías acotadas: alguien los consultó por RUT en el mesón
+  (`db.estadoLector`, enganchado con `persistencia.guardarLectorConsultado`),
+  o tienen un préstamo activo ahora mismo (`sincronizarLectoresActivos`,
+  información que ya era visible en la vista Préstamos).
+- **Se purgan solos por antigüedad**: un lector que nadie vuelve a consultar
+  y sin préstamo activo desaparece del disco a los 30 días
+  (`purgarLectoresAntiguos`).
+- **El derecho de supresión llega hasta acá.** Migración nueva,
+  `015_lapidas_eliminaciones.sql`: tabla `elementos_eliminados` (lápidas) con
+  un disparador `AFTER DELETE` en `libros` y `lectores`, protegida con RLS
+  (mismo criterio que las demás: solo personal, `es_personal()`). La
+  sincronización la consulta y borra de la copia local todo lo que ya no
+  esté en el servidor (`purgarLectoresEliminados`). Sin esto, alguien que
+  ejerce su derecho de supresión seguiría con sus datos en el disco del
+  mesón indefinidamente después de que el administrador lo borrara — el
+  municipio habría respondido la solicitud sin dejar de tratar el dato.
+- `verificar_rls()` (función de administración, definida en la 010) ahora
+  también revisa `elementos_eliminados` — pasó de 7 a 8 tablas.
+
+Sincronización en segundo plano enganchada en `js/main.js`: una vez al
+iniciar sesión, cada 5 minutos mientras la pestaña siga abierta, y al
+recuperar la conexión (evento `online`). Nunca bloquea nada: cada paso de
+`persistencia.js` atrapa sus propios errores.
+
+**Pruebas**: `pruebas/probar-persistencia.mjs` (nuevo, 25 comprobaciones,
+IndexedDB en memoria con `fake-indexeddb`) cubre las cuatro reglas de arriba
+una por una. `pruebas/probar-migraciones.py` y `pruebas/probar_librero.py`
+—este último con cambio de rol de Postgres real (`set role authenticated` /
+`anon`), no solo simulado— confirman que la lápida se crea al borrar y que
+la RLS de `elementos_eliminados` protege de verdad: un anónimo no ve ninguna
+fila, el personal sí. `pruebas/probar-interfaz.mjs` ganó 8 comprobaciones
+estructurales más (el enganche, no la lógica: que `sw.js` precargue
+`persistencia.js`, que `db.js` y `main.js` lo importen donde correspondía).
+
+Conteos actualizados hoy, ya reflejados en la tabla de la sección 6:
+`probar-interfaz.mjs` 90 → 98, `probar_librero.py` 97 → 105 (Windows sin
+tzdata: 78 → 84, ver `pruebas/LEEME.md`), `probar-migraciones.py` 114 → 120,
+más `probar-persistencia.mjs`, nueva, con 25. Sumando las siete suites con
+número (todas menos `verificar_consolidacion.py`, que no reporta un conteo):
+463 comprobaciones — no se compara contra un total "de antes" porque la
+tabla de la sección 6 ya venía con conteos desactualizados al empezar esta
+fase (se corrigieron de paso, junto con todo lo demás de esta sección).
+
+### Riesgo documentado, no corregido — responsabilidad de la organización
+
+El disco del equipo del mesón sigue sin cifrar. `CUMPLIMIENTO-LEGAL.md`
+sección "9 bis" ya lo señala como pendiente de la organización, no del
+código: sin cifrado de disco y bloqueo de sesión del sistema operativo,
+cualquiera con acceso físico al computador de la biblioteca alcanza la copia
+local mientras no se haya purgado (hasta 30 días para un lector sin
+actividad). No se intentó resolver desde el código porque no se puede: es
+una decisión y una acción sobre el equipo físico, fuera del alcance de este
+repositorio.

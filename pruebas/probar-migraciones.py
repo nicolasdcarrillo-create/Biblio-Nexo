@@ -543,6 +543,57 @@ def main():
                 assert '1' in r, "la inserción se revirtió: la auditoría bloqueó la operación"
             prueba("si la auditoría falla, la operación NO se bloquea", auditoria_no_bloquea)
 
+            # --- Lápidas de eliminación (migración 015, requisito de la Fase 1.2) ---
+            print("\n  Lápidas de eliminación (Fase 1.2):")
+
+            def lapida_de_lector():
+                # Lector y libro desechables, para no tocar los datos que usan
+                # las demás pruebas (el lector_id=1 de "anonimiza()", más abajo).
+                correr(srv, """
+                  insert into public.lectores (rut, nombre, email, telefono)
+                  values ('11111111-9', 'Desechable Para Prueba', 'x@x.cl', '+56911111111');
+                """)
+                r = correr(srv, "select id from public.lectores where rut = '11111111-9';")
+                lector_id = r.split('\n')[2].strip()
+                correr(srv, f"delete from public.lectores where id = {lector_id};")
+                r = correr(srv, f"select eliminado_en from public.elementos_eliminados where tabla = 'lectores' and id = {lector_id};")
+                assert len(r.split('\n')) > 2 and r.split('\n')[2].strip(), \
+                    f"no quedó lápida del lector {lector_id}, se leyó: {r}"
+            prueba("borrar un lector deja lápida en elementos_eliminados", lapida_de_lector)
+
+            def lapida_de_libro():
+                correr(srv, """
+                  insert into public.libros (isbn, titulo, autor, stock, copias_totales)
+                  values ('LAP-1', 'Desechable Para Prueba', 'X', 1, 1);
+                """)
+                r = correr(srv, "select id from public.libros where isbn = 'LAP-1';")
+                libro_id = r.split('\n')[2].strip()
+                correr(srv, f"delete from public.libros where id = {libro_id};")
+                r = correr(srv, f"select eliminado_en from public.elementos_eliminados where tabla = 'libros' and id = {libro_id};")
+                assert len(r.split('\n')) > 2 and r.split('\n')[2].strip(), \
+                    f"no quedó lápida del libro {libro_id}, se leyó: {r}"
+            prueba("borrar un libro deja lápida en elementos_eliminados", lapida_de_libro)
+
+            # No se prueba aquí "un anónimo no ve ninguna lápida": este arnés
+            # de pruebas se conecta siempre con el mismo rol de Postgres (ver
+            # correr(), más arriba) y solo simula auth.uid() con una variable
+            # de sesión — nunca cambia de ROLE de verdad, así que una lectura
+            # cruda de la tabla no ejercita la RLS por rol tal como la vería
+            # PostgREST en producción. Lo que SÍ se puede probar aquí, y es lo
+            # que importa, es que elementos_eliminados quedó protegida: se
+            # reutiliza verificar_rls() (función de administración ya
+            # existente, ver arriba) para confirmar que la tabla nueva tiene
+            # RLS activo y con política, igual que las demás.
+            def verificar_rls_incluye_elementos_eliminados():
+                como(uid_admin)
+                try:
+                    r = correr(srv, "select tabla, rls_activo, politicas, diagnostico from public.verificar_rls() where tabla = 'elementos_eliminados';")
+                    assert 'elementos_eliminados' in r, f"verificar_rls() no reportó la tabla nueva, se leyó: {r}"
+                    assert 'Correcto' in r, f"elementos_eliminados no quedó con RLS + política correctas, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("verificar_rls() confirma que elementos_eliminados quedó protegida", verificar_rls_incluye_elementos_eliminados)
+
             # --- Derechos del titular ---
             print("\n  Cumplimiento (Ley 21.719):")
             # Se reutiliza el admin de la 003 (nicolasd.carrillo@gmail.com):

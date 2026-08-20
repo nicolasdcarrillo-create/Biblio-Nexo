@@ -5,16 +5,22 @@
  *
  *   - Precarga el "cascarón" de la aplicación (HTML, CSS, JS propio, fuentes,
  *     Tailwind/FontAwesome compilados) para que la app pueda ABRIR sin
- *     conexión. Esto es Fase 1.1 nada más.
- *   - NO guarda datos del catálogo, lectores ni préstamos — eso es Fase 1.2
- *     (una capa de IndexedDB, todavía sin escribir). Sin conexión, hoy, la
- *     interfaz abre pero las operaciones que necesitan Supabase (iniciar
- *     sesión, prestar, devolver, etc.) siguen fallando tal como antes.
+ *     conexión. Esto sigue siendo todo lo que hace ESTE archivo.
+ *   - La copia local de catálogo y lectores (IndexedDB, con sus reglas de
+ *     privacidad) es la Fase 1.2, y vive aparte, en
+ *     js/modules/persistencia.js — no aquí. Este service worker NO guarda
+ *     ningún dato de negocio, solo el cascarón de archivos estáticos.
+ *   - Registrar un préstamo o una devolución sin conexión sigue sin
+ *     funcionar: eso es la Fase 1.3 (cola de sincronización), todavía sin
+ *     escribir. Sin conexión, hoy, la interfaz abre y el catálogo/lectores
+ *     replicados están disponibles para consulta, pero las operaciones que
+ *     necesitan una respuesta del servidor siguen fallando tal como antes.
  *   - NO intercepta nada que no sea GET, ni nada de otro origen (Supabase,
  *     Open Library): esas peticiones pasan derecho, sin pasar por ningún
  *     caché. Es a propósito — cachear una respuesta de Supabase por
  *     accidente sería servir datos de préstamos desactualizados como si
- *     fueran el estado real.
+ *     fueran el estado real. La copia local de Fase 1.2 la escribe la propia
+ *     aplicación, con criterio, no este archivo por reflejo.
  *
  * Estrategia de caché, por tipo de recurso:
  *
@@ -76,6 +82,7 @@ const PRECACHE_URLS = [
   '/js/modules/db.js',
   '/js/modules/errores.js',
   '/js/modules/libros-externos.js',
+  '/js/modules/persistencia.js',
   '/js/modules/qr.js',
   '/js/modules/scanner.js',
   '/js/modules/ui-base.js',

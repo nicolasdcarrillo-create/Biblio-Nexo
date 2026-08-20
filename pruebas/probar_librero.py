@@ -357,7 +357,10 @@ print('\n7. AUTODIAGNÓSTICOS QUE VE EL ADMINISTRADOR EN PANTALLA')
 ok, filas = como(ADMIN, "select tabla, diagnostico from public.verificar_rls();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_rls() no reporta ninguna tabla en problemas', ok and not malas, texto(malas))
-comprobar('verificar_rls() revisa las 7 tablas con datos', len(filas) == 7, f'revisó {len(filas)}')
+# 8, no 7: desde la migración 015 (Fase 1.2, lápidas de eliminación) también
+# se revisa "elementos_eliminados" — ver el comentario junto a la definición
+# de verificar_rls() en la 010.
+comprobar('verificar_rls() revisa las 8 tablas con datos', len(filas) == 8, f'revisó {len(filas)}')
 
 ok, filas = como(ADMIN, "select funcion, es_definer from public.verificar_circulacion();")
 rotas = [f[0] for f in filas if not f[1]]
@@ -621,6 +624,53 @@ else:
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
 comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 40,
           texto(out)[-150:])
+
+
+# ===========================================================================
+# BLOQUE AÑADIDO PARA LA FASE 1.2 — lápidas de eliminación (migración 015)
+# ===========================================================================
+# Esta es la única suite del proyecto que cambia de ROL de Postgres de
+# verdad (set role authenticated / anon), así que es la única que puede
+# probar la RLS de "elementos_eliminados" tal como la vería PostgREST en
+# producción — no solo que un admin pueda borrar, sino que un anónimo
+# de verdad no vea nada, fila por fila.
+print('\n12. LÁPIDAS DE ELIMINACIÓN (Fase 1.2, requisito de CUMPLIMIENTO-LEGAL.md § 9 bis)')
+
+sql("""
+insert into public.lectores (rut, nombre, email, telefono)
+  values ('55555555-6', 'Lector Desechable', 'desechable@correo.cl', '56900000000');
+insert into public.libros (isbn, titulo, autor, stock, copias_totales)
+  values ('LAP-PRUEBA', 'Libro Desechable', 'X', 1, 1);
+""")
+lector_desechable_id = valor("select id from public.lectores where rut = '55555555-6';")
+libro_desechable_id = valor("select id from public.libros where isbn = 'LAP-PRUEBA';")
+
+ok, out = como(ADMIN, f"delete from public.lectores where id = {lector_desechable_id};")
+comprobar('un admin puede borrar un lector (como siempre)', ok, texto(out)[-200:] if not ok else '')
+ok, out = como(ADMIN, f"delete from public.libros where id = {libro_desechable_id};")
+comprobar('un admin puede borrar un libro (como siempre)', ok, texto(out)[-200:] if not ok else '')
+
+comprobar('el borrado del lector dejó una lápida en elementos_eliminados',
+          valor(f"select count(*) from public.elementos_eliminados where tabla = 'lectores' and id = {lector_desechable_id};") == 1)
+comprobar('el borrado del libro dejó una lápida en elementos_eliminados',
+          valor(f"select count(*) from public.elementos_eliminados where tabla = 'libros' and id = {libro_desechable_id};") == 1)
+
+# La RLS real, con roles reales — no la simulación de probar-migraciones.py
+ok, r = como_anonimo("select * from public.elementos_eliminados")
+comprobar('el anónimo no ve ninguna lápida (bloqueado, o la consulta vuelve vacía)',
+          (not ok) or len(r) == 0, f'ok={ok}, filas={texto(r)[:150]}')
+
+if TIMEZONE_OK:
+    ok, r = como(LIBRERO, "select tabla, id from public.elementos_eliminados")
+    comprobar('un librero (personal) sí ve las lápidas',
+              ok and len(r) >= 2, f'ok={ok}, filas={texto(r)[:150]}')
+else:
+    omitir('un librero (personal) sí ve las lápidas')
+
+ok, r = como(ADMIN, "select tabla, rls_activo, politicas, diagnostico from public.verificar_rls() where tabla = 'elementos_eliminados';")
+comprobar('verificar_rls() confirma que elementos_eliminados quedó protegida (RLS activo + política + Correcto)',
+          ok and len(r) == 1 and r[0][1] is True and r[0][2] >= 1 and r[0][3] == 'Correcto',
+          texto(r))
 
 
 print('\n' + '─' * 62)

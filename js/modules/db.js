@@ -1,5 +1,6 @@
 import { supabase } from '../supabase-init.js';
 import { conTiempoLimite } from './utilidades.js';
+import persistencia from './persistencia.js';
 
 // Límite normal para una consulta o RPC. Ver utilidades.js: sin esto, una
 // llamada colgada deja la pantalla esperando para siempre.
@@ -439,7 +440,14 @@ export const db = {
             }
             throw new Error(error.message || 'No se pudo consultar el lector.');
         }
-        return Array.isArray(data) ? data[0] : data;
+        const resultado = Array.isArray(data) ? data[0] : data;
+        // Fase 1.2 (funcionamiento sin conexión): se guarda en el almacén
+        // local del mesón para poder mostrarlo si se corta la conexión justo
+        // después de consultarlo. Nunca debe interrumpir la consulta real: si
+        // el almacén local falla, persistencia.js ya se hace cargo de
+        // atraparlo en silencio.
+        persistencia.guardarLectorConsultado(resultado);
+        return resultado;
     },
 
     async bloquearLector(lectorId, bloquear, motivo = null) {

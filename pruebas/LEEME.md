@@ -47,6 +47,39 @@ Monta la interfaz real sobre un DOM (jsdom) con un Supabase falso, y comprueba
 el arranque con rol librero, el menú que le corresponde, la vista Mi perfil, sus
 validaciones, y que la cámara del mesón vuelva a encender tras apagarla.
 
+---
+
+## Pruebas agregadas para la Fase 1 (funcionamiento sin conexión)
+
+### `probar-persistencia.mjs` — la copia local en IndexedDB (Fase 1.2)
+
+Prueba `js/modules/persistencia.js` con IndexedDB en memoria (sin navegador)
+y un Supabase falso propio. Cubre exactamente lo que exige
+`CUMPLIMIENTO-LEGAL.md`, sección "9 bis": que el catálogo se replique entero
+por delta, que los lectores NUNCA entren en bloque (solo consultados o con
+préstamo activo), que una lápida de borrado del servidor purgue la copia
+local (el derecho de supresión), y que un lector sin actividad se purgue solo
+por antigüedad.
+
+```bash
+npm install jsdom fake-indexeddb --no-save
+node pruebas/probar-persistencia.mjs
+```
+
+**Importante:** instala las dos juntas, en el mismo comando. Como este
+proyecto no tiene `package.json` (a propósito, ver `.gitignore`), cada
+`npm install <paquete>` sin uno recalcula todo `node_modules` desde cero y
+puede desinstalar silenciosamente lo que ya tenías. Ya pasó una vez armando
+esta prueba: instalar `fake-indexeddb` solo se llevó `jsdom` por delante.
+
+### Sección 10 de `probar-interfaz.mjs` — el service worker y el manifest (Fase 1.1)
+
+No es un archivo aparte: son comprobaciones estructurales agregadas a
+`probar-interfaz.mjs` que verifican `sw.js` (los tres eventos del ciclo de
+vida, caché versionada, qué precarga y qué NO precarga a propósito) y
+`manifest.json` (JSON válido, campos obligatorios), sin necesitar un
+navegador real para eso.
+
 ```bash
 npm install jsdom
 node pruebas/probar-interfaz.mjs
@@ -162,8 +195,11 @@ misma simulación de sesión que usa el resto del script. No hay, en el código,
 un camino sin esa guarda para estas cinco funciones.
 
 Mientras no se corra `preparar_timezone_pgserver.py` (sección anterior), un
-resultado de `probar_librero.py` en Windows de 78 comprobaciones correctas,
-0 con fallo y 12 omitidas es el esperado, no una regresión.
+resultado de `probar_librero.py` en Windows de 84 comprobaciones correctas,
+0 con fallo y 13 omitidas es el esperado, no una regresión. (Antes de la
+Fase 1.2 —lápidas de eliminación, migración 015— era 78 y 12: la sección
+nueva agrega 7 comprobaciones, una de ellas sensible al mismo huso horario
+que las demás omitidas en Windows.)
 
 Al inspeccionar el paquete directamente (no en la salida de la suite), la
 carencia se manifiesta como `could not open directory
@@ -177,8 +213,8 @@ quien tenga que depurar el paquete a mano.
 | Trabajo | Qué hace |
 |---|---|
 | `consolidacion` | Lee los archivos SQL, segundos |
-| `interfaz` | DOM simulado con jsdom |
-| `base-de-datos` | PostgreSQL 16 real, 66 comprobaciones |
+| `interfaz` | DOM simulado con jsdom (`probar-interfaz.mjs`) + IndexedDB en memoria con fake-indexeddb (`probar-persistencia.mjs`, Fase 1.2) |
+| `base-de-datos` | PostgreSQL 16 real |
 | `reconstruccion` | Rehace la base con el CLI de Supabase desde cero |
 
 El último es el más valioso: si la base se puede reconstruir desde los archivos,

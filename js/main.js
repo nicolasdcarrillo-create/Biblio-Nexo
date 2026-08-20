@@ -3,6 +3,7 @@ import * as auth from './modules/auth.js';
 import uiManager from './modules/ui.js';
 import registroErrores from './modules/errores.js';
 import { conTiempoLimite } from './modules/utilidades.js';
+import persistencia from './modules/persistencia.js';
 
 // Mensaje honesto: en el cuelgue que motivó este cambio nunca sale ninguna
 // petición de red (se comprobó con navigator.locks.query()), así que hablar
@@ -60,6 +61,33 @@ function registrarServiceWorker() {
 }
 registrarServiceWorker();
 
+// Cada cuánto se repite la sincronización en segundo plano mientras la
+// pestaña sigue abierta. Cinco minutos: ni tan seguido como para competir con
+// el trabajo real por ancho de banda, ni tan espaciado como para que la copia
+// local quede desactualizada toda una jornada.
+const INTERVALO_SINCRONIZACION_MS = 5 * 60 * 1000;
+let sincronizacionIniciada = false;
+
+/**
+ * Arranca la sincronización en segundo plano del almacén local (Fase 1.2 —
+ * ver js/modules/persistencia.js para el detalle y las reglas de privacidad).
+ * Se llama una vez que hay sesión iniciada — antes no tiene sentido: sin
+ * sesión, RLS no deja leer ni libros ni lectores.
+ *
+ * Nunca bloquea nada: `persistencia.sincronizarTodo()` ya atrapa sus propios
+ * errores y no lanza. Esto solo decide CUÁNDO se llama — al iniciar sesión,
+ * cada cinco minutos mientras la pestaña siga abierta, y cada vez que el
+ * navegador avisa que recuperó la conexión.
+ */
+function iniciarSincronizacionEnSegundoPlano() {
+    if (sincronizacionIniciada) return;
+    sincronizacionIniciada = true;
+
+    persistencia.sincronizarTodo();
+    setInterval(() => persistencia.sincronizarTodo(), INTERVALO_SINCRONIZACION_MS);
+    window.addEventListener('online', () => persistencia.sincronizarTodo());
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Se activa antes que cualquier otra cosa, incluso antes del try: un
     // cuelgue o error durante el propio arranque —como el candado de
@@ -93,6 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (evento === 'SIGNED_IN' && sesion && !uiManager.sesionRenderizada) {
                 uiManager.sesionRenderizada = true;
                 await uiManager.renderShell(sesion.user);
+                iniciarSincronizacionEnSegundoPlano();
             }
             if (evento === 'SIGNED_OUT') {
                 uiManager.sesionRenderizada = false;
@@ -110,6 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (session) {
             uiManager.sesionRenderizada = true;
             await uiManager.renderShell(session.user);
+            iniciarSincronizacionEnSegundoPlano();
         } else {
             uiManager.renderLogin();
         }

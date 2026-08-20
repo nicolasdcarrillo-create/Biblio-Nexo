@@ -160,8 +160,12 @@ async function deshacerEscaneo(id) {
     item.deshaciendo = true;
     renderListaEscaneados();
     try {
+        // p_accion/p_cantidad ya no se mandan: el servidor los deriva solo de
+        // su propio rastro de auditoría (ver el comentario largo de la
+        // función en 010_consolidacion.sql — versión corregida por el hueco
+        // de seguridad de la primera).
         const filas = await rpc('deshacer_libro_remoto', {
-            p_token: token(), p_libro_id: item.libroId, p_accion: item.accion, p_cantidad: item.cantidad
+            p_token: token(), p_libro_id: item.libroId
         });
         const fila = filas?.[0];
         if (!fila?.deshecho) {

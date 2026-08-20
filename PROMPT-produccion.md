@@ -194,7 +194,7 @@ Verificado el 27 de julio de 2026. Confírmalo tú mismo antes de asumirlo.
     node pruebas/probar-sync-queue.mjs           → 37 comprobaciones, IndexedDB en memoria + Supabase falso controlable (Fase 1.3)
     node pruebas/probar-estado-conexion.mjs      → 18 comprobaciones, IndexedDB en memoria (Fase 1.4)
     python3 pruebas/probar_librero.py            → 106 comprobaciones, PostgreSQL real (85 en Windows sin tzdata, ver LEEME.md)
-    python3 pruebas/probar-migraciones.py        → 130 comprobaciones, PostgreSQL real (dos escenarios de esquema)
+    python3 pruebas/probar-migraciones.py        → 136 comprobaciones, PostgreSQL real (dos escenarios de esquema)
 
 De las nueve, corren en CI hoy: `verificar_consolidacion.py` y
 `probar-interfaz.mjs` (trabajo `interfaz`, que desde la Fase 1.2 también
@@ -1045,3 +1045,76 @@ Modificados: `escaneo-remoto.html`, `js/escaneo-remoto.js`,
 
 No hay migración numerada nueva: `deshacer_libro_remoto` se agregó directo
 en `010_consolidacion.sql`, sin cambios de esquema.
+
+---
+
+## 17. Estado al 20 de agosto de 2026 (más tarde el mismo día) — corrección de seguridad en `deshacer_libro_remoto`
+
+Encontrado en una revisión propia, después de entregar el ítem 11 (no en
+producción, no reportado por nadie): la primera versión de
+`deshacer_libro_remoto` recibía `p_accion` y `p_cantidad` del celular y
+confiaba en ellos a ciegas. El único control era que el token siguiera
+vigente — pero un enlace vigente (hasta 24 horas, y puede circular entre
+varias personas del mesón) podía deshacer una acción sobre **cualquier**
+libro del catálogo, no solo los que su propio enlace había tocado. Con
+`accion:'incrementado'` se le podía restar ejemplares a cualquier libro sin
+haberlo escaneado nunca; con `accion:'creado'`, hasta borrarlo entero si no
+tenía préstamos. Rompía el principio que la propia sección de
+`010_consolidacion.sql` documenta para todo el escaneo remoto: "angosto a
+propósito... lo máximo que permite es escribir entradas de catálogo".
+
+**La corrección, sin cambios de esquema.** `deshacer_libro_remoto` ya no
+recibe `p_accion` ni `p_cantidad` — su firma bajó a `(p_token, p_libro_id)`.
+En vez de confiar en el celular, busca en `auditoria` el movimiento MÁS
+RECIENTE para ese libro y ese enlace en concreto
+(`datos_despues->>'enlace_id'`, la marca que `agregar_libro_remoto` ya deja
+desde el principio), y de ahí deriva sola:
+
+- **Si ese enlace nunca tocó ese libro**: no hay nada que deshacer — rechaza
+  con "Este enlace no fue el que agregó o repuso este libro".
+- **Si la acción ya se había deshecho antes**: el propio "deshacer" también
+  queda marcado en `auditoria` (`operacion: 'deshacer_escaneo_remoto'`), así
+  que el movimiento más reciente lo delata — rechaza con "Esta acción ya se
+  había deshecho antes" (cierra, de paso, un reintento/doble clic que antes
+  habría restado dos veces).
+- **Qué fue y cuánto**: `accion = 'INSERT'` en el registro de auditoría es
+  un 'creado'; `'UPDATE'` es un 'incrementado', y `ejemplares_agregados` (ya
+  guardado ahí) es la cantidad exacta a restar — nunca un número que mande
+  el celular.
+
+El resto de la lógica (borrar si es 'creado' salvo que ya haya préstamo;
+restar sin bajar de lo disponible si es 'incrementado') queda igual.
+
+**`js/escaneo-remoto.js`**: `deshacerEscaneo()` ya no manda `p_accion` ni
+`p_cantidad` en la llamada RPC — solo `p_token` y `p_libro_id`. `item.accion`
+e `item.cantidad` se conservan en el arreglo `escaneados` (siguen sirviendo
+para el texto de cada fila, "Agregado"/"Repuesto ×N"), pero ya no viajan al
+servidor.
+
+**Pruebas nuevas o ajustadas**, todas en verde:
+- `pruebas/probar-migraciones.py`: +3 pruebas × dos escenarios de esquema
+  (130 → 136) — un segundo enlace no puede deshacer lo que hizo el primero
+  (la prueba que reproduce el hueco cerrado hoy), y ni un 'creado' ni un
+  'incrementado' se pueden deshacer dos veces con el mismo enlace. Las
+  pruebas existentes de `deshacer_libro_remoto` se ajustaron para construir
+  el libro siempre a través de `agregar_libro_remoto` (así queda el rastro
+  de auditoría que la función ahora necesita) en vez de insertarlo directo.
+- `pruebas/probar-escaneo-remoto.mjs`: el simulador de RPC ahora lleva su
+  propio "historial" en memoria (qué token hizo qué, a qué libro) para
+  poder simular la comprobación nueva; las 13 pruebas existentes siguen
+  pasando sin cambios de conteo — la prueba del enlace ajeno no tiene
+  sentido a nivel de interfaz (cada carga de página solo conoce un token a
+  la vez), así que vive solo en `probar-migraciones.py`.
+- `pruebas/probar_librero.py`: sin cambio de conteo, solo se ajustó la
+  firma de la llamada en la prueba de "el anónimo no puede deshacer con un
+  token inventado".
+
+### Archivos para subir en esta ronda (corrección de seguridad)
+
+Modificados: `supabase/migrations/010_consolidacion.sql`,
+`js/escaneo-remoto.js`, `pruebas/probar-escaneo-remoto.mjs`,
+`pruebas/probar-migraciones.py`, `pruebas/probar_librero.py`,
+`PROMPT-produccion.md`, `ESTADO.md`, `pruebas/LEEME.md`.
+
+Sin archivos nuevos, sin migración numerada nueva — la función ya existía,
+solo cambió su cuerpo y su firma (de 4 parámetros a 2), directo en la 010.

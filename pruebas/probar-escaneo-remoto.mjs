@@ -40,18 +40,33 @@ async function prueba(desc, fn) {
 // pruebas/probar-migraciones.py, contra SQL real).
 // ---------------------------------------------------------------------------
 const ENLACE_VALIDO = { token: 'token-valido-de-prueba', expira_en: '2026-12-31T23:00:00Z' };
+// Un segundo enlace válido, para probar que uno no puede deshacer lo que
+// hizo el otro (el hueco de seguridad de la primera versión de
+// deshacer_libro_remoto: cualquier token vigente podía deshacer CUALQUIER
+// libro del catálogo, no solo los que su propio enlace había tocado).
+const OTRO_ENLACE_VALIDO = { token: 'otro-token-valido-de-prueba', expira_en: '2026-12-31T23:00:00Z' };
 const LIBRO_EXISTENTE = { isbn: '9789561117', titulo: 'Subterra', autor: 'Baldomero Lillo', stock: 3, copias_totales: 3 };
 const libros = [{ ...LIBRO_EXISTENTE }];
 
+// Simula lo que en SQL real vive en `auditoria` (ver 010_consolidacion.sql):
+// el rastro de qué enlace hizo cada movimiento, para que deshacer_libro_remoto
+// pueda comprobar "¿este enlace fue el que hizo esto?" en vez de confiarle
+// esa respuesta al celular.
+const historialEscaneoRemoto = []; // { libroId, token, tipo: 'escaneo_remoto'|'deshacer_escaneo_remoto', accion: 'INSERT'|'UPDATE', cantidad }
+
+function esTokenValido(token) {
+  return token === ENLACE_VALIDO.token || token === OTRO_ENLACE_VALIDO.token;
+}
+
 function respuestaRpc(nombre, cuerpo) {
   if (nombre === 'validar_enlace_escaneo') {
-    if (cuerpo.p_token === ENLACE_VALIDO.token) {
+    if (esTokenValido(cuerpo.p_token)) {
       return { ok: true, datos: [{ valido: true, motivo: null, expira_en: ENLACE_VALIDO.expira_en }] };
     }
     return { ok: true, datos: [{ valido: false, motivo: 'Este enlace no es válido.', expira_en: null }] };
   }
   if (nombre === 'agregar_libro_remoto') {
-    if (cuerpo.p_token !== ENLACE_VALIDO.token) {
+    if (!esTokenValido(cuerpo.p_token)) {
       return { ok: false, datos: { message: 'Este enlace no es válido o ya expiró. Pide uno nuevo.' } };
     }
     const existente = libros.find(l => l.isbn === cuerpo.p_isbn);
@@ -59,17 +74,21 @@ function respuestaRpc(nombre, cuerpo) {
       const suma = cuerpo.p_stock ?? 1;
       existente.stock += suma;
       existente.copias_totales += suma;
-      return { ok: true, datos: [{ estado: 'incrementado', libro_id: 1, isbn: existente.isbn, titulo: existente.titulo, autor: existente.autor, stock: existente.stock, copias_totales: existente.copias_totales }] };
+      const libroId = libros.indexOf(existente) + 1;
+      historialEscaneoRemoto.push({ libroId, token: cuerpo.p_token, tipo: 'escaneo_remoto', accion: 'UPDATE', cantidad: suma });
+      return { ok: true, datos: [{ estado: 'incrementado', libro_id: libroId, isbn: existente.isbn, titulo: existente.titulo, autor: existente.autor, stock: existente.stock, copias_totales: existente.copias_totales }] };
     }
     if (!cuerpo.p_titulo) {
       return { ok: true, datos: [{ estado: 'falta_info', libro_id: null, isbn: cuerpo.p_isbn, titulo: null, autor: null, stock: null, copias_totales: null }] };
     }
     const nuevo = { isbn: cuerpo.p_isbn, titulo: cuerpo.p_titulo, autor: cuerpo.p_autor || null, stock: cuerpo.p_stock ?? 1, copias_totales: cuerpo.p_stock ?? 1 };
     libros.push(nuevo);
-    return { ok: true, datos: [{ estado: 'creado', libro_id: libros.length, ...nuevo }] };
+    const libroId = libros.length;
+    historialEscaneoRemoto.push({ libroId, token: cuerpo.p_token, tipo: 'escaneo_remoto', accion: 'INSERT', cantidad: nuevo.stock });
+    return { ok: true, datos: [{ estado: 'creado', libro_id: libroId, ...nuevo }] };
   }
   if (nombre === 'deshacer_libro_remoto') {
-    if (cuerpo.p_token !== ENLACE_VALIDO.token) {
+    if (!esTokenValido(cuerpo.p_token)) {
       return { ok: false, datos: { message: 'Este enlace no es válido o ya expiró. Pide uno nuevo.' } };
     }
     // Misma convención que arriba: libro_id es la posición (1-indexada) en
@@ -78,16 +97,28 @@ function respuestaRpc(nombre, cuerpo) {
     if (!libro) {
       return { ok: true, datos: [{ deshecho: false, motivo: 'Ese libro ya no está en el catálogo.' }] };
     }
-    if (cuerpo.p_accion === 'creado') {
+    // El movimiento más reciente para ESTE libro Y este token — nunca lo que
+    // manda el cliente. Ya no se leen p_accion ni p_cantidad del cuerpo.
+    const relevantes = historialEscaneoRemoto.filter(h => h.libroId === cuerpo.p_libro_id && h.token === cuerpo.p_token);
+    const ultimo = relevantes[relevantes.length - 1];
+    if (!ultimo) {
+      return { ok: true, datos: [{ deshecho: false, motivo: 'Este enlace no fue el que agregó o repuso este libro; no se puede deshacer desde acá.' }] };
+    }
+    if (ultimo.tipo === 'deshacer_escaneo_remoto') {
+      return { ok: true, datos: [{ deshecho: false, motivo: 'Esta acción ya se había deshecho antes.' }] };
+    }
+    if (ultimo.accion === 'INSERT') {
       libros.splice(cuerpo.p_libro_id - 1, 1);
+      historialEscaneoRemoto.push({ libroId: cuerpo.p_libro_id, token: cuerpo.p_token, tipo: 'deshacer_escaneo_remoto' });
       return { ok: true, datos: [{ deshecho: true, motivo: null }] };
     }
-    const aQuitar = Math.min(cuerpo.p_cantidad ?? 1, libro.stock);
+    const aQuitar = Math.min(ultimo.cantidad, libro.stock);
     if (aQuitar <= 0) {
       return { ok: true, datos: [{ deshecho: false, motivo: 'No queda ningún ejemplar disponible de esta acción para deshacer (puede estar prestado).' }] };
     }
     libro.stock -= aQuitar;
     libro.copias_totales -= aQuitar;
+    historialEscaneoRemoto.push({ libroId: cuerpo.p_libro_id, token: cuerpo.p_token, tipo: 'deshacer_escaneo_remoto' });
     return { ok: true, datos: [{ deshecho: true, motivo: null }] };
   }
   return { ok: false, datos: { message: `RPC no simulada: ${nombre}` } };

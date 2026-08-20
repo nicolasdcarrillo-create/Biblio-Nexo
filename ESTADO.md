@@ -3,7 +3,7 @@
 No es documentación permanente del proyecto — se borra o se vacía cuando esta
 ronda de trabajo termine. Mientras tanto, es el punto de partida para
 retomar mañana. El detalle completo de hoy (con el porqué de cada cosa) está
-en `PROMPT-produccion.md`, sección 16.
+en `PROMPT-produccion.md`, secciones 16 y 17.
 
 **Fecha**: 2026-08-20
 **Working tree**: revisar con `git status` — hay cambios sin confirmar
@@ -54,7 +54,8 @@ diseño, reducido con un filtro de calidad. `manifest.json`, `index.html` y
 
 **Pruebas nuevas o ampliadas**, todas corriendo en verde:
 - `pruebas/probar-escaneo-remoto.mjs`: 9 → 13 comprobaciones.
-- `pruebas/probar-migraciones.py`: 120 → 130 (dos escenarios de esquema).
+- `pruebas/probar-migraciones.py`: 120 → 136 (dos escenarios de esquema —
+  incluye las 3 pruebas de la corrección de seguridad de más abajo).
 - `pruebas/probar_librero.py`: 105 → 106 (85 en Windows sin tzdata).
 - `pruebas/verificar_consolidacion.py`: 41 funciones en el manifiesto (antes 40).
 
@@ -62,11 +63,33 @@ diseño, reducido con un filtro de calidad. `manifest.json`, `index.html` y
 
 ---
 
+## Completado hoy, más tarde: corrección de seguridad en `deshacer_libro_remoto`
+
+Encontrado en revisión propia después de entregar el ítem 11 (no en
+producción, nadie lo reportó). La primera versión confiaba en `p_accion` y
+`p_cantidad` que mandaba el celular, así que CUALQUIER enlace de escaneo
+vigente podía deshacer una acción sobre **cualquier libro del catálogo**,
+no solo los que había escaneado esa sesión — podía restarle ejemplares o
+hasta borrar un libro que nunca tocó.
+
+**Corrección**: la función bajó de 4 a 2 parámetros —
+`deshacer_libro_remoto(p_token, p_libro_id)`— y deriva sola, desde
+`auditoria`, qué hizo ESE enlace en concreto sobre ese libro, sin cambios de
+esquema. De paso cierra otro hueco: ya no se puede deshacer la misma acción
+dos veces. Detalle completo en `PROMPT-produccion.md` §17.
+
+`js/escaneo-remoto.js` ajustado (ya no manda esos dos parámetros).
+`pruebas/probar-migraciones.py` 130 → 136 (+3 pruebas × dos escenarios: un
+enlace no puede deshacer lo que hizo otro, y ni un 'creado' ni un
+'incrementado' se puede deshacer dos veces).
+
+---
+
 ## Cómo verificar lo de hoy
 
 1. `git add` / `git commit` / `git push` de los archivos de abajo.
 2. `node pruebas/probar-escaneo-remoto.mjs` → 13 comprobaciones correctas.
-3. `python3 pruebas/probar-migraciones.py` → 130 comprobaciones correctas.
+3. `python3 pruebas/probar-migraciones.py` → 136 comprobaciones correctas.
 4. `python3 pruebas/probar_librero.py` → 106 comprobaciones correctas.
 5. `python3 pruebas/verificar_consolidacion.py` → consolidación intacta.
 6. En producción: abrir un enlace de escaneo remoto, escanear un libro ya
@@ -77,7 +100,7 @@ diseño, reducido con un filtro de calidad. `manifest.json`, `index.html` y
 
 ---
 
-## Archivos para subir en esta ronda (ítems 11-13)
+## Archivos para subir en esta ronda (ítems 11-13 + corrección de seguridad)
 
 Nuevos: `js/modules/portadas.js`, `icono-512x512.png` (reemplaza también a
 `icono-192x192.png`, mismo nombre de archivo).
@@ -88,6 +111,12 @@ Modificados: `escaneo-remoto.html`, `js/escaneo-remoto.js`,
 `pruebas/verificar_consolidacion.py`, `pruebas/probar-escaneo-remoto.mjs`,
 `pruebas/probar-migraciones.py`, `pruebas/probar_librero.py`,
 `pruebas/LEEME.md`, `PROMPT-produccion.md`, este archivo.
+
+Si ya habías subido el commit de los ítems 11-13 antes de esta corrección:
+la función `deshacer_libro_remoto` cambió de firma (de 4 a 2 parámetros).
+Este `git push` la reemplaza — no hace falta ningún paso manual en la base
+de datos, `010_consolidacion.sql` ya trae el `drop function` de la firma
+vieja.
 
 ---
 
@@ -171,3 +200,9 @@ cerraron hoy.
 - **`deshacer_libro_remoto()` nunca resta más ejemplares de los que siguen
   disponibles, y nunca elimina un libro con préstamos** (nuevo, de hoy) — ver
   ítem 11 arriba y el comentario de la función en `010_consolidacion.sql`.
+- **`deshacer_libro_remoto()` nunca confía en `p_accion`/`p_cantidad` del
+  cliente — no existen como parámetros** (nuevo, de hoy, corrección de
+  seguridad): deriva todo desde `auditoria`, comprobando que sea el MISMO
+  enlace el que hizo la acción original. Si algún día se toca esta función
+  de nuevo, no reintroducir esos parámetros — ver §17 de
+  `PROMPT-produccion.md` para el porqué exacto.

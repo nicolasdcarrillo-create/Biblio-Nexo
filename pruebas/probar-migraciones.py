@@ -499,7 +499,7 @@ def main():
                         '{token}', 'DESHACER-CREADO', 'Libro Para Deshacer', 'Autor X', null, null, 1);
                     """)
                     libro_id = r.split('\n')[2].strip()
-                    r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id}, 'creado', 1);")
+                    r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id});")
                     assert 't' in r.split('\n')[2], f"debió deshacerse, se leyó: {r}"
                 finally:
                     como(uid_librero)
@@ -524,7 +524,7 @@ def main():
                     libro_id = r.split('\n')[2].strip()
                     r = correr(srv, "select stock, copias_totales from public.libros where isbn = 'DESHACER-INCR';")
                     assert '5' in r.split('\n')[2], f"debió sumar 3 al stock base de 2, se leyó: {r}"
-                    r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id}, 'incrementado', 3);")
+                    r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id});")
                     assert 't' in r.split('\n')[2], f"debió deshacerse, se leyó: {r}"
                 finally:
                     como(uid_librero)
@@ -534,37 +534,49 @@ def main():
                    deshacer_incrementado_resta_lo_agregado)
 
             def deshacer_no_resta_mas_de_lo_disponible():
-                # stock=0 simula que, entre agregar y deshacer, ya se prestaron
-                # los ejemplares recién sumados: no debe quedar nada por restar.
                 correr(srv, """
                   insert into public.libros (isbn, titulo, autor, stock, copias_totales)
-                  values ('DESHACER-PARCIAL', 'Base', 'Autor', 0, 2);
+                  values ('DESHACER-PARCIAL', 'Base', 'Autor', 0, 0);
                 """)
-                r = correr(srv, "select id from public.libros where isbn = 'DESHACER-PARCIAL';")
-                libro_id = r.split('\n')[2].strip()
                 token = crea_enlace_y_devuelve_token()
                 anon()
                 try:
-                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id}, 'incrementado', 2);")
+                    r = correr(srv, f"""
+                      select libro_id from public.agregar_libro_remoto(
+                        '{token}', 'DESHACER-PARCIAL', null, null, null, null, 2);
+                    """)
+                    libro_id = r.split('\n')[2].strip()
+                finally:
+                    como(uid_librero)
+                # Simula que, entre agregar y deshacer, ya se prestaron los 2
+                # ejemplares recién sumados: no debe quedar nada por restar.
+                correr(srv, f"update public.libros set stock = 0 where id = {libro_id};")
+                anon()
+                try:
+                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id});")
                     linea = r.split('\n')[2]
                     assert ' f ' in linea or linea.strip().startswith('f'), \
                         f"no debió poder deshacer con 0 de stock disponible, se leyó: {r}"
                     assert 'prestado' in r.lower(), f"no explicó el motivo, se leyó: {r}"
                 finally:
                     como(uid_librero)
-                r = correr(srv, "select stock, copias_totales from public.libros where isbn = 'DESHACER-PARCIAL';")
+                r = correr(srv, f"select stock, copias_totales from public.libros where id = {libro_id};")
                 linea = r.split('\n')[2]
                 assert '0' in linea and '2' in linea, f"no debió tocar el inventario, se leyó: {r}"
             prueba("deshacer_libro_remoto() no resta ejemplares que ya se prestaron",
                    deshacer_no_resta_mas_de_lo_disponible)
 
             def deshacer_creado_no_borra_si_ya_hay_prestamo():
-                correr(srv, """
-                  insert into public.libros (isbn, titulo, autor, stock, copias_totales)
-                  values ('DESHACER-PRESTADO', 'Base', 'Autor', 0, 1);
-                """)
-                r = correr(srv, "select id from public.libros where isbn = 'DESHACER-PRESTADO';")
-                libro_id = r.split('\n')[2].strip()
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"""
+                      select libro_id from public.agregar_libro_remoto(
+                        '{token}', 'DESHACER-PRESTADO', 'Libro Prestado', 'Autor', null, null, 1);
+                    """)
+                    libro_id = r.split('\n')[2].strip()
+                finally:
+                    como(uid_librero)
                 correr(srv, """
                   insert into public.lectores (rut, nombre, email, telefono)
                   values ('22222222-5', 'Lector Para Prestamo Remoto', 'y@y.cl', '+56922222222');
@@ -575,10 +587,9 @@ def main():
                   insert into public.prestamos (libro_id, lector_id, fecha_devolucion_esperada, estado)
                   values ({libro_id}, {lector_id}, current_date + 7, 'activo');
                 """)
-                token = crea_enlace_y_devuelve_token()
                 anon()
                 try:
-                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id}, 'creado', 1);")
+                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id});")
                     linea = r.split('\n')[2]
                     assert ' f ' in linea or linea.strip().startswith('f'), \
                         f"no debió poder borrar un libro con préstamo, se leyó: {r}"
@@ -590,11 +601,93 @@ def main():
             prueba("deshacer_libro_remoto() no elimina un libro que ya tiene un préstamo",
                    deshacer_creado_no_borra_si_ya_hay_prestamo)
 
+            def deshacer_rechaza_un_enlace_que_no_hizo_esa_accion():
+                # El hueco de seguridad de la primera versión: CUALQUIER
+                # enlace vigente podía deshacer CUALQUIER libro del catálogo,
+                # no solo los que su propio enlace había tocado. Un segundo
+                # enlace, válido, intenta deshacer lo que hizo el primero.
+                token_a = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"""
+                      select libro_id from public.agregar_libro_remoto(
+                        '{token_a}', 'DESHACER-AJENO', 'Libro De Otro Enlace', 'Autor', null, null, 1);
+                    """)
+                    libro_id = r.split('\n')[2].strip()
+                finally:
+                    como(uid_librero)
+                token_b = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token_b}', {libro_id});")
+                    linea = r.split('\n')[2]
+                    assert ' f ' in linea or linea.strip().startswith('f'), \
+                        f"un enlace no debió poder deshacer lo que hizo otro, se leyó: {r}"
+                    assert 'no fue el que' in r.lower(), f"no explicó el motivo, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+                r = correr(srv, "select count(*) from public.libros where isbn = 'DESHACER-AJENO';")
+                assert '1' in r.split('\n')[2], f"el libro no debió tocarse, se leyó: {r}"
+            prueba("deshacer_libro_remoto() rechaza un enlace que no fue el que hizo esa acción",
+                   deshacer_rechaza_un_enlace_que_no_hizo_esa_accion)
+
+            def deshacer_rechaza_deshacer_dos_veces():
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"""
+                      select libro_id from public.agregar_libro_remoto(
+                        '{token}', 'DESHACER-DOBLE', 'Libro Deshecho Dos Veces', 'Autor', null, null, 1);
+                    """)
+                    libro_id = r.split('\n')[2].strip()
+                    r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id});")
+                    assert 't' in r.split('\n')[2], f"el primer deshacer debió funcionar, se leyó: {r}"
+                    # El libro ya no existe (era 'creado'), así que un segundo
+                    # intento debe fallar por "ya no está en el catálogo" —
+                    # ambos motivos son válidos, lo que importa es que no
+                    # vuelva a decir deshecho=true.
+                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id});")
+                    linea = r.split('\n')[2]
+                    assert ' f ' in linea or linea.strip().startswith('f'), \
+                        f"no debió poder deshacer dos veces, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("deshacer_libro_remoto() no deja deshacer la misma acción dos veces ('creado')",
+                   deshacer_rechaza_deshacer_dos_veces)
+
+            def deshacer_incrementado_rechaza_deshacer_dos_veces():
+                correr(srv, """
+                  insert into public.libros (isbn, titulo, autor, stock, copias_totales)
+                  values ('DESHACER-DOBLE-INCR', 'Base', 'Autor', 1, 1);
+                """)
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"""
+                      select libro_id from public.agregar_libro_remoto(
+                        '{token}', 'DESHACER-DOBLE-INCR', null, null, null, null, 2);
+                    """)
+                    libro_id = r.split('\n')[2].strip()
+                    r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id});")
+                    assert 't' in r.split('\n')[2], f"el primer deshacer debió funcionar, se leyó: {r}"
+                    r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id});")
+                    linea = r.split('\n')[2]
+                    assert ' f ' in linea or linea.strip().startswith('f'), \
+                        f"no debió poder deshacer dos veces, se leyó: {r}"
+                    assert 'ya se había deshecho' in r.lower(), f"no explicó el motivo, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+                r = correr(srv, f"select stock, copias_totales from public.libros where isbn = 'DESHACER-DOBLE-INCR';")
+                linea = r.split('\n')[2]
+                assert '1' in linea, f"el segundo intento no debió tocar el inventario, se leyó: {r}"
+            prueba("deshacer_libro_remoto() no deja deshacer la misma acción dos veces ('incrementado')",
+                   deshacer_incrementado_rechaza_deshacer_dos_veces)
+
             def deshacer_libro_remoto_rechaza_token_invalido():
                 anon()
                 try:
                     debe_fallar(
-                        "select * from public.deshacer_libro_remoto('token-inventado', 1, 'creado', 1);",
+                        "select * from public.deshacer_libro_remoto('token-inventado', 1);",
                         "no es válido")
                 finally:
                     como(uid_librero)

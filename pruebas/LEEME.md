@@ -288,6 +288,25 @@ con un token inventado (la única barrera sigue siendo el token, nunca el
 rol). Los dos conteos hardcodeados del manifiesto (`verificar_definiciones()`)
 subieron de 40 a 41 funciones, por la función nueva.
 
+### Corrección de seguridad en `deshacer_libro_remoto` (mismo día, más tarde)
+
+La primera versión confiaba en `p_accion`/`p_cantidad` del celular, y
+CUALQUIER enlace vigente podía deshacer una acción sobre cualquier libro del
+catálogo, no solo los que había tocado. La corrección le bajó la firma a
+`(p_token, p_libro_id)`: ahora deriva sola, desde `auditoria`, qué hizo ESE
+enlace en concreto. Detalle completo en `PROMPT-produccion.md` §17.
+
+- `probar-migraciones.py`: +3 pruebas × dos escenarios de esquema
+  (130 → 136) — un enlace no puede deshacer lo que hizo otro (la que
+  reproduce el hueco cerrado), y ni un 'creado' ni un 'incrementado' se
+  pueden deshacer dos veces con el mismo enlace.
+- `probar-escaneo-remoto.mjs`: mismo conteo (13) — el simulador de RPC ganó
+  un "historial" en memoria para simular la comprobación nueva, pero la
+  prueba del enlace ajeno no tiene sentido a nivel de interfaz (cada página
+  solo conoce un token a la vez) y por eso vive solo en `probar-migraciones.py`.
+- `probar_librero.py`: mismo conteo (106), solo se ajustó la firma de la
+  llamada en la prueba del token inventado.
+
 ---
 
 ## Integración continua

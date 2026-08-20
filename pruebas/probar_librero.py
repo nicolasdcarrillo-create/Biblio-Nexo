@@ -613,7 +613,7 @@ comprobar('...y ese ISBN inventado no quedó en el catálogo',
           valor("select count(*) from public.libros where isbn = '000-inventado';") == 0)
 
 ok, r = como_anonimo(
-    "select * from public.deshacer_libro_remoto('token-inventado', 1, 'creado', 1)")
+    "select * from public.deshacer_libro_remoto('token-inventado', 1)")
 comprobar('el anónimo no puede deshacer un escaneo con un token inventado',
           not ok, f'se ejecutó y devolvió: {texto(r)[:100]}')
 

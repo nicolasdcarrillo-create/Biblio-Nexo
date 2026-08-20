@@ -392,9 +392,94 @@ comprobar('main.js importa persistencia.js', /import\s+persistencia\s+from\s+['"
 comprobar('main.js arranca la sincronización en segundo plano después de iniciar sesión (no antes: sin sesión, RLS no deja leer nada)',
   /renderShell\([^)]*\)[\s\S]{0,80}iniciarSincronizacionEnSegundoPlano\(\)/.test(mainJs));
 comprobar('la sincronización en segundo plano se repite sola mientras la pestaña sigue abierta',
-  /setInterval\(\s*\(\)\s*=>\s*persistencia\.sincronizarTodo\(\)/.test(mainJs));
+  /setInterval\(\s*\(\)\s*=>\s*\{[\s\S]{0,200}persistencia\.sincronizarTodo\(\)/.test(mainJs));
 comprobar('también se reintenta al recuperar la conexión (evento "online")',
   /addEventListener\(\s*['"]online['"][\s\S]{0,60}sincronizarTodo/.test(mainJs));
+
+// ---------------------------------------------------------------------------
+// 12. Fase 1.3 — cola de sincronización: el enganche, no la lógica interna
+// (la lógica de SyncQueue, con IndexedDB y un Supabase falso controlable de
+// verdad, se prueba aparte en pruebas/probar-sync-queue.mjs)
+// ---------------------------------------------------------------------------
+console.log('\n12. Fase 1.3 — cola de sincronización: el enganche, no la lógica interna');
+
+const uiBaseJs = fs.readFileSync('js/modules/ui-base.js', 'utf8');
+
+comprobar('db.js define la clase SyncQueue y exporta colaSync',
+  /class SyncQueue/.test(dbJs) && /export const colaSync = new SyncQueue\(\)/.test(dbJs));
+comprobar('db.js distingue un fallo de red de un rechazo real del servidor (esFalloDeRed)',
+  /function esFalloDeRed\(error\)/.test(dbJs));
+comprobar('registrarPrestamo() encola en vez de perder el préstamo cuando la red falla',
+  /async registrarPrestamo[\s\S]{0,1200}colaSync\.encolar\(\s*['"]prestar_libro['"]/.test(dbJs));
+comprobar('devolverPrestamo() encola en vez de perder la devolución cuando la red falla',
+  /async devolverPrestamo[\s\S]{0,1200}colaSync\.encolar\(\s*['"]devolver_prestamo['"]/.test(dbJs));
+comprobar('renovarPrestamo() encola en vez de perder la renovación cuando la red falla',
+  /async renovarPrestamo[\s\S]{0,1200}colaSync\.encolar\(\s*['"]renovar_prestamo['"]/.test(dbJs));
+comprobar('consultarLibro() cae a la copia local cuando la red falla (nunca inventa un "no existe")',
+  /async consultarLibro[\s\S]{0,600}consultarLibroSinConexion/.test(dbJs));
+comprobar('estadoLector() cae a la copia local cuando la red falla (nunca inventa un "no existe")',
+  /async estadoLector[\s\S]{0,600}estadoLectorSinConexion/.test(dbJs));
+comprobar('el respaldo sin conexión de estadoLector() nunca devuelve existe:false ' +
+  '(evitaría un duplicado al reconectar): lanza un error claro en su lugar',
+  /async function estadoLectorSinConexion[\s\S]{0,400}throw new Error/.test(dbJs));
+
+comprobar('main.js importa colaSync desde db.js',
+  /import\s*\{\s*colaSync\s*\}\s*from\s*['"]\.\/modules\/db\.js['"]/.test(mainJs));
+comprobar('main.js reintenta la cola pendiente al iniciar sesión y en cada ciclo de sincronización',
+  /iniciarSincronizacionEnSegundoPlano[\s\S]{0,400}colaSync\.reintentarPendientes\(\)/.test(mainJs));
+
+comprobar('db.js se suscribe él mismo al evento "online" para reintentar la cola ' +
+  '(no depende de que main.js se acuerde de hacerlo)',
+  /addEventListener\(\s*['"]online['"][\s\S]{0,60}colaSync\.reintentarPendientes\(\)/.test(dbJs));
+
+comprobar('ui-base.js distingue el resultado "encolado" del éxito normal en los cinco lugares que ' +
+  'escriben (renovar, devolver x2, prestar x2 — la persona del mesón ve un aviso distinto, no un falso "listo")',
+  (uiBaseJs.match(/r\?\.encolado/g) || []).length === 5);
+
+// ---------------------------------------------------------------------------
+// 13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna
+// (colaSync.alCambiar()/estadoConexion en sí no tienen una prueba dedicada
+// aparte: son puro "pegamento" entre piezas ya probadas — persistencia.js
+// en probar-persistencia.mjs, SyncQueue en probar-sync-queue.mjs — así que
+// comprobar el enganche estructural es lo que de verdad vale la pena aquí)
+// ---------------------------------------------------------------------------
+console.log('\n13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna');
+
+comprobar('existe js/modules/estado-conexion.js', fs.existsSync('js/modules/estado-conexion.js'));
+comprobar('sw.js precarga estado-conexion.js (si no, se rompería el import sin conexión)',
+  listaPrecarga.includes('/js/modules/estado-conexion.js'));
+
+const estadoConexionJs = fs.readFileSync('js/modules/estado-conexion.js', 'utf8');
+comprobar('estado-conexion.js se suscribe a colaSync para enterarse de cambios sin tener que preguntar por encuesta',
+  /colaSync\.alCambiar\(/.test(estadoConexionJs));
+comprobar('estado-conexion.js escucha los eventos "online"/"offline" del navegador',
+  /addEventListener\(\s*['"]online['"]/.test(estadoConexionJs) &&
+  /addEventListener\(\s*['"]offline['"]/.test(estadoConexionJs));
+comprobar('estado-conexion.js expone un suscribir() que avisa de inmediato con el estado actual',
+  /suscribir\(fn\)[\s\S]{0,200}fn\(this\.obtener\(\)\)/.test(estadoConexionJs));
+
+comprobar('db.js expone alCambiar() en SyncQueue para que el indicador no tenga que hacer polling',
+  /alCambiar\(fn\)/.test(dbJs));
+comprobar('SyncQueue avisa a sus escuchas al encolar una operación nueva',
+  /async encolar\([\s\S]{0,500}this\._avisar\(\)/.test(dbJs));
+comprobar('SyncQueue avisa "sincronizando" al empezar Y al terminar de reintentar (no solo al final)',
+  (dbJs.match(/this\._avisar\(\)/g) || []).length >= 3);
+
+comprobar('main.js importa estadoConexion y lo inicia junto con el resto de la sincronización en segundo plano',
+  /import\s+estadoConexion\s+from\s+['"]\.\/modules\/estado-conexion\.js['"]/.test(mainJs) &&
+  /iniciarSincronizacionEnSegundoPlano[\s\S]{0,200}estadoConexion\.iniciar\(\)/.test(mainJs));
+
+comprobar('ui-base.js importa estadoConexion', /import\s+estadoConexion\s+from\s+['"]\.\/estado-conexion\.js['"]/.test(uiBaseJs));
+comprobar('renderShell monta un elemento para el indicador de conexión en la franja de título',
+  /id="estado-conexion"/.test(uiBaseJs));
+comprobar('renderShell se suscribe al estado de conexión (y se des-suscribe primero, por si se llama de nuevo)',
+  /this\._detenerEstadoConexion\?\.\(\)[\s\S]{0,200}estadoConexion\.suscribir\(/.test(uiBaseJs));
+comprobar('el indicador cubre las cuatro situaciones que pide la sección 7: en línea, sin conexión, sincronizando, N pendientes',
+  /_renderIndicadorConexion/.test(uiBaseJs) &&
+  /!enLinea/.test(uiBaseJs) && /sincronizando\)/.test(uiBaseJs) &&
+  /pendientes > 0/.test(uiBaseJs) && /'En línea'/.test(uiBaseJs));
+comprobar('el indicador nunca depende solo del color: cada estado trae también un ícono y un texto propios',
+  /aria-label.*Estado de conexión/.test(uiBaseJs));
 
 // ---------------------------------------------------------------------------
 console.log(`\n${'─'.repeat(60)}`);

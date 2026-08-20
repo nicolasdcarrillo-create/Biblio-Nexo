@@ -4,6 +4,8 @@ import uiManager from './modules/ui.js';
 import registroErrores from './modules/errores.js';
 import { conTiempoLimite } from './modules/utilidades.js';
 import persistencia from './modules/persistencia.js';
+import { colaSync } from './modules/db.js';
+import estadoConexion from './modules/estado-conexion.js';
 
 // Mensaje honesto: en el cuelgue que motivó este cambio nunca sale ninguna
 // petición de red (se comprobó con navigator.locks.query()), así que hablar
@@ -70,21 +72,34 @@ let sincronizacionIniciada = false;
 
 /**
  * Arranca la sincronización en segundo plano del almacén local (Fase 1.2 —
- * ver js/modules/persistencia.js para el detalle y las reglas de privacidad).
- * Se llama una vez que hay sesión iniciada — antes no tiene sentido: sin
- * sesión, RLS no deja leer ni libros ni lectores.
+ * ver js/modules/persistencia.js para el detalle y las reglas de privacidad),
+ * la cola de escrituras pendientes (Fase 1.3 — ver la clase SyncQueue en
+ * js/modules/db.js) y el indicador de conexión (Fase 1.4 —
+ * js/modules/estado-conexion.js). Se llama una vez que hay sesión iniciada —
+ * antes no tiene sentido: sin sesión, RLS no deja leer ni libros ni lectores,
+ * y no puede haber ninguna operación en cola todavía.
  *
- * Nunca bloquea nada: `persistencia.sincronizarTodo()` ya atrapa sus propios
- * errores y no lanza. Esto solo decide CUÁNDO se llama — al iniciar sesión,
- * cada cinco minutos mientras la pestaña siga abierta, y cada vez que el
- * navegador avisa que recuperó la conexión.
+ * Nunca bloquea nada: tanto `persistencia.sincronizarTodo()` como
+ * `colaSync.reintentarPendientes()` ya atrapan sus propios errores y no
+ * lanzan. Esto decide CUÁNDO se llaman al iniciar sesión y cada cinco
+ * minutos mientras la pestaña siga abierta. El evento "online" NO se
+ * duplica aquí a propósito: `colaSync` ya se suscribe a él por su cuenta
+ * (ver el final de la clase SyncQueue en db.js) — así la cola se reintenta
+ * sola al recuperar la conexión incluso si este módulo cambiara de forma
+ * de arrancar la sesión. persistencia.sincronizarTodo() sí necesita que se
+ * la llame desde aquí porque no se suscribe a nada por su cuenta.
  */
 function iniciarSincronizacionEnSegundoPlano() {
     if (sincronizacionIniciada) return;
     sincronizacionIniciada = true;
 
+    estadoConexion.iniciar();
     persistencia.sincronizarTodo();
-    setInterval(() => persistencia.sincronizarTodo(), INTERVALO_SINCRONIZACION_MS);
+    colaSync.reintentarPendientes();
+    setInterval(() => {
+        persistencia.sincronizarTodo();
+        colaSync.reintentarPendientes();
+    }, INTERVALO_SINCRONIZACION_MS);
     window.addEventListener('online', () => persistencia.sincronizarTodo());
 }
 

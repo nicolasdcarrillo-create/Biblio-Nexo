@@ -1,7 +1,7 @@
 import { supabase } from '../supabase-init.js';
 
 /**
- * Persistencia local (Fase 1.2 — funcionamiento sin conexión).
+ * Persistencia local (Fase 1.2 y 1.3 — funcionamiento sin conexión).
  *
  * Qué hace y qué NO hace:
  *
@@ -9,9 +9,11 @@ import { supabase } from '../supabase-init.js';
  *     por delta (`actualizado_en`, migración 011): en vez de traer todos los
  *     libros cada vez, solo pide lo que cambió desde la última sincronización.
  *   - Guarda una copia PARCIAL de los LECTORES — nunca el padrón completo.
- *     Todavía NO permite operar sin conexión (eso es la Fase 1.3, la cola de
- *     sincronización, sin escribir): hoy esta capa solo replica y purga en
- *     segundo plano. La pantalla sigue sin leer de aquí.
+ *   - Desde la Fase 1.3: expone búsquedas locales (`buscarLibroLocalPorCodigo`,
+ *     `buscarLectorLocalPorRut`) que `db.js` usa como último recurso cuando
+ *     la red falla, y el almacén `colaSync` — la cola de escrituras
+ *     pendientes que orquesta la clase `SyncQueue`, definida en `db.js` (la
+ *     lógica de reintento vive allá; aquí solo se guarda).
  *
  * Por qué los lectores se tratan distinto del catálogo — esto no es una
  * decisión de diseño libre, está exigido por CUMPLIMIENTO-LEGAL.md, sección
@@ -50,7 +52,13 @@ import { supabase } from '../supabase-init.js';
  */
 
 const NOMBRE_BD = 'biblionexo-local';
-const VERSION_BD = 1;
+// v2 (Fase 1.3): agrega el índice "rut" a "lectores" (para encontrarlo
+// offline sin recorrer todo el almacén) y el almacén "colaSync" — la cola de
+// escrituras pendientes de SyncQueue, en js/modules/db.js. Ver el bloque de
+// onupgradeneeded más abajo: cada pieza se crea solo si falta, así que sirve
+// igual para una instalación nueva (salta de 0 a 2 de un tirón) que para
+// alguien que ya tenía la v1 (solo se agrega lo que falta).
+const VERSION_BD = 2;
 
 // Cuánto puede vivir un lector en el almacén local sin que nadie lo consulte
 // ni tenga un préstamo activo. Es una purga por antigüedad, no un permiso de
@@ -80,16 +88,39 @@ function abrir() {
         const peticion = indexedDB.open(NOMBRE_BD, VERSION_BD);
         peticion.onupgradeneeded = () => {
             const bd = peticion.result;
-            if (!bd.objectStoreNames.contains('libros')) {
-                bd.createObjectStore('libros', { keyPath: 'id' });
+            const tx = peticion.transaction;
+
+            const almacenLibros = bd.objectStoreNames.contains('libros')
+                ? tx.objectStore('libros')
+                : bd.createObjectStore('libros', { keyPath: 'id' });
+            if (!almacenLibros.indexNames.contains('isbn')) {
+                // Para poder buscar un libro por ISBN sin conexión (Fase 1.3,
+                // consultarLibro) sin recorrer todo el catálogo local.
+                almacenLibros.createIndex('isbn', 'isbn');
             }
-            if (!bd.objectStoreNames.contains('lectores')) {
-                const almacen = bd.createObjectStore('lectores', { keyPath: 'id' });
+
+            const almacenLectores = bd.objectStoreNames.contains('lectores')
+                ? tx.objectStore('lectores')
+                : bd.createObjectStore('lectores', { keyPath: 'id' });
+            if (!almacenLectores.indexNames.contains('consultadoEn')) {
                 // Para poder purgar por antigüedad sin recorrer todo el almacén.
-                almacen.createIndex('consultadoEn', 'consultadoEn');
+                almacenLectores.createIndex('consultadoEn', 'consultadoEn');
             }
+            if (!almacenLectores.indexNames.contains('rut')) {
+                // Para poder buscar un lector por RUT sin conexión (Fase 1.3,
+                // estadoLector) — el almacén se indexa por id, no por rut.
+                almacenLectores.createIndex('rut', 'rut');
+            }
+
             if (!bd.objectStoreNames.contains('meta')) {
                 bd.createObjectStore('meta', { keyPath: 'clave' });
+            }
+
+            if (!bd.objectStoreNames.contains('colaSync')) {
+                // La cola de escrituras pendientes (Fase 1.3). La orquesta
+                // SyncQueue en js/modules/db.js; este almacén solo la guarda.
+                const almacenCola = bd.createObjectStore('colaSync', { keyPath: 'id', autoIncrement: true });
+                almacenCola.createIndex('proximoIntentoEn', 'proximoIntentoEn');
             }
         };
         peticion.onsuccess = () => resolver(peticion.result);
@@ -344,19 +375,98 @@ class PersistentStorage {
         return obtenerTodos('lectores');
     }
 
+    /**
+     * Busca un libro guardado localmente por ISBN o por id (lo que haya
+     * escaneado o escrito la persona). Es el último recurso de
+     * `db.consultarLibro()` cuando la red falla — el catálogo se replica
+     * entero (Fase 1.2), así que esto no tiene ningún reparo de privacidad.
+     */
+    async buscarLibroLocalPorCodigo(codigo) {
+        if (codigo == null) return null;
+        const bd = await abrir();
+        const porIsbn = await conAlmacen(bd, 'libros', 'readonly', almacen =>
+            pedido(almacen.index('isbn').get(String(codigo))));
+        if (porIsbn) return porIsbn;
+        const comoNumero = Number(codigo);
+        if (!Number.isFinite(comoNumero)) return null;
+        const porId = await conAlmacen(bd, 'libros', 'readonly', almacen => pedido(almacen.get(comoNumero)));
+        // IDBObjectStore.get() resuelve en `undefined`, no en `null`, cuando no
+        // hay coincidencia — se normaliza para que quien llama (db.js) pueda
+        // comprobar siempre con `=== null` o simplemente `!libro`, sin
+        // sorpresas según cuál de las dos rutas de búsqueda respondió.
+        return porId ?? null;
+    }
+
+    /**
+     * Busca un lector guardado localmente por RUT. Es el último recurso de
+     * `db.estadoLector()` cuando la red falla — a diferencia del catálogo,
+     * SOLO encuentra algo si ese lector ya había entrado antes por una de
+     * las dos vías controladas de arriba (consultado, o con préstamo
+     * activo). No encontrar nada es el caso esperado para cualquier lector
+     * que nunca se tocó desde este equipo, no un error.
+     */
+    async buscarLectorLocalPorRut(rut) {
+        if (!rut) return null;
+        const bd = await abrir();
+        const lector = await conAlmacen(bd, 'lectores', 'readonly', almacen => pedido(almacen.index('rut').get(rut)));
+        // Misma normalización que buscarLibroLocalPorCodigo: `undefined` → `null`.
+        return lector ?? null;
+    }
+
+    // ------------------------------------------------------------------
+    // Cola de sincronización (Fase 1.3) — almacenamiento puro. La decisión
+    // de CUÁNDO reintentar y qué hacer con cada resultado es de SyncQueue,
+    // en js/modules/db.js; aquí solo se guarda, lista y actualiza.
+    // ------------------------------------------------------------------
+
+    /** Guarda una operación pendiente y devuelve su id local. */
+    async encolarOperacion(tipo, params, descripcion) {
+        const bd = await abrir();
+        return conAlmacen(bd, 'colaSync', 'readwrite', almacen => pedido(almacen.add({
+            tipo, params, descripcion: descripcion || null,
+            creadoEn: Date.now(), intentos: 0, proximoIntentoEn: Date.now(), ultimoError: null
+        })));
+    }
+
+    /** Todas las operaciones pendientes, sin filtrar por si ya les tocaba
+     *  reintentar — ese cálculo lo hace SyncQueue. */
+    async listarOperacionesPendientes() {
+        return obtenerTodos('colaSync');
+    }
+
+    /** Aplica cambios parciales a una operación pendiente (intentos,
+     *  próximo intento, último error) sin tener que releerla primero. */
+    async actualizarOperacion(id, cambios) {
+        const bd = await abrir();
+        await conAlmacen(bd, 'colaSync', 'readwrite', async almacen => {
+            const actual = await pedido(almacen.get(id));
+            if (!actual) return; // ya se quitó (por ejemplo, se completó en paralelo)
+            almacen.put({ ...actual, ...cambios });
+        });
+    }
+
+    /** Quita una operación de la cola: se completó, o se dio por fallida
+     *  para siempre (con su aviso ya registrado aparte). */
+    async quitarOperacion(id) {
+        const bd = await abrir();
+        await conAlmacen(bd, 'colaSync', 'readwrite', almacen => almacen.delete(id));
+    }
+
     /** Diagnóstico simple: cuánto hay guardado y cuándo se sincronizó por
      *  última vez cada cosa. Pensado para un futuro indicador de conexión
      *  (Fase 1.4) y para las propias pruebas de este módulo. */
     async estado() {
-        const [libros, lectores, librosUltimaSync, lectoresEliminadosUltimaSync] = await Promise.all([
+        const [libros, lectores, pendientes, librosUltimaSync, lectoresEliminadosUltimaSync] = await Promise.all([
             obtenerTodos('libros'),
             obtenerTodos('lectores'),
+            obtenerTodos('colaSync'),
             leerMeta('libros_ultima_sync'),
             leerMeta('lectores_eliminados_ultima_sync')
         ]);
         return {
             librosGuardados: libros.length,
             lectoresGuardados: lectores.length,
+            operacionesPendientes: pendientes.length,
             librosUltimaSync,
             lectoresEliminadosUltimaSync
         };

@@ -206,7 +206,11 @@ console.log('\n4. Purga por antigüedad (el requisito de "no se replica el padr�
 // de 30 días que nadie lo consulta ni tiene préstamo activo — persistencia.js
 // no expone ningún atajo para retroceder el reloj, y no debería.
 await new Promise((resolver, rechazar) => {
-    const peticion = indexedDB.open('biblionexo-local', 1);
+    // Sin número de versión: se abre la base tal como quedó (ya en VERSION_BD
+    // de persistencia.js). Pedir una versión vieja a propósito aquí rompería
+    // la apertura en cuanto persistencia.js suba de versión (como pasó al
+    // llegar a la Fase 1.3, VERSION_BD 1 → 2).
+    const peticion = indexedDB.open('biblionexo-local');
     peticion.onsuccess = () => {
         const bd = peticion.result;
         const tx = bd.transaction('lectores', 'readwrite');
@@ -254,6 +258,69 @@ const diag = await persistencia.estado();
 comprobar('reporta cuántos libros hay guardados', typeof diag.librosGuardados === 'number' && diag.librosGuardados > 0);
 comprobar('reporta cuántos lectores hay guardados', typeof diag.lectoresGuardados === 'number');
 comprobar('reporta la última marca de sincronización del catálogo', !!diag.librosUltimaSync);
+comprobar('reporta cuántas operaciones de la cola de sincronización hay pendientes',
+    typeof diag.operacionesPendientes === 'number' && diag.operacionesPendientes === 0);
+
+// ---------------------------------------------------------------------------
+// 7. Fase 1.3: búsquedas locales (respaldo sin conexión de db.js) y la cola
+//    de sincronización (almacenamiento puro — la orquestación es de
+//    SyncQueue, en db.js, probada aparte en probar-sync-queue.mjs)
+// ---------------------------------------------------------------------------
+console.log('\n7. Fase 1.3: búsquedas locales y almacenamiento de la cola de sincronización');
+
+// buscarLibroLocalPorCodigo: el libro 2 (Sub Terra, isbn "222") sigue en el
+// almacén desde la sección 1.
+let libroEncontrado = await persistencia.buscarLibroLocalPorCodigo('222');
+comprobar('buscarLibroLocalPorCodigo() encuentra un libro por ISBN',
+    libroEncontrado?.id === 2, JSON.stringify(libroEncontrado));
+
+libroEncontrado = await persistencia.buscarLibroLocalPorCodigo(2);
+comprobar('buscarLibroLocalPorCodigo() encuentra un libro por id numérico (código escrito a mano)',
+    libroEncontrado?.id === 2, JSON.stringify(libroEncontrado));
+
+libroEncontrado = await persistencia.buscarLibroLocalPorCodigo('no-existe-este-codigo');
+comprobar('buscarLibroLocalPorCodigo() devuelve null si no está en la copia local',
+    libroEncontrado === null, JSON.stringify(libroEncontrado));
+
+// buscarLectorLocalPorRut: el lector 11 (Beno Huenchumán) sigue en el
+// almacén desde la sección 2 (tiene préstamo activo).
+let lectorEncontrado = await persistencia.buscarLectorLocalPorRut('22222222-2');
+comprobar('buscarLectorLocalPorRut() encuentra un lector ya replicado',
+    lectorEncontrado?.id === 11, JSON.stringify(lectorEncontrado));
+
+lectorEncontrado = await persistencia.buscarLectorLocalPorRut('00000000-0');
+comprobar('buscarLectorLocalPorRut() devuelve null para un RUT nunca tocado en este equipo (caso esperado, no un error)',
+    lectorEncontrado === null, JSON.stringify(lectorEncontrado));
+
+// Cola de sincronización: solo almacenamiento (CRUD), sin la lógica de
+// reintento — esa vive en SyncQueue, dentro de db.js.
+const idCola = await persistencia.encolarOperacion('prestar_libro',
+    { p_libro_id: 2, p_lector_rut: '22222222-2' }, 'Préstamo del libro #2 al RUT 22222222-2');
+comprobar('encolarOperacion() devuelve un id', typeof idCola === 'number' || typeof idCola === 'bigint');
+
+let pendientes = await persistencia.listarOperacionesPendientes();
+comprobar('listarOperacionesPendientes() ve la operación recién encolada',
+    pendientes.some(o => o.id === idCola && o.tipo === 'prestar_libro' && o.intentos === 0),
+    JSON.stringify(pendientes));
+
+await persistencia.actualizarOperacion(idCola, { intentos: 1, proximoIntentoEn: 12345, ultimoError: 'Sin conexión' });
+pendientes = await persistencia.listarOperacionesPendientes();
+const actualizada = pendientes.find(o => o.id === idCola);
+comprobar('actualizarOperacion() aplica los cambios sin perder los campos que no se tocaron',
+    actualizada?.intentos === 1 && actualizada?.proximoIntentoEn === 12345 &&
+    actualizada?.tipo === 'prestar_libro' && actualizada?.params?.p_libro_id === 2,
+    JSON.stringify(actualizada));
+
+await persistencia.actualizarOperacion(999999, { intentos: 99 });
+comprobar('actualizarOperacion() con un id que no existe no lanza (pudo completarse en paralelo)', true);
+
+await persistencia.quitarOperacion(idCola);
+pendientes = await persistencia.listarOperacionesPendientes();
+comprobar('quitarOperacion() la saca de la cola', !pendientes.some(o => o.id === idCola), JSON.stringify(pendientes));
+
+const diagFinal = await persistencia.estado();
+comprobar('estado() vuelve a reportar cero operaciones pendientes tras vaciar la cola',
+    diagFinal.operacionesPendientes === 0, JSON.stringify(diagFinal));
 
 // ---------------------------------------------------------------------------
 console.log(`\n${'─'.repeat(60)}`);

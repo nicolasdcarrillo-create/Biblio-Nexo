@@ -7,11 +7,15 @@ name: Pruebas
 # devolver libros habría sido detectado por la comprobación de consolidación en
 # el momento de escribirlo, no meses después.
 #
-# Tres trabajos, del más rápido al más lento, para tener respuesta pronto:
+# Seis trabajos, del más rápido al más lento, para tener respuesta pronto:
 #
 #   1. consolidacion  — lee archivos, tarda segundos
-#   2. interfaz       — DOM simulado, tarda menos de un minuto
-#   3. base-de-datos  — PostgreSQL real, un par de minutos
+#   2. interfaz       — DOM simulado (incluye probar-vistas.mjs y
+#      probar-escaneo-remoto.mjs), tarda menos de un minuto
+#   3. migraciones     — PostgreSQL embebido (pgserver), sin servicio aparte,
+#      un par de minutos
+#   4. base-de-datos  — PostgreSQL real, un par de minutos
+#   5. reconstruccion — PostgreSQL real + CLI de Supabase, el más lento
 
 on:
   push:
@@ -45,6 +49,9 @@ jobs:
       - name: Verificar que la consolidación esté intacta
         run: python3 pruebas/verificar_consolidacion.py
 
+      - name: Verificar que el JS llama a cada RPC con la firma vigente
+        run: python3 pruebas/verificar_llamadas_rpc.py
+
   # ==========================================================================
   # 2. Interfaz sobre DOM simulado
   # ==========================================================================
@@ -58,14 +65,57 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Instalar jsdom
-        run: npm install jsdom --no-save
+      # Las dos juntas, en un solo comando: sin package.json que las fije,
+      # instalarlas por separado hace que npm recalcule node_modules entero y
+      # se lleve por delante la que no se acaba de pedir (ver pruebas/LEEME.md).
+      - name: Instalar jsdom y fake-indexeddb
+        run: npm install jsdom fake-indexeddb --no-save
 
       - name: Probar la interfaz
         run: node pruebas/probar-interfaz.mjs
 
+      - name: Probar las vistas (catálogo, lectores, préstamos, reportes, administración)
+        run: node pruebas/probar-vistas.mjs
+
+      - name: Probar el escaneo remoto sin sesión (ítem 11)
+        run: node pruebas/probar-escaneo-remoto.mjs
+
+      - name: Probar la persistencia local (Fase 1.2)
+        run: node pruebas/probar-persistencia.mjs
+
+      - name: Probar la cola de sincronización (Fase 1.3)
+        run: node pruebas/probar-sync-queue.mjs
+
+      - name: Probar el indicador de conexión (Fase 1.4)
+        run: node pruebas/probar-estado-conexion.mjs
+
   # ==========================================================================
-  # 3. Base de datos real
+  # 3. Migraciones contra un PostgreSQL embebido
+  # ==========================================================================
+  # A diferencia de probar-vistas.mjs (que simula Supabase por completo), esto
+  # ejecuta SQL real: errores de tipo (varchar/text), funciones llamadas antes
+  # de existir, o casts equivocados solo aparecen aquí. Usa pgserver (Postgres
+  # empaquetado en el propio paquete de Python), así que no necesita un
+  # servicio aparte como los dos trabajos de abajo — corre en un contenedor
+  # normal, con solo Python.
+  migraciones:
+    name: Migraciones (PostgreSQL embebido)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar pgserver y el cliente de Python
+        run: pip install pgserver "psycopg[binary]" --break-system-packages
+
+      - name: Probar las migraciones (dos escenarios de esquema)
+        run: python3 pruebas/probar-migraciones.py
+
+  # ==========================================================================
+  # 4. Base de datos real
   # ==========================================================================
   # Aplica las diez migraciones sobre un PostgreSQL de verdad y comprueba el
   # sistema con dos identidades (admin y librero). Incluye la reproducción del
@@ -73,12 +123,12 @@ jobs:
   # 008, demuestra que la devolución fallaba en silencio, y recién entonces
   # verifica la corrección.
   base-de-datos:
-    name: Base de datos (PostgreSQL 16)
+    name: Base de datos (PostgreSQL 17)
     runs-on: ubuntu-latest
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: pruebas
           POSTGRES_DB: biblionexo
@@ -137,7 +187,7 @@ jobs:
             -t -A -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public';" || true
 
   # ==========================================================================
-  # 4. Reconstrucción completa con el CLI de Supabase
+  # 5. Reconstrucción completa con el CLI de Supabase
   # ==========================================================================
   # La prueba más valiosa del proyecto: rehacer la base entera desde los
   # archivos de migración, usando la misma herramienta que se usa en producción.
@@ -149,7 +199,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: pruebas
           POSTGRES_DB: biblionexo

@@ -35,11 +35,15 @@
  *     último recurso si ni la red ni el caché específico responden.
  *
  * Versionado del caché: subir CACHE_VERSION en cada cambio a la lista de
- * `PRECACHE_URLS` o a la lógica de abajo. `activate` borra cualquier caché
+ * `PRECACHE_URLS`, a la lógica de abajo, O A LA FIRMA de un RPC que llame
+ * alguno de los archivos de PRECACHE_URLS (aunque el archivo no cambie de
+ * nombre): si no, alguien con este service worker activo y sin conexión (o
+ * con una pestaña vieja sin recargar) puede seguir corriendo JS que manda un
+ * parámetro que el servidor ya no acepta. `activate` borra cualquier caché
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v3'; // ítems 11 y 13: se agregaron icono-512x512.png y js/modules/portadas.js a PRECACHE_URLS
+const CACHE_VERSION = 'v4'; // corrección de seguridad de deshacer_libro_remoto(): bajó de 4 a 2 parámetros y js/escaneo-remoto.js (en PRECACHE_URLS) ya no manda los dos que se quitaron
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 

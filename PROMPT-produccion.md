@@ -1118,3 +1118,135 @@ Modificados: `supabase/migrations/010_consolidacion.sql`,
 
 Sin archivos nuevos, sin migración numerada nueva — la función ya existía,
 solo cambió su cuerpo y su firma (de 4 parámetros a 2), directo en la 010.
+
+---
+
+## 18. Estado al 21 de agosto de 2026 — pulido de la lista "Ahora"
+
+Origen: una auditoría propia del proyecto (arquitectura, CI, versionado,
+seguridad, documentación) pedida explícitamente para encontrar qué faltaba
+por pulir. De ahí salieron cuatro acciones concretas, con permiso explícito
+para implementarlas ("pule lo que haga falta en estos momentos"). Las cuatro
+quedaron hechas y verificadas localmente; lo único que falta es lo de
+siempre — subir el commit y ver la CI en verde.
+
+### 1 — Las tres suites que faltaban, enganchadas a `.github/workflows/pruebas.yml`
+
+`probar-vistas.mjs`, `probar-migraciones.py` y `probar-escaneo-remoto.mjs`
+corrían solo a mano desde que se escribieron. Quedaron enganchadas:
+
+- `probar-vistas.mjs` y `probar-escaneo-remoto.mjs`, como pasos nuevos del
+  trabajo `interfaz` (ya traía jsdom instalado, no hizo falta nada más).
+- `probar-migraciones.py`, en un trabajo nuevo, `migraciones` — usa
+  `pgserver` (PostgreSQL embebido en el paquete de Python), así que no
+  necesita un servicio de PostgreSQL aparte como sí necesitan
+  `base-de-datos` y `reconstruccion`.
+
+Al intentar enganchar `probar-vistas.mjs` aparecieron 2 fallos reales, sin
+tocar ni una línea de la aplicación — ver el punto siguiente.
+
+### 2 — `probar-vistas.mjs` calculaba "hoy" en UTC, no en la fecha de Chile: prueba intermitente, corregida
+
+`_diasRestantes()`/`_estadoPrestamo()` (`js/modules/ui-base.js`) usan a
+propósito `hoyEnChile()`, no la hora del dispositivo, para no discrepar del
+servidor. El banco de pruebas, en cambio, armaba su `hoy` con
+`new Date().toISOString()` — la fecha en UTC. Entre las 00:00 y las
+~03:00-04:00 UTC, Chile todavía está en el día anterior, así que dos
+pruebas fallaban solas varias horas al día, sin relación con ningún cambio
+de código. Corregido para calcular `hoy` con el mismo criterio que
+`hoyEnChile()` (`js/modules/db.js`), a mediodía local para que `setDate()`
+nunca cruce de día por el desfase horario. El detalle completo, incluida la
+segunda vuelta (`masFechaHoras()` no podía heredar ese mismo `hoy` sin
+romper los enlaces de escaneo remoto simulados), está en `pruebas/LEEME.md`.
+
+De no corregirse, habría sido peor que no tener la suite en CI: una prueba
+que falla sola, sin relación con el cambio que se está revisando, enseña a
+la gente a ignorar la CI en rojo.
+
+### 3 — `pruebas/verificar_llamadas_rpc.py`: chequeo estático nuevo, sin base de datos
+
+Cruza cada `rpc('nombre', {...})` del código JS contra la firma que esa
+función tiene HOY en las migraciones (la última definición de cada nombre,
+por orden de archivo — así queda tras aplicarlas todas). Nace de lo que casi
+pasó con la corrección de seguridad del punto 17: `deshacer_libro_remoto()`
+bajó de 4 a 2 parámetros y `js/escaneo-remoto.js` sí se actualizó a mano en
+el mismo cambio, pero nada más que la revisión humana lo garantizaba.
+
+Verificado a propósito antes de darlo por bueno: se reintrodujo
+`p_accion`/`p_cantidad` en la llamada de `js/escaneo-remoto.js` (el error
+real que ya se cometió una vez) y el script lo marcó de inmediato, con
+archivo y línea. Se revirtió el cambio de prueba enseguida. Corre como paso
+nuevo del trabajo `consolidacion` (es solo lectura de texto, tarda
+segundos).
+
+### 4 — `CACHE_VERSION` subió a `v4`, y `postgres:16` → `postgres:17` en CI
+
+`sw.js` seguía en `v3` pese a que la corrección de seguridad del punto 17
+cambió la firma de un RPC que llama un archivo en `PRECACHE_URLS`
+(`js/escaneo-remoto.js`). Con la estrategia network-first el riesgo real era
+acotado, pero alguien con el service worker activo y sin conexión (o con una
+pestaña vieja sin recargar) podía seguir corriendo JS que manda un parámetro
+que el servidor ya no acepta. Se agregó además una nota general en el
+comentario de `sw.js`: cualquier cambio de firma de un RPC llamado desde un
+archivo precargado sube `CACHE_VERSION`, no solo los cambios a la lista de
+archivos.
+
+De paso se cerró el pendiente de la sección 11: los trabajos `base-de-datos`
+y `reconstruccion` de CI corrían contra `postgres:16`, mientras que
+producción corre `17.6.1`. Cambio mecánico (una palabra en cada uno de los
+dos `image:`), pero sin poder confirmarse aquí — este entorno no tiene un
+motor Docker disponible para levantar el contenedor de servicio, así que la
+validación real queda para cuando corra en GitHub Actions, igual que con
+cualquier otro cambio de este `.yml`.
+
+### Qué NO se tocó en esta ronda, y por qué
+
+- **`migration repair` de las migraciones 012, 013 y 014**: sigue
+  necesitando aprobación explícita antes de tocar producción — no es un
+  cambio de "pulido", es un cambio sobre el estado real de la base.
+- **La política RLS "de más" en `usuarios`**: es una decisión de postura de
+  seguridad, no un defecto objetivo — le corresponde a quien administra el
+  sistema, no a esta sesión decidirla en su nombre.
+- **Dividir más `ui-base.js`** (todavía 2900 líneas, con secciones enteras
+  tituladas CATÁLOGO y ADMINISTRACIÓN que se solapan con `js/vistas/*.js`):
+  identificado como el siguiente candidato concreto, pero es un refactor de
+  verdad, con riesgo real de romper algo si se apura — mejor como su propia
+  ronda de trabajo, con tiempo para probar cada vista después de moverla,
+  que agregado de prisa al final de esta.
+- **Dividir `js/modules/db.js`** (~840 líneas en un solo objeto): igual de
+  válido, pero de menor urgencia — es cohesivo tal como está, y no es el
+  archivo que ya se intentó dividir una vez.
+
+### Pruebas: sin cambio de conteo, todas verificadas localmente antes de subir
+
+Ninguna de las cuatro acciones tocó lógica de negocio, así que ningún
+conteo de comprobaciones cambió. Se corrieron las nueve suites en este
+equipo antes de dar la ronda por cerrada:
+
+```
+probar-interfaz.mjs           124/124
+probar-vistas.mjs              106/106  (0/2 antes de la corrección del punto 2)
+probar-escaneo-remoto.mjs       13/13
+probar-persistencia.mjs         37/37
+probar-sync-queue.mjs           37/37
+probar-estado-conexion.mjs      18/18
+probar-migraciones.py          136/136
+verificar_consolidacion.py     intacta
+verificar_llamadas_rpc.py      todas las llamadas coinciden con la firma vigente
+```
+
+`probar_librero.py` y `reconstruccion` (contra PostgreSQL real) no se
+corrieron en este equipo — dependen de un servicio de PostgreSQL que este
+entorno no tiene disponible. Quedan, como siempre, para la CI real tras el
+`git push`.
+
+### Archivos para subir en esta ronda (pulido)
+
+Modificados: `.github/workflows/pruebas.yml`, `sw.js`,
+`pruebas/probar-vistas.mjs`, `PROMPT-produccion.md`, `ESTADO.md`,
+`pruebas/LEEME.md`, `pendientes-checklist.md`.
+
+Nuevo: `pruebas/verificar_llamadas_rpc.py`.
+
+Sin cambios de esquema, sin cambios a ninguna función RPC — nada en esta
+ronda tocó `supabase/migrations/`.

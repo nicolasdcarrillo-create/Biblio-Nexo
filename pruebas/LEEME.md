@@ -309,16 +309,69 @@ enlace en concreto. Detalle completo en `PROMPT-produccion.md` §17.
 
 ---
 
+## Pulido de esta ronda: las tres suites que faltaban, enganchadas a CI
+
+`probar-vistas.mjs`, `probar-migraciones.py` y `probar-escaneo-remoto.mjs`
+corrían solo a mano hasta ahora — desde hoy, las tres corren en cada envío
+(ver la tabla de "Integración continua" más abajo). Al hacerlo aparecieron
+dos problemas reales que nadie había visto porque nunca se habían corrido en
+un entorno automatizado, a una hora cualquiera del día:
+
+### `probar-vistas.mjs` calculaba "hoy" con la fecha UTC del runner, no con la de Chile
+
+`_diasRestantes()` y `_estadoPrestamo()` (en `js/modules/ui-base.js`) usan a
+propósito `hoyEnChile()`, NO la hora del dispositivo, para no depender de un
+reloj mal configurado ni discrepar del servidor (ver el comentario en
+`ui-base.js` mismo). Pero el `hoy`/`iso()` que arma los datos de prueba en
+`probar-vistas.mjs` usaba `new Date().toISOString()` — la fecha en UTC.
+Entre las 00:00 y las ~03:00-04:00 UTC (Chile está detrás de UTC), esa fecha
+va un día ADELANTE de la fecha real en Chile, así que dos pruebas fallaban
+solas varias horas al día, sin que nadie tocara el código: exactamente el
+tipo de intermitencia que habría hecho perder la confianza en esta suite si
+se hubiera enganchado a CI tal como estaba. Se corrigió para que `hoy` se
+calcule con el mismo criterio que `hoyEnChile()` (mismo archivo,
+`js/modules/db.js`), a mediodía local para que sumar/restar días con
+`setDate()` nunca cruce de día por el desfase horario.
+
+`masFechaHoras()` (para los enlaces de escaneo remoto, que sí son una marca
+de tiempo real, no una fecha calendario) se dejó aparte, calculada desde el
+instante real (`new Date()`) — si hubiera heredado el `hoy` de mediodía de
+Chile, un enlace recién creado podría nacer ya "vencido" cuando el mediodía
+de Chile queda en el pasado respecto al instante real.
+
+### `verificar_llamadas_rpc.py` — chequeo nuevo, sin base de datos
+
+Cruza cada `rpc('nombre', {...})` del código JS contra la firma que esa
+función tiene HOY en las migraciones (tomando la última definición de cada
+nombre, por orden de archivo). Nace directamente de lo que casi pasó con la
+corrección de seguridad de `deshacer_libro_remoto()`: la función bajó de 4 a
+2 parámetros y `js/escaneo-remoto.js` sí se actualizó a mano en el mismo
+cambio, pero nada más que la revisión humana lo garantizaba. Verificado que
+detecta el caso real: reintroducir `p_accion`/`p_cantidad` en la llamada lo
+marca de inmediato como error, con el archivo y la línea exactos.
+
+No es un parser de JS ni de SQL — es una lectura de texto, con los mismos
+límites que cualquier chequeo de este tipo (ver el docstring del script). Si
+no reconoce una llamada real porque está escrita de forma muy distinta a las
+que ya existen, anota el caso aquí en vez de forzar el patrón del script.
+
+```bash
+python3 pruebas/verificar_llamadas_rpc.py
+```
+
+---
+
 ## Integración continua
 
-`.github/workflows/pruebas.yml` corre cuatro trabajos en cada envío:
+`.github/workflows/pruebas.yml` corre cinco trabajos en cada envío:
 
 | Trabajo | Qué hace |
 |---|---|
-| `consolidacion` | Lee los archivos SQL, segundos |
-| `interfaz` | DOM simulado con jsdom (`probar-interfaz.mjs`) + IndexedDB en memoria con fake-indexeddb (`probar-persistencia.mjs`, Fase 1.2; `probar-sync-queue.mjs`, Fase 1.3; `probar-estado-conexion.mjs`, Fase 1.4) |
-| `base-de-datos` | PostgreSQL 16 real |
-| `reconstruccion` | Rehace la base con el CLI de Supabase desde cero |
+| `consolidacion` | Lee los archivos SQL, segundos. Incluye `verificar_consolidacion.py` y, desde esta ronda, `verificar_llamadas_rpc.py` |
+| `interfaz` | DOM simulado con jsdom: `probar-interfaz.mjs`, y desde esta ronda `probar-vistas.mjs` y `probar-escaneo-remoto.mjs` — más IndexedDB en memoria con fake-indexeddb (`probar-persistencia.mjs`, Fase 1.2; `probar-sync-queue.mjs`, Fase 1.3; `probar-estado-conexion.mjs`, Fase 1.4) |
+| `migraciones` | Desde esta ronda: `probar-migraciones.py` contra PostgreSQL embebido (`pgserver`), sin servicio aparte |
+| `base-de-datos` | PostgreSQL 17 real (antes 16) |
+| `reconstruccion` | Rehace la base con el CLI de Supabase desde cero, contra PostgreSQL 17 (antes 16) |
 
 El último es el más valioso: si la base se puede reconstruir desde los archivos,
 los archivos son coherentes.

@@ -39,8 +39,17 @@ const LECTORES = [
   { id: 11, rut: '11111111-1', nombre: 'Pedro Huenchumán', email: null, telefono: null, bloqueado_manual: true, motivo_bloqueo: 'Pérdida de ejemplar', created_at: '2026-07-24T10:00:00Z' }
 ];
 
-const hoy = new Date();
-const iso = d => d.toISOString().split('T')[0];
+// "Hoy" en la fecha de Chile, no en la del reloj UTC del runner de CI —
+// mismo criterio que hoyEnChile() en js/modules/db.js. Antes esto era
+// `new Date()` + toISOString() (que da la fecha en UTC): entre las 00:00 y
+// las ~03:00-04:00 UTC, Chile todavía está en el día anterior, así que
+// _diasRestantes(iso(hoy)) daba -1 en vez de 0 y dos pruebas fallaban solas
+// varias horas al día, sin que nadie tocara el código (encontrado al
+// intentar enganchar esta suite a CI: ver ESTADO.md).
+const hoyCL = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+const [anioCL, mesCL, diaCL] = hoyCL.split('-').map(Number);
+const hoy = new Date(anioCL, mesCL - 1, diaCL, 12); // mediodía local: setDate() nunca cruza de día por un desfase horario
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const masDias = n => { const d = new Date(hoy); d.setDate(d.getDate() + n); return iso(d); };
 
 const PRESTAMOS = [
@@ -85,7 +94,12 @@ const TABLAS = { libros: LIBROS, lectores: LECTORES, prestamos: PRESTAMOS, usuar
 // vez de datos fijos, como en el resto de los RPC simulados de más abajo).
 const ENLACES_ESCANEO = [];
 let PROXIMO_ID_ENLACE = 1;
-const masFechaHoras = n => { const d = new Date(hoy); d.setHours(d.getHours() + n); return d.toISOString(); };
+// A propósito NO parte de `hoy` (mediodía de la fecha calendario de Chile,
+// ver más abajo): esto es una marca de tiempo real que el mock compara
+// contra `new Date()` (el instante real) para decidir "vigente" — tiene que
+// partir del instante real también, o un enlace recién creado podría nacer
+// ya "expirado" si el mediodía de Chile quedó en el pasado respecto a ahora.
+const masFechaHoras = n => { const d = new Date(); d.setHours(d.getHours() + n); return d.toISOString(); };
 
 const supabaseFalso = {
   from: tabla => crearConsulta(TABLAS[tabla] || [], tabla),

@@ -1,0 +1,32 @@
+-- ============================================================================
+-- BiblioNexo — 016: Elimina la política RLS redundante de `usuarios`
+-- ============================================================================
+-- Ejecutar DESPUÉS de la 015. Es idempotente: `drop policy if exists`, se
+-- puede correr dos veces sin problema.
+--
+-- Origen del problema: la migración remota `20260726153034` (26 de julio,
+-- aplicada directo sobre producción con el editor SQL, sin archivo local
+-- hasta que se auditó — ver `PROMPT-produccion.md` §11) creó, además de las
+-- dos políticas que sí quedaron incorporadas en la 013, una tercera:
+--
+--   "Lectura de roles propia" — SELECT, rol `public` (no `authenticated`),
+--   using (auth.uid() = id)
+--
+-- Esta política es estrictamente redundante con "usuarios ve su perfil"
+-- (008/010), que ya cubre exactamente ese permiso y además el caso admin:
+--
+--   using (id = auth.uid() OR es_admin())
+--
+-- Postgres evalúa las políticas RLS con OR entre sí, así que tener ambas no
+-- amplía ni restringe nada — la segunda nunca decide un caso que la primera
+-- no decidiera ya. Confirmado leyendo `pg_policies` en producción antes de
+-- escribir este archivo, no por inferencia. Ninguna prueba local la
+-- menciona ni depende de ella.
+--
+-- Se elimina en vez de conservarse "por si acaso": una política sin archivo
+-- de origen ni explicación es exactamente el tipo de deriva que
+-- `verificar_politicas()` (pendiente, ver PROMPT-produccion.md §11) busca
+-- prevenir a futuro. Menos superficie sin documentar, mismo comportamiento.
+-- ============================================================================
+
+drop policy if exists "Lectura de roles propia" on public.usuarios;

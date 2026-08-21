@@ -4,33 +4,26 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 21 de agosto de 2026 (pulido de la lista "Ahora": CI
-enganchada, prueba intermitente corregida, chequeo nuevo, CACHE_VERSION y
-postgres:17).
+Última actualización: 21 de agosto de 2026, más tarde el mismo día — los
+dos últimos pendientes de "Ahora" quedaron resueltos.
 
 ---
 
 ## 🔴 Urgente — falta este paso tuyo
 
-- [ ] **Subir el commit del pulido de hoy.** Ya está hecho y probado
-      localmente — falta el `git add`/`commit`/`push` de tu lado. Archivos:
-      `.github/workflows/pruebas.yml`, `sw.js`, `pruebas/probar-vistas.mjs`,
-      `pruebas/verificar_llamadas_rpc.py` (nuevo), `PROMPT-produccion.md`,
-      `ESTADO.md`, `pruebas/LEEME.md`, este archivo.
-      **Presta especial atención a la CI esta vez**: los trabajos
-      `base-de-datos` y `reconstruccion` corren contra `postgres:17` por
-      primera vez, y este entorno de trabajo no tiene Docker disponible para
-      probarlo antes — es el único cambio de la ronda que no se pudo
-      verificar aquí mismo.
+- [ ] **Subir `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql`.**
+      Ya está **aplicada en producción** (se hizo directo con la conexión de
+      Supabase de esta sesión, no falta ningún paso en la base) — el
+      `git add`/`commit`/`push` es solo para que el repositorio quede tan al
+      día como la base. Junto con `PROMPT-produccion.md`, `ESTADO.md` y este
+      archivo.
 
 ---
 
 ## 🟠 Ahora — barato y con impacto real
 
-- [ ] Decidir qué hacer con la política RLS "de más" en la tabla `usuarios`
-      — es una decisión tuya, no algo que esta sesión deba resolver sola.
-- [ ] `migration repair` para las migraciones 012, 013 y 014 — requiere tu
-      aprobación antes de tocar producción.
+Sin pendientes en esta categoría — los dos últimos (la política RLS y el
+`migration repair`) quedaron resueltos hoy, ver ✅ abajo.
 
 ---
 
@@ -55,6 +48,11 @@ postgres:17).
       encontrados (cosméticos, no urgentes): `mx-auto` en los círculos
       numerados de `escaneo-remoto.js`, y `hover:bg-rose-100` en el botón de
       cerrar sesión de `perfil.js`.
+- [ ] (Nuevo, visto en el run #36) La CI avisa que `actions/setup-node@v4`
+      con `node-version: '20'` está deprecado y GitHub está forzando
+      Node 24 por su cuenta — no rompe nada hoy, pero conviene subir el
+      número a mano antes de que GitHub deje de dar ese aviso y simplemente
+      falle.
 
 ---
 
@@ -100,8 +98,22 @@ postgres:17).
 - [x] `CACHE_VERSION` subido a `v4` en `sw.js` (la corrección de seguridad
       de ayer cambió una firma de RPC sin subir el número de versión).
 - [x] CI alineada a `postgres:17` en `base-de-datos` y `reconstruccion`
-      (producción corre 17.6.1) — cambio mecánico, sin confirmar todavía en
-      la CI real (ver 🔴 arriba).
+      (producción corre 17.6.1) — confirmado en verde, run #36.
+- [x] Commit `ecbde20` (el `.github/workflows/pruebas.yml` que había quedado
+      afuera del commit anterior por la protección de escritura en `.github`)
+      subido a mano y confirmado: los 5 jobs corren, todos en verde —
+      `consolidacion` (7s), `interfaz` (19s), `migraciones` (10s, nuevo),
+      `base-de-datos` en PostgreSQL 17 (32s), `reconstruccion` en
+      PostgreSQL 17 (49s). Run #36, 53 segundos en total.
+- [x] `migration repair` de 012, 013 y 014 — verificado en vivo contra
+      producción: ya estaban registradas, no hacía falta ningún repair. Se
+      resolvió en algún momento entre el 6 de agosto y hoy, sin quedar
+      anotado en ninguna sesión.
+- [x] Política RLS redundante `"Lectura de roles propia"` en `usuarios` —
+      eliminada. Confirmado en vivo que era subconjunto exacto de "usuarios
+      ve su perfil" antes de tocarla, y confirmado después que `pg_policies`
+      bajó de 5 a 4 filas. Migración 016 aplicada directo a producción con
+      permiso explícito (ver 🔴 arriba para subir el archivo al repo).
 
 ## 🔵 Pendiente de verificación manual (no bloquea nada, pero nadie lo hizo)
 

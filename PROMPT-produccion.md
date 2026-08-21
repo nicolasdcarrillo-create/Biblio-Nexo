@@ -1250,3 +1250,69 @@ Nuevo: `pruebas/verificar_llamadas_rpc.py`.
 
 Sin cambios de esquema, sin cambios a ninguna función RPC — nada en esta
 ronda tocó `supabase/migrations/`.
+
+---
+
+## 19. Estado al 21 de agosto de 2026 (más tarde el mismo día) — los dos últimos pendientes de "Ahora"
+
+Se retomaron los dos últimos ítems de la lista "Ahora" de la sección 18.
+Antes de tocar nada, se verificó el estado real de producción directo
+contra la base (esta sesión tiene una conexión de Supabase activa al
+proyecto `vcngmgzxjoorjhcgqzpk`) en vez de confiar en lo que decía la
+documentación de hace dos semanas.
+
+### `migration repair` de 012, 013 y 014: ya no hacía falta
+
+Consultado `supabase_migrations.schema_migrations` en producción: las tres
+ya estaban registradas, con el mismo nombre que los archivos locales. En
+algún momento entre el 6 de agosto (cuando se documentó el problema) y hoy,
+alguien ya corrió el `migration repair` — no quedó registrado en ninguna
+nota de esta sesión, así que no se sabe cuándo ni quién. Sin acción
+pendiente; se saca de la lista.
+
+### La política RLS redundante en `usuarios`: eliminada, con permiso explícito
+
+Confirmado en vivo contra `pg_policies` que `"Lectura de roles propia"`
+(`SELECT`, `using (auth.uid() = id)`) seguía activa, y que sigue siendo un
+subconjunto exacto de `"usuarios ve su perfil"` (008/010,
+`using (id = auth.uid() OR es_admin())`) — Postgres evalúa las políticas
+RLS con OR entre sí, así que la segunda ya cubre todo lo que la primera
+permitía. Detalle nuevo que la documentación anterior no tenía: la
+redundante estaba concedida al pseudo-rol `public` (que incluye a `anon`),
+no a `authenticated` como el resto — inofensivo en la práctica, porque
+`auth.uid()` da `null` sin sesión y ninguna fila tiene `id = null`, pero
+igual una inconsistencia de más.
+
+Se presentó la decisión con las tres opciones (eliminarla, mantenerla y
+documentar, o dejarla pendiente) y la persona eligió eliminarla.
+
+**Migración 016** (`016_eliminar_politica_redundante_usuarios.sql`, nueva,
+un `drop policy if exists`) creada y aplicada directo a producción con la
+conexión de Supabase de esta sesión. Un detalle a tener en cuenta para la
+próxima vez que se use `apply_migration` así: la herramienta registró la
+migración con la versión igual a un timestamp
+(`20260821042519`) en vez de `016`, y el `name` con el prefijo numérico
+incluido (`016_eliminar_politica_redundante_usuarios` en vez de
+`eliminar_politica_redundante_usuarios`) — ninguna de las dos coincidía con
+la convención que siguen las migraciones 001-015, y habría producido
+exactamente el mismo tipo de deriva que motivó el punto anterior la próxima
+vez que alguien corriera `supabase migration list --linked`. Corregido a
+mano con dos `UPDATE` sobre `supabase_migrations.schema_migrations`
+(cambio de metadata, no de esquema) para que quedara `version = '016'`,
+`name = 'eliminar_politica_redundante_usuarios'`, igual que el resto.
+Verificado después: `pg_policies` en `usuarios` ahora tiene 4 políticas,
+no 5.
+
+**Pendiente nuevo, anotado para quien use `apply_migration` (u otra vía que
+no sea el CLI de Supabase) en este proyecto de nuevo:** revisar siempre
+cómo quedó registrada la migración en `supabase_migrations.schema_migrations`
+después, no asumir que coincide con el nombre del archivo local.
+
+### Archivos para subir en esta ronda
+
+Nuevo: `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql`
+(ya aplicado en producción — subir este archivo es solo para que el
+repositorio quede igual de sincronizado que la base, no hace falta ningún
+paso manual adicional).
+
+Modificados: `PROMPT-produccion.md`, `ESTADO.md`, `pendientes-checklist.md`.

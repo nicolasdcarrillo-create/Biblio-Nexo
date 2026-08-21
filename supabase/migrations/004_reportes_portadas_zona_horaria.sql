@@ -1,3 +1,7 @@
+-- ADVERTENCIA: Este archivo es histórico y puede contener definiciones de funciones que han sido consolidadas.
+-- NO ejecutar este archivo directamente en staging o producción para corregir funciones críticas.
+-- Las definiciones autoritativas están en supabase/migrations/010_consolidacion.sql y se reaplican con 011_reaplicar_consolidacion.sql.
+-- Si se necesita corregir funciones en la base de datos, usar 011_reaplicar_consolidacion.sql (idempotente) tras respaldar la BD.
 -- ============================================================================
 -- BiblioNexo — 004: Reportes, portadas y zona horaria
 -- ============================================================================
@@ -63,7 +67,7 @@ grant execute on function public.hoy_chile() to authenticated;
 -- 3) RPC DE PRÉSTAMO — ahora registra la fecha y usa hora local
 -- ----------------------------------------------------------------------------
 
-create or replace function public.prestar_libro(
+-- ARCHIVADO: create or replace function public.prestar_libro(
   p_libro_id bigint,
   p_lector_rut text
 )
@@ -126,7 +130,7 @@ grant execute on function public.prestar_libro(bigint, text) to authenticated;
 -- 4) RPC DE DEVOLUCIÓN — con hora local
 -- ----------------------------------------------------------------------------
 
-create or replace function public.devolver_prestamo(
+-- ARCHIVADO: create or replace function public.devolver_prestamo(
   p_prestamo_id bigint
 )
 returns void

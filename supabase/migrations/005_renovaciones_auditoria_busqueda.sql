@@ -1,3 +1,7 @@
+-- ADVERTENCIA: Este archivo es histórico y puede contener definiciones de funciones que han sido consolidadas.
+-- NO ejecutar este archivo directamente en staging o producción para corregir funciones críticas.
+-- Las definiciones autoritativas están en supabase/migrations/010_consolidacion.sql y se reaplican con 011_reaplicar_consolidacion.sql.
+-- Si se necesita corregir funciones en la base de datos, usar 011_reaplicar_consolidacion.sql (idempotente) tras respaldar la BD.
 -- ============================================================================
 -- BiblioNexo — 005: Renovaciones, auditoría y búsqueda sin acentos
 -- ============================================================================
@@ -13,7 +17,7 @@
 
 alter table public.prestamos add column if not exists renovaciones int not null default 0;
 
-create or replace function public.renovar_prestamo(
+-- ARCHIVADO: create or replace function public.renovar_prestamo(
   p_prestamo_id bigint
 )
 returns table (
@@ -100,7 +104,7 @@ create index if not exists auditoria_tabla_idx on public.auditoria (tabla);
 -- se revierte y deja de poderse crear, editar o eliminar cualquier libro,
 -- lector o préstamo. La bitácora nunca debe impedir la operación real; si no se
 -- puede registrar, se deja una advertencia y la operación continúa.
-create or replace function public.registrar_auditoria()
+-- ARCHIVADO: create or replace function public.registrar_auditoria()
 returns trigger
 language plpgsql
 security definer

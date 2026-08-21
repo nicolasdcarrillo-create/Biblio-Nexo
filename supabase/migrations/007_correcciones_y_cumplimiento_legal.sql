@@ -1,3 +1,7 @@
+-- ADVERTENCIA: Este archivo es histórico y puede contener definiciones de funciones que han sido consolidadas.
+-- NO ejecutar este archivo directamente en staging o producción para corregir funciones críticas.
+-- Las definiciones autoritativas están en supabase/migrations/010_consolidacion.sql y se reaplican con 011_reaplicar_consolidacion.sql.
+-- Si se necesita corregir funciones en la base de datos, usar 011_reaplicar_consolidacion.sql (idempotente) tras respaldar la BD.
 -- ============================================================================
 -- BiblioNexo — 007: Correcciones críticas y cumplimiento legal
 -- ============================================================================
@@ -52,7 +56,7 @@ drop function if exists public.renovar_prestamo(bigint);
 -- dos tipos. Lo mismo con ::bigint para los identificadores, por si las
 -- tablas usan serial (integer) en vez de bigserial.
 
-create or replace function public.estado_lector(p_rut text)
+-- ARCHIVADO: create or replace function public.estado_lector(p_rut text)
 returns table (
   existe boolean, lector_id bigint, nombre text, rut text, email text, telefono text,
   bloqueado_manual boolean, motivo_bloqueo text,
@@ -240,7 +244,7 @@ drop policy if exists "parametros escritura admin" on public.parametros;
 create policy "parametros escritura admin" on public.parametros
   for all using (public.es_admin()) with check (public.es_admin());
 
-create or replace function public.parametro_int(p_clave text, p_defecto int)
+-- ARCHIVADO: create or replace function public.parametro_int(p_clave text, p_defecto int)
 returns int
 language sql
 stable
@@ -254,7 +258,7 @@ grant execute on function public.parametro_int(text, int) to authenticated;
 
 
 -- Se reinstalan las funciones de préstamo y renovación leyendo los parámetros
-create or replace function public.prestar_libro(p_libro_id bigint, p_lector_rut text)
+-- ARCHIVADO: create or replace function public.prestar_libro(p_libro_id bigint, p_lector_rut text)
 returns table (prestamo_id bigint, fecha_devolucion_esperada date)
 language plpgsql
 set search_path = public
@@ -300,7 +304,7 @@ $$;
 grant execute on function public.prestar_libro(bigint, text) to authenticated;
 
 
-create or replace function public.renovar_prestamo(p_prestamo_id bigint)
+-- ARCHIVADO: create or replace function public.renovar_prestamo(p_prestamo_id bigint)
 returns table (nueva_fecha date, renovaciones_usadas int)
 language plpgsql
 set search_path = public

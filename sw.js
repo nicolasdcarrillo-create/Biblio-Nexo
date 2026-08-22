@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v6'; // registro obligatorio al aceptar una invitación (js/main.js, js/modules/ui-base.js): pantalla nueva que se abre con el enlace del correo, antes no existía
+const CACHE_VERSION = 'v7'; // reglas de contraseña de la pantalla de registro (js/modules/ui-base.js): 8 caracteres + mayúscula + número, en vez de 12 caracteres
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 

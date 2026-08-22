@@ -103,6 +103,13 @@ existía). 106/106 en `pruebas/probar-vistas.mjs`, `verificar_llamadas_rpc.py`
 en verde. No probado todavía con un enlace de correo real — ver 🔴 en
 `pendientes-checklist.md`.
 
+**Ajuste pedido después, mismo día**: la regla de contraseña bajó de 12
+caracteres a 8, con la condición de que tenga al menos una mayúscula y un
+número (la comprobación de que las dos contraseñas coincidan ya estaba desde
+el principio, no era nueva). Cambio acotado a esta pantalla — el resto de la
+app (recuperación de contraseña, cambio de contraseña desde Mi perfil) sigue
+con sus propias reglas de antes, sin tocar. `CACHE_VERSION` subido a `v7`.
+
 ### 3. Invitación de personal por correo
 
 Edge Function nuevo `invitar-personal` — recibe `{email, rol}`, comprueba

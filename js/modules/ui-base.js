@@ -1171,7 +1171,7 @@ class UIManager {
               <label for="ci-pass-1" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Contraseña nueva</label>
               <input id="ci-pass-1" type="password" autocomplete="new-password" placeholder="••••••••"
                 class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
-              <p class="text-[11px] text-stone-500 mt-1">Mínimo 12 caracteres.</p>
+              <p class="text-[11px] text-stone-500 mt-1">Mínimo 8 caracteres, con al menos una mayúscula y un número.</p>
             </div>
             <div>
               <label for="ci-pass-2" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Repite la contraseña</label>
@@ -1202,8 +1202,16 @@ class UIManager {
         this.showToast('Escribe tu nombre y al menos un apellido.', 'error');
         return;
       }
-      if (p1.length < 12) {
-        this.showToast('La contraseña debe tener al menos 12 caracteres.', 'error');
+      if (p1.length < 8) {
+        this.showToast('La contraseña debe tener al menos 8 caracteres.', 'error');
+        return;
+      }
+      if (!/[A-Z]/.test(p1)) {
+        this.showToast('La contraseña debe tener al menos una letra mayúscula.', 'error');
+        return;
+      }
+      if (!/[0-9]/.test(p1)) {
+        this.showToast('La contraseña debe tener al menos un número.', 'error');
         return;
       }
       if (p1 !== p2) {

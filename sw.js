@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v8'; // db.js se dividió por dominio en js/modules/db/*.js (22 de agosto de 2026) — archivos nuevos en PRECACHE_URLS
+const CACHE_VERSION = 'v9'; // eliminar_libro() con papelera/restaurar (22 de agosto de 2026) — RPC nuevos en js/modules/db/libros.js, pestaña "Eliminados" en admin.js
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 

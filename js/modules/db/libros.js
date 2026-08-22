@@ -101,5 +101,30 @@ export const libros = {
             if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 020 en Supabase.');
             throw new Error(error.message || 'No se pudo eliminar el libro.');
         }
+    },
+
+    /**
+     * Papelera de libros (migración 021): lista los que se eliminaron y
+     * todavía no se restauraron. No hace falta ninguna tabla de respaldo
+     * propia — lee la foto que ya guarda `auditoria` de cada borrado.
+     * Devuelve `null` si la migración 021 no se ha ejecutado (mismo patrón
+     * que el resto de `db.*`, para que la pantalla explique qué falta en
+     * vez de mostrar un error genérico).
+     */
+    async listarLibrosEliminados() {
+        const { data, error } = await conTiempoLimite(supabase.rpc('listar_libros_eliminados'), ESPERA);
+        if (error) {
+            if (esFuncionInexistente(error)) return null;
+            throw new Error(error.message || 'No se pudieron listar los libros eliminados.');
+        }
+        return data || [];
+    },
+
+    async restaurarLibro(libroId) {
+        const { error } = await conTiempoLimite(supabase.rpc('restaurar_libro', { p_libro_id: libroId }), ESPERA);
+        if (error) {
+            if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 021 en Supabase.');
+            throw new Error(error.message || 'No se pudo restaurar el libro.');
+        }
     }
 };

@@ -446,10 +446,11 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-# 45, no 41: 44 fue manifiesto_tablas_protegidas(), manifiesto_politicas() y
+# 47, no 41: 44 fue manifiesto_tablas_protegidas(), manifiesto_politicas() y
 # verificar_politicas() (RLS/grants, mismo patrón que este autodiagnóstico).
 # 45 sumó eliminar_libro() (020_permitir_eliminar_libro_con_historial.sql).
-comprobar('el manifiesto cubre 45 funciones', len(filas) == 45, f'cubre {len(filas)}')
+# 47 sumó listar_libros_eliminados() y restaurar_libro() (021_papelera_libros.sql).
+comprobar('el manifiesto cubre 47 funciones', len(filas) == 47, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -562,8 +563,59 @@ comprobar('...y libro_id quedó en null en ese préstamo (la llave foránea, no 
 comprobar('...la lápida de eliminación también quedó puesta (015)',
           valor(f"select count(*) from public.elementos_eliminados where tabla = 'libros' and id = {libro_devuelto_id};") == 1)
 
-sql(f"delete from public.prestamos where libro_id = {libro_activo_id} or libro_titulo_archivado = 'Libro Con Historial Devuelto';")
-sql(f"delete from public.libros where id = {libro_activo_id};")
+
+# ===========================================================================
+# RESTAURAR_LIBRO() Y LISTAR_LIBROS_ELIMINADOS() — migración 021
+# ===========================================================================
+# El pedido que siguió al de arriba: poder deshacer un eliminar_libro() hecho
+# sin querer, desde una pestaña "Eliminados" en Administración. No hace falta
+# ninguna tabla de respaldo propia — se lee la foto que ya guarda `auditoria`
+# de cada borrado (registrar_auditoria(), migración 005).
+print('\n10 ter. RESTAURAR_LIBRO() Y LISTAR_LIBROS_ELIMINADOS() (migración 021)')
+
+ok, out = como(LIBRERO, "select * from public.listar_libros_eliminados();")
+comprobar('un librero NO puede ver la papelera (solo un administrador)',
+          not ok and 'administrador' in texto(out).lower(), texto(out)[-200:])
+
+ok, papelera = como(ADMIN, "select libro_id, titulo, autor, copias_totales from public.listar_libros_eliminados();")
+en_papelera = [f for f in papelera if str(f[0]) == str(libro_devuelto_id)] if ok else []
+comprobar('el libro eliminado aparece en la papelera del administrador',
+          ok and len(en_papelera) == 1, texto(out)[-200:] if not ok else texto(papelera)[-300:])
+if en_papelera:
+    comprobar('...con el título, autor y ejemplares de antes de eliminarse',
+              en_papelera[0][1] == 'Libro Con Historial Devuelto' and en_papelera[0][2] == 'Autora Devuelta'
+              and en_papelera[0][3] == 2, texto(en_papelera[0]))
+
+ok, out = como(LIBRERO, f"select public.restaurar_libro({libro_devuelto_id});")
+comprobar('un librero NO puede restaurar un libro (solo un administrador)',
+          not ok and 'administrador' in texto(out).lower(), texto(out)[-200:])
+comprobar('...y el libro sigue sin estar en el catálogo',
+          valor(f"select count(*) from public.libros where id = {libro_devuelto_id};") == 0)
+
+ok, out = como(ADMIN, f"select public.restaurar_libro({libro_devuelto_id});")
+comprobar('un admin SÍ puede restaurar el libro eliminado', ok, texto(out)[-200:] if not ok else '')
+comprobar('...el libro volvió al catálogo con el mismo id, título, autor e ISBN',
+          valor(f"select titulo from public.libros where id = {libro_devuelto_id};") == 'Libro Con Historial Devuelto'
+          and valor(f"select autor from public.libros where id = {libro_devuelto_id};") == 'Autora Devuelta'
+          and valor(f"select isbn from public.libros where id = {libro_devuelto_id};") == 'ELB-DEVUELTO')
+comprobar('...con los mismos ejemplares de antes de eliminarse',
+          valor(f"select copias_totales from public.libros where id = {libro_devuelto_id};") == 2
+          and valor(f"select stock from public.libros where id = {libro_devuelto_id};") == 2)
+comprobar('...el préstamo cerrado quedó reenganchado al libro restaurado',
+          valor(f"select count(*) from public.prestamos where libro_id = {libro_devuelto_id} and libro_titulo_archivado is null and libro_autor_archivado is null;") == 1)
+
+ok, papelera2 = como(ADMIN, "select libro_id from public.listar_libros_eliminados();")
+comprobar('el libro restaurado ya no aparece en la papelera',
+          ok and str(libro_devuelto_id) not in [str(f[0]) for f in papelera2], texto(papelera2)[-200:])
+
+ok, out = como(ADMIN, f"select public.restaurar_libro({libro_devuelto_id});")
+comprobar('restaurar un libro que ya está en el catálogo da un error claro, no lo duplica',
+          not ok and 'catálogo' in texto(out).lower(), texto(out)[-200:])
+comprobar('...y sigue habiendo un solo libro con ese id',
+          valor(f"select count(*) from public.libros where id = {libro_devuelto_id};") == 1)
+
+sql(f"delete from public.prestamos where libro_id = {libro_activo_id} or libro_id = {libro_devuelto_id};")
+sql(f"delete from public.libros where id = {libro_activo_id} or id = {libro_devuelto_id};")
 
 
 # ===========================================================================
@@ -713,7 +765,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 45,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 47,
           texto(out)[-150:])
 
 

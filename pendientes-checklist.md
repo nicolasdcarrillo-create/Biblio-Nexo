@@ -4,18 +4,19 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 22 de agosto de 2026 (cuarta ronda del día) —
-reportaste que no dejaba eliminar una copia de "La mujer justa" con el
-mensaje "Revise si el libro tiene préstamos activos", aunque el libro no
-tenía ningún préstamo activo. Encontrado y corregido: una llave foránea sin
-documentar bloqueaba el borrado de cualquier libro con historial de
-préstamos, activo o no. Elegiste la solución de fondo (permitir eliminar
-cuando no hay préstamos activos, archivando título y autor del historial ya
-cerrado) — ver el detalle en ✅ abajo. Ronda anterior: de la categoría 🟡 se
-resolvieron dos de las tres cosas: el script de verificación estática de
-clases de Tailwind (que de paso encontró **26 clases más** sin compilar,
-además de las 2 ya corregidas antes hoy) y la división de `js/modules/db.js`
-por dominio. Queda pendiente la más delicada — dividir `ui-base.js` — con un
+Última actualización: 22 de agosto de 2026 (quinta ronda del día) —
+aclaraste que la idea de la ronda anterior era más específica: no eliminar
+el libro entero (para bajar de cantidad ya servía el campo "Ejemplares en
+total" del modal Editar), sino poder **restaurar un libro si se eliminó por
+accidente**, desde una pestaña nueva "Eliminados" en Administración. Hecho:
+ver el detalle en ✅ abajo. Ronda anterior (la del bug de "La mujer justa"):
+encontrado y corregido que una llave foránea sin documentar bloqueaba el
+borrado de cualquier libro con historial de préstamos, activo o no —
+también en ✅ abajo. Ronda antes de esa: de la categoría 🟡 se resolvieron
+dos de las tres cosas: el script de verificación estática de clases de
+Tailwind (que de paso encontró **26 clases más** sin compilar, además de
+las 2 ya corregidas ese día) y la división de `js/modules/db.js` por
+dominio. Queda pendiente la más delicada — dividir `ui-base.js` — con un
 plan ya listo para revisar antes de tocar código, ver más abajo.
 
 ---
@@ -61,6 +62,28 @@ quedaron resueltas hoy, ver ✅ abajo.
 
 ## ✅ Ya verificado en esta ronda (referencia, no acción)
 
+- [x] **Papelera de libros: restaurar uno eliminado por accidente, desde
+      Administración → Eliminados.** Aclaraste el pedido real de la ronda
+      anterior: no hacía falta un botón para quitar una sola copia (ya
+      existía — "Editar libro" → "Ejemplares en total", que baja la
+      cantidad con `ajustar_copias`, sin tocar el historial), y el borrado
+      completo de un libro (`eliminar_libro()`, ronda anterior) solo debía
+      poder deshacerse cuando fue un libro entero eliminado por error — no
+      una reducción de cantidad. Implementado sin ninguna tabla nueva de
+      respaldo: `registrar_auditoria()` (migración 005) ya guardaba una
+      foto completa de cada libro justo antes de borrarlo, en
+      `auditoria.datos_antes` — dos funciones nuevas
+      (`listar_libros_eliminados()` y `restaurar_libro()`,
+      `010_consolidacion.sql`, migración `021_papelera_libros.sql` que solo
+      agrega un índice de apoyo) leen esa foto para reconstruir el libro
+      con el mismo id, y reenganchan automáticamente el préstamo cerrado
+      que esa eliminación había archivado (usando que dentro de una misma
+      transacción `now()` da siempre el mismo valor en Postgres, para
+      cruzar con precisión qué préstamos tocó esa eliminación en concreto).
+      Pestaña nueva "Eliminados" en Administración, con una tabla de libros
+      pendientes de restaurar y un botón "Restaurar" en cada uno. 12
+      comprobaciones nuevas en `pruebas/probar_librero.py` (128/128 en
+      total). Aplicado y verificado en vivo contra producción.
 - [x] **Bug reportado: no dejaba eliminar una copia de un libro con
       historial ya devuelto — corregido y en producción.** Reportaste que
       "La mujer justa" (0 préstamos activos, 1 ya devuelto) rechazaba el

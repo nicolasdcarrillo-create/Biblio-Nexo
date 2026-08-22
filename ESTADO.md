@@ -12,10 +12,10 @@ editados sin confirmar. Todo ya está **aplicado y desplegado en producción**
 para que quede tan al día como la base. Ver la lista completa en
 `pendientes-checklist.md`, sección 🔴.
 
-**Lo más reciente (cuarta ronda del día)**: bug reportado — no dejaba
-eliminar una copia de "La mujer justa" — corregido y en producción. Ver la
-sección "Cuarta ronda del día" al final de este archivo para el detalle
-técnico completo, o la entrada ✅ correspondiente en
+**Lo más reciente (quinta ronda del día)**: papelera de libros — restaurar
+uno eliminado por accidente desde Administración → Eliminados — hecha y en
+producción. Ver la sección "Quinta ronda del día" al final de este archivo
+para el detalle técnico completo, o la entrada ✅ correspondiente en
 `pendientes-checklist.md` para el resumen.
 
 ---
@@ -533,3 +533,103 @@ reportes de períodos pasados.
 `supabase/migrations/010_consolidacion.sql` (editado),
 `supabase/migrations/020_permitir_eliminar_libro_con_historial.sql`
 (nuevo), `pendientes-checklist.md`, este archivo.
+
+---
+
+## Quinta ronda del día: papelera de libros (`restaurar_libro()`)
+
+Aclaraste el pedido real detrás de la ronda anterior: "la idea era eliminar
+uno solo o que se pueda editar la cantidad y en la sección de administración
+que me permita restaurar si se eliminó por accidente".
+
+### Lo que ya existía y no hacía falta construir
+
+Editar la cantidad de ejemplares de un libro **ya existe**: el modal "Editar
+libro" del Catálogo tiene un campo "Ejemplares en total" que pasa por
+`ajustar_copias()` — bajarlo de 2 a 1, por ejemplo, quita una copia sin
+tocar el historial de préstamos. Se lo confirmé al usuario en vez de
+construir un botón nuevo "quitar 1 copia" (opción que ofrecí y no eligió).
+
+### Lo que sí hacía falta: restaurar un libro eliminado por accidente
+
+Alcance acordado con el usuario (tres preguntas, una por decisión): el
+campo de cantidad ya alcanza para copias sueltas: no hace falta un botón
+nuevo; solo importa poder deshacer un libro eliminado POR COMPLETO (no una
+reducción de cantidad); y la papelera va en una pestaña nueva de
+Administración, no dentro de una que ya existía.
+
+### Cómo se implementó
+
+Sin ninguna tabla nueva de respaldo. La razón: `registrar_auditoria()`
+(migración 005) ya guarda una foto COMPLETA de cada libro
+(`to_jsonb(old)`, con todas sus columnas) justo antes de borrarlo, en
+`auditoria.datos_antes`, porque `libros` tiene el disparador de auditoría
+conectado desde siempre. Lo mismo pasa con el UPDATE que `eliminar_libro()`
+hace sobre `prestamos` para archivar título/autor un instante antes de
+borrar el libro: también queda una fila de auditoría con el `libro_id` de
+antes de archivar.
+
+- **`listar_libros_eliminados()`** (RPC nuevo, admin-only,
+  `010_consolidacion.sql`): lee `auditoria` buscando el DELETE más reciente
+  de cada libro que todavía no se restauró (no existe una fila viva con ese
+  id), y reconstruye título/autor/ISBN/ejemplares desde `datos_antes`.
+- **`restaurar_libro(p_libro_id)`** (RPC nuevo, admin-only): reinserta el
+  libro en `libros` con el MISMO id (`insert ... overriding system value`,
+  posible porque `id` es `generated always as identity` — no cualquier
+  identity permite esto, pero el `overriding system value` explícito sí),
+  usando los datos archivados en `auditoria`. El truco para reenganchar
+  los préstamos correctos: dentro de una misma transacción, `now()` en
+  Postgres devuelve siempre el MISMO valor (es el inicio de la
+  transacción, no el de cada sentencia) — así que el `created_at` que
+  quedó en la fila de auditoría del DELETE de `libros` es idéntico al de
+  las filas de auditoría del UPDATE de `prestamos` que archivó su
+  título/autor en esa misma llamada a `eliminar_libro()`. Cruzar por ese
+  `created_at` exacto (además del `libro_id` archivado) identifica sin
+  ambigüedad cuáles préstamos reenganchar — sin necesidad de ninguna
+  columna ni tabla puente nueva, y sin riesgo de confundir dos libros
+  distintos con el mismo título eliminados en momentos distintos.
+- **`021_papelera_libros.sql`** (migración nueva): no agrega ninguna tabla
+  ni columna — solo un índice (`auditoria_tabla_registro_idx` sobre
+  `(tabla, registro_id, created_at desc)`) para que las dos funciones de
+  arriba no tengan que recorrer toda `auditoria`, que solo crece y nunca se
+  purga.
+- **Administración → Eliminados** (pestaña nueva en `js/vistas/admin.js`):
+  tabla de libros pendientes de restaurar, con título, autor, ISBN,
+  ejemplares, cuándo y quién los eliminó, y un botón "Restaurar" por fila.
+- **`js/modules/db/libros.js`**: `listarLibrosEliminados()` y
+  `restaurarLibro(id)`, mismo patrón `esFuncionInexistente` que el resto de
+  `db.*` (si falta la migración 021, la pantalla explica qué falta en vez
+  de un error genérico).
+- `manifiesto_funciones()` actualizado (45 → 47 funciones) —
+  `pruebas/probar_librero.py` también actualizado (dos conteos
+  hardcodeados, mismo cuidado que la ronda anterior tras el CI en rojo por
+  este mismo tipo de olvido).
+- `pruebas/verificar_clases_tailwind.py`: `restore-book-btn` (gancho de
+  delegación de eventos del botón "Restaurar") agregado a la lista de
+  excepciones documentadas, mismo patrón que `delete-book-btn` y el resto.
+- `CACHE_VERSION` subida de `v8` a `v9` en `sw.js` (RPC nuevos en un
+  archivo ya precacheado, `js/modules/db/libros.js`, y pestaña nueva en
+  `admin.js`).
+
+### Verificado
+
+`pruebas/probar-migraciones.py` en verde (152/152),
+`pruebas/probar_librero.py` en verde (128/128, 12 comprobaciones nuevas
+sobre la papelera: permisos de admin vs. librero, que aparece en la lista
+con los datos correctos, que restaurar reengancha el préstamo y limpia el
+archivado, que ya no aparece en la lista tras restaurarse, y que restaurar
+dos veces da un error claro sin duplicar el libro), las 6 suites de
+pruebas JS y los 3 verificadores de Python en verde. Aplicado a producción
+(migración 021 vía `apply_migration`, `010_consolidacion.sql` completo vía
+`execute_sql`) y confirmado en vivo: `listar_libros_eliminados` y
+`restaurar_libro` existen con `security definer`, el índice quedó creado,
+y no hay ninguna función duplicada por firma.
+
+### Pendiente de esta ronda: sincronizar al repositorio
+
+`js/modules/db/libros.js` (editado), `js/vistas/admin.js` (editado),
+`pruebas/probar_librero.py` (editado),
+`pruebas/verificar_clases_tailwind.py` (editado), `sw.js` (editado, `v9`),
+`supabase/migrations/010_consolidacion.sql` (editado),
+`supabase/migrations/021_papelera_libros.sql` (nuevo),
+`pendientes-checklist.md`, este archivo.

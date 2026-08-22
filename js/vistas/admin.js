@@ -27,6 +27,7 @@ export default {
         ${boton('bloqueados', 'Bloqueados', 'fa-user-lock')}
         ${boton('personal', 'Personal', 'fa-user-shield')}
         ${boton('enlaces', 'Enlaces remotos', 'fa-qrcode')}
+        ${boton('eliminados', 'Eliminados', 'fa-trash-can-arrow-up')}
         ${boton('auditoria', 'Auditoría', 'fa-clipboard-list')}
         ${boton('cumplimiento', 'Cumplimiento', 'fa-scale-balanced')}
         ${boton('diagnostico', 'Diagnóstico', 'fa-heart-pulse')}
@@ -47,6 +48,7 @@ export default {
       bloqueados: () => this._adminBloqueados(panel),
       personal: () => this._adminPersonal(panel),
       enlaces: () => this._adminEnlacesEscaneo(panel),
+      eliminados: () => this._adminEliminados(panel),
       auditoria: () => this._adminAuditoria(panel),
       cumplimiento: () => this._adminCumplimiento(panel),
       diagnostico: () => this._adminDiagnostico(panel)
@@ -452,6 +454,86 @@ export default {
           this.renderAdmin();
         } catch (err) {
           this.showToast(err.message || 'No se pudo revocar el enlace.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+  },
+
+  /**
+   * Papelera de libros (migración 021, `eliminar_libro()` de la 020): libros
+   * eliminados del catálogo que todavía se pueden restaurar. Lee la foto que
+   * ya guarda `auditoria` de cada borrado — no hay ninguna tabla nueva.
+   */
+  async _adminEliminados(panel) {
+    const filas = await db.listarLibrosEliminados();
+    if (filas === null) {
+      panel.innerHTML = this._avisoMigracion('021', '021_papelera_libros.sql');
+      return;
+    }
+
+    if (filas.length === 0) {
+      panel.innerHTML = html`
+        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-lg">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Libros eliminados</h3>
+          <p class="text-sm text-stone-600">Ningún libro eliminado del catálogo está pendiente de restaurar.</p>
+        </div>`;
+      return;
+    }
+
+    panel.innerHTML = html`
+      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+        <div class="catalog-card-header">
+          <h3 class="font-serif font-semibold text-lg text-stone-900">Libros eliminados</h3>
+          <p class="text-xs text-stone-500 mt-0.5">
+            Se pueden restaurar tal como quedaron justo antes de eliminarse — título, autor, ejemplares y todo su
+            historial de préstamos, reenganchado.
+          </p>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+            <tr>
+              <th class="text-left px-4 py-3">Libro</th>
+              <th class="text-center px-4 py-3">Ejemplares</th>
+              <th class="text-left px-4 py-3">Eliminado</th>
+              <th class="text-right px-4 py-3">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filas.map(f => html`
+              <tr class="border-t border-stone-200">
+                <td class="px-4 py-3">
+                  <div class="font-bold text-stone-800">${f.titulo || 'Sin título'}</div>
+                  <div class="text-xs text-stone-500">${f.autor || ''}</div>
+                  <div class="text-[11px] font-mono text-stone-500">${f.isbn || 'sin ISBN'}</div>
+                </td>
+                <td class="px-4 py-3 text-center tabular-nums">${f.copias_totales ?? '—'}</td>
+                <td class="px-4 py-3 text-stone-500 text-xs">
+                  ${this._fechaHoraLegible(f.eliminado_en)}
+                  ${f.eliminado_por ? html`<div class="text-[11px] text-stone-400">${f.eliminado_por}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button class="restore-book-btn btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold" data-id="${f.libro_id}">Restaurar</button>
+                </td>
+              </tr>`)}
+          </tbody>
+        </table>
+      </div>`;
+
+    panel.querySelectorAll('.restore-book-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await this.showConfirm(
+          '¿Restaurar este libro? Vuelve al catálogo con sus ejemplares y su historial de préstamos.',
+          { title: 'Restaurar libro', confirmText: 'Restaurar', danger: false }
+        );
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          await db.restaurarLibro(btn.dataset.id);
+          this.showToast('Libro restaurado.', 'success');
+          this.renderAdmin();
+        } catch (err) {
+          this.showToast(err.message || 'No se pudo restaurar.', 'error');
           btn.disabled = false;
         }
       });

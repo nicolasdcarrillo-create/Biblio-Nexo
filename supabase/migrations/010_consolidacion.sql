@@ -774,6 +774,144 @@ end;
 $$;
 grant execute on function public.eliminar_libro(bigint) to authenticated;
 
+-- ── listar_libros_eliminados / restaurar_libro ── (nuevas: 021_papelera_libros.sql)
+--
+-- El pedido que siguió al de arriba: poder deshacer un `eliminar_libro()`
+-- hecho sin querer, desde una pestaña "Eliminados" en Administración. No
+-- hizo falta ninguna tabla nueva de respaldo — `registrar_auditoria()`
+-- (migración 005) ya guarda una foto completa (`to_jsonb(old)`) de cada
+-- libro justo antes de borrarlo, en `auditoria.datos_antes`, porque `libros`
+-- ya tiene el disparador de auditoría conectado desde siempre. Lo mismo pasa
+-- con el UPDATE que archiva título/autor en `prestamos` un instante antes:
+-- también queda una fila en `auditoria` con el `libro_id` de antes de
+-- archivar.
+--
+-- El truco para reenganchar los préstamos correctos al restaurar: dentro de
+-- una misma transacción, `now()` en Postgres devuelve siempre el mismo valor
+-- (es el inicio de la transacción, no el de cada sentencia) — así que el
+-- `created_at` que quedó en la fila de auditoría del DELETE de `libros` es
+-- IDÉNTICO al de las filas de auditoría del UPDATE de `prestamos` que
+-- archivó su título/autor en la misma llamada a `eliminar_libro()`. Cruzar
+-- por ese `created_at` exacto (además del `libro_id` archivado) identifica
+-- sin ambigüedad cuáles préstamos hay que reenganchar, incluso si dos libros
+-- distintos con el mismo título se eliminaron en momentos distintos.
+create or replace function public.listar_libros_eliminados()
+returns table (
+  libro_id bigint,
+  titulo text,
+  autor text,
+  isbn text,
+  copias_totales int,
+  eliminado_en timestamptz,
+  eliminado_por text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.es_admin() then
+    raise exception 'Solo un administrador puede ver los libros eliminados.' using errcode = 'P0001';
+  end if;
+
+  return query
+    with ultima_eliminacion as (
+      -- Si un mismo id se eliminó más de una vez (se restauró y se volvió a
+      -- eliminar), solo importa la última eliminación de verdad.
+      select distinct on (a.registro_id)
+        a.registro_id::bigint as libro_id,
+        a.datos_antes,
+        a.created_at,
+        a.usuario_email
+        from public.auditoria a
+       where a.tabla = 'libros' and a.accion = 'DELETE' and a.registro_id is not null
+       order by a.registro_id, a.created_at desc
+    )
+    select
+      u.libro_id,
+      u.datos_antes->>'titulo',
+      u.datos_antes->>'autor',
+      u.datos_antes->>'isbn',
+      (u.datos_antes->>'copias_totales')::int,
+      u.created_at,
+      u.usuario_email
+      from ultima_eliminacion u
+     -- Si ya existe un libro vivo con ese id, ya se restauró: no es basura pendiente.
+     where not exists (select 1 from public.libros l where l.id = u.libro_id)
+     order by u.created_at desc;
+end;
+$$;
+grant execute on function public.listar_libros_eliminados() to authenticated;
+
+drop function if exists public.restaurar_libro(bigint);
+create or replace function public.restaurar_libro(p_libro_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_datos jsonb;
+  v_eliminado_en timestamptz;
+begin
+  if not public.es_admin() then
+    raise exception 'Solo un administrador puede restaurar un libro.' using errcode = 'P0001';
+  end if;
+
+  if exists (select 1 from public.libros where id = p_libro_id) then
+    raise exception 'Ese libro ya está en el catálogo — no hace falta restaurarlo.' using errcode = 'P0001';
+  end if;
+
+  select a.datos_antes, a.created_at
+    into v_datos, v_eliminado_en
+    from public.auditoria a
+   where a.tabla = 'libros' and a.accion = 'DELETE' and a.registro_id = p_libro_id::text
+   order by a.created_at desc
+   limit 1;
+
+  if v_datos is null then
+    raise exception 'No hay ningún registro de que ese libro se haya eliminado.' using errcode = 'P0001';
+  end if;
+
+  begin
+    insert into public.libros (
+      id, isbn, titulo, autor, stock, genero, ubicacion, portada_url,
+      copias_totales, dias_prestamo_override, created_at
+    ) overriding system value
+    values (
+      p_libro_id,
+      v_datos->>'isbn',
+      v_datos->>'titulo',
+      v_datos->>'autor',
+      (v_datos->>'stock')::int,
+      v_datos->>'genero',
+      v_datos->>'ubicacion',
+      v_datos->>'portada_url',
+      (v_datos->>'copias_totales')::int,
+      (v_datos->>'dias_prestamo_override')::int,
+      coalesce((v_datos->>'created_at')::timestamptz, now())
+    );
+  exception when unique_violation then
+    raise exception 'No se pudo restaurar: ya existe otro libro con el mismo ISBN.' using errcode = 'P0001';
+  end;
+
+  -- Reengancha los préstamos que esta eliminación había archivado (ver nota
+  -- de más arriba sobre por qué el cruce por `created_at` exacto es seguro).
+  update public.prestamos p
+     set libro_id = p_libro_id,
+         libro_titulo_archivado = null,
+         libro_autor_archivado = null
+    from public.auditoria a
+   where a.tabla = 'prestamos'
+     and a.accion = 'UPDATE'
+     and a.created_at = v_eliminado_en
+     and (a.datos_antes->>'libro_id')::bigint = p_libro_id
+     and p.id = a.registro_id::bigint
+     and p.libro_id is null;
+end;
+$$;
+grant execute on function public.restaurar_libro(bigint) to authenticated;
+
 -- ── bloquear_lector ── (última versión: 006_bloqueo_inventario_admin.sql)
 drop function if exists public.bloquear_lector(bigint, boolean, text);
 create or replace function public.bloquear_lector(
@@ -2139,6 +2277,8 @@ as $manifiesto$
     ('ajustar_copias', true),
     ('corregir_inventario', true),
     ('eliminar_libro', true),
+    ('listar_libros_eliminados', true),
+    ('restaurar_libro', true),
     ('bloquear_lector', true),
     ('asignar_rol', true),
     ('asegurar_perfil', true),

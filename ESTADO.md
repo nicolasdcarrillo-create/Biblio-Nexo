@@ -79,6 +79,30 @@ viva solo en el dashboard de Supabase.
 El pendiente de `pendientes-checklist.md` ("asignar quién aprieta el botón")
 ya no aplica: no hay botón que apretar.
 
+### 3.1. Registro obligatorio al aceptar la invitación (agregado después)
+
+El usuario pidió, tras ver el flujo funcionando, que aceptar la invitación no
+deje entrar directo al panel con el perfil vacío: ahora pide nombre completo,
+cargo (opcional) y una contraseña propia de al menos 12 caracteres antes de
+mostrar cualquier otra pantalla.
+
+Mecanismo: igual patrón que la recuperación de contraseña, que ya existía.
+`esEnlaceDeInvitacion()` en `js/main.js` revisa el fragmento de la URL
+(`#...type=invite...`) ANTES de consultar la sesión — si coincide, muestra
+`renderCompletarInvitacion()` (nueva, en `js/modules/ui-base.js`) y no sigue
+con el arranque normal. Ese formulario llama a `auth.actualizarPassword()`
+(ya existía, la misma función de la recuperación) y a
+`db.actualizarMiPerfil()` (RPC `actualizar_mi_perfil`, migración 008, la
+misma que usa "Mi perfil" — sin esquema nuevo). Si guardar el nombre falla
+por algún motivo, no deja a la persona sin poder entrar: la contraseña ya
+quedó puesta, y completa el nombre después desde "Mi perfil" — el error
+queda igual en el registro de errores.
+
+`CACHE_VERSION` subido a `v6` en `sw.js` (pantalla nueva que antes no
+existía). 106/106 en `pruebas/probar-vistas.mjs`, `verificar_llamadas_rpc.py`
+en verde. No probado todavía con un enlace de correo real — ver 🔴 en
+`pendientes-checklist.md`.
+
 ### 3. Invitación de personal por correo
 
 Edge Function nuevo `invitar-personal` — recibe `{email, rol}`, comprueba
@@ -159,3 +183,29 @@ Pendiente de la ronda anterior, seguía sin subir:
   registrada en `supabase_migrations.schema_migrations`** — puede no
   coincidir con el nombre del archivo local (esta ronda volvió a pasar, con
   la 017 y la 018, y se corrigió a mano).
+- **El correo de `inviteUserByEmail` sale con la marca de Supabase por
+  defecto, y — más importante — el servidor SMTP compartido de Supabase
+  solo entrega esos correos a direcciones que ya son parte del "Team" de la
+  organización en el Dashboard.** A cualquier otra dirección le falla en
+  silencio (`Email address not authorized`). El usuario avisó del problema
+  de marca al recibir el correo real (dos capturas de Gmail); investigado
+  contra la documentación de Supabase (`auth-smtp`, `auth-email-templates`)
+  esta misma ronda. Solución en dos partes, sin cambios de código, ambas
+  documentadas con instrucciones completas en
+  `supabase/plantilla-invitacion-email.md`: (1) cambiar el texto de la
+  plantilla en Authentication → Email Templates, ya con los colores y
+  tipografías reales de "Patrimonio de Futrono"; (2) conectar un SMTP
+  propio (ej. Resend) para que deje de aplicar el límite de "solo al
+  equipo" — requiere que BiblioNexo tenga un dominio propio, que hoy no
+  tiene (el sitio vive en un subdominio de `vercel.app`). Pendiente de que
+  el usuario decida y haga el paso 2 — no bloquea nada más.
+  **Confirmado en vivo el mismo día**: al intentar invitar a
+  `nikitoxdmxk@gmail.com` (que no es miembro del equipo de la organización
+  de Supabase, la única persona ahí es `nicolasd.carrillo@gmail.com`) el
+  formulario mostró "No se pudo enviar la invitación: Error sending invite
+  email." — el mensaje genérico que da GoTrue cuando el SMTP compartido
+  rechaza el envío, consistente con la restricción documentada. Invitar al
+  propio correo del dueño de la organización sí debería seguir funcionando
+  como prueba, pero cualquier persona nueva de verdad va a fallar hasta que
+  se conecte el SMTP propio (ver Parte 2 de
+  `supabase/plantilla-invitacion-email.md`).

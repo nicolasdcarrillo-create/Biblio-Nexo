@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v5'; // plazo de préstamo por libro (js/modules/db.js, js/modules/ui-base.js) e invitación de personal (js/vistas/admin.js): buscar_libros() ahora devuelve una columna más y hay RPCs/Edge Functions nuevas que estos archivos ya llaman
+const CACHE_VERSION = 'v6'; // registro obligatorio al aceptar una invitación (js/main.js, js/modules/ui-base.js): pantalla nueva que se abre con el enlace del correo, antes no existía
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 

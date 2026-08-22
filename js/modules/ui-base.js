@@ -1120,6 +1120,122 @@ class UIManager {
     });
   }
 
+  /**
+   * Pantalla que ve quien acepta una invitación desde
+   * Administración → Personal (ver `esEnlaceDeInvitacion()` en `main.js`).
+   *
+   * La cuenta ya existe en Supabase Auth y ya tiene rol asignado en
+   * `public.usuarios` — eso lo hizo el Edge Function `invitar-personal` al
+   * momento de invitar, no ahora. Lo que falta es lo que nadie puso todavía:
+   * una contraseña (la cuenta se creó sin una) y el nombre/cargo de la
+   * persona. Sin esta pantalla, aceptar la invitación entraría directo al
+   * panel con el perfil en blanco y sin contraseña para volver a entrar
+   * después si cierra la sesión.
+   *
+   * Reutiliza `actualizar_mi_perfil()` (RPC de la migración 008, la misma que
+   * usa "Mis datos" en Mi perfil) — nada de esquema nuevo.
+   */
+  renderCompletarInvitacion() {
+    const momento = this._momentoDelDia();
+    document.body.innerHTML = `
+      <div class="h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
+        <div id="login-scene" class="momento-${momento}" aria-hidden="true">
+          <div class="astro"></div>
+          <svg aria-hidden="true" focusable="false" class="absolute inset-x-0 bottom-0 w-full h-[45%]" viewBox="0 0 400 200" preserveAspectRatio="none">
+            <path d="M0,120 L60,70 L110,110 L170,50 L230,105 L290,65 L340,100 L400,80 L400,200 L0,200 Z" fill="#0F2126" opacity="0.92"></path>
+            <path d="M0,150 Q40,130 90,145 T190,140 T290,148 T400,138 L400,200 L0,200 Z" fill="#16302A" opacity="0.92"></path>
+            <path d="M0,170 Q100,155 200,170 T400,165 L400,200 L0,200 Z" fill="#0B1E24"></path>
+          </svg>
+        </div>
+
+        <div class="glass-panel relative z-10 w-full max-w-md rounded-2xl shadow-2xl p-8">
+          <div class="flex items-center gap-2 mb-1">
+            <i aria-hidden="true" class="fas fa-book text-patrimonio-madera"></i>
+            <h1 class="font-serif font-semibold text-xl text-stone-900">Bienvenido/a a Biblio<span class="text-patrimonio-madera">Nexo</span></h1>
+          </div>
+          <p class="text-xs text-stone-600 mb-5">Te invitaron a formar parte del equipo. Completa tus datos y crea tu contraseña para empezar.</p>
+
+          <form id="completar-invitacion-form" class="space-y-4">
+            <div>
+              <label for="ci-nombre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Nombre completo</label>
+              <input id="ci-nombre" type="text" required placeholder="María Antileo Huenchumán"
+                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            </div>
+            <div>
+              <label for="ci-cargo" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Cargo <span class="normal-case font-normal text-stone-400">(opcional)</span></label>
+              <input id="ci-cargo" type="text" placeholder="Encargada de biblioteca"
+                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            </div>
+            <div class="h-px bg-stone-300/70 my-1"></div>
+            <div>
+              <label for="ci-pass-1" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Contraseña nueva</label>
+              <input id="ci-pass-1" type="password" autocomplete="new-password" placeholder="••••••••"
+                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              <p class="text-[11px] text-stone-500 mt-1">Mínimo 12 caracteres.</p>
+            </div>
+            <div>
+              <label for="ci-pass-2" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Repite la contraseña</label>
+              <input id="ci-pass-2" type="password" autocomplete="new-password" placeholder="••••••••"
+                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            </div>
+            <button type="submit" class="btn-madera w-full text-white font-medium rounded-xl shadow py-2.5 text-sm">
+              Crear mi cuenta y entrar
+            </button>
+          </form>
+        </div>
+      </div>
+      <div id="toast-container" role="status" aria-live="polite" aria-atomic="false" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
+    `;
+
+    document.getElementById('completar-invitacion-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const nombre = document.getElementById('ci-nombre').value.trim();
+      const cargo = document.getElementById('ci-cargo').value.trim();
+      const p1 = document.getElementById('ci-pass-1').value;
+      const p2 = document.getElementById('ci-pass-2').value;
+
+      if (!nombre) {
+        this.showToast('Escribe tu nombre completo.', 'error');
+        return;
+      }
+      if (nombre.split(/\s+/).length < 2) {
+        this.showToast('Escribe tu nombre y al menos un apellido.', 'error');
+        return;
+      }
+      if (p1.length < 12) {
+        this.showToast('La contraseña debe tener al menos 12 caracteres.', 'error');
+        return;
+      }
+      if (p1 !== p2) {
+        this.showToast('Las dos contraseñas no coinciden.', 'error');
+        return;
+      }
+
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        await auth.actualizarPassword(p1);
+
+        try {
+          await db.actualizarMiPerfil({ nombre, cargo: cargo || null, telefono: null });
+        } catch (errPerfil) {
+          // La contraseña ya quedó puesta — la cuenta funciona. No hay que
+          // dejar a la persona sin poder entrar solo porque el nombre no se
+          // guardó; lo completa después desde "Mi perfil".
+          registroErrores.registrarOperacion('completar-invitacion', errPerfil);
+        }
+
+        this.showToast('Cuenta activada. Bienvenido/a a BiblioNexo.', 'success');
+        // Se limpia el token del enlace para que recargar no reabra esta pantalla
+        window.history.replaceState({}, '', window.location.pathname);
+        setTimeout(() => window.location.reload(), 1200);
+      } catch (err) {
+        this.showToast(err.message || 'No se pudo activar la cuenta.', 'error');
+        btn.disabled = false;
+      }
+    });
+  }
+
   renderLogin() {
     const momento = this._momentoDelDia();
 

@@ -44,6 +44,17 @@ function esEnlaceDeRecuperacion() {
 }
 
 /**
+ * Detecta si la página se abrió desde el enlace de "Aceptar invitación" del
+ * correo que manda el Edge Function `invitar-personal`. Supabase marca este
+ * enlace igual que el de recuperación, pero con `type=invite` en vez de
+ * `type=recovery` (ver `js/main.js` — mismo mecanismo, mismo lugar de la URL).
+ */
+function esEnlaceDeInvitacion() {
+    const hash = window.location.hash || '';
+    return hash.includes('type=invite');
+}
+
+/**
  * Registro del service worker (Fase 1.1 — funcionamiento sin conexión).
  *
  * Se registra recién después del evento `load`, no antes: así no compite por
@@ -121,6 +132,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // sin haber cambiado nada.
         if (esEnlaceDeRecuperacion()) {
             uiManager.renderNuevaPassword();
+            window.__appBooted = true;
+            return;
+        }
+
+        // Igual razón que la recuperación de contraseña, pero para quien recién
+        // acepta una invitación (Administración → Personal): la cuenta existe en
+        // Supabase Auth desde que se mandó la invitación, pero sin contraseña ni
+        // nombre — sin esto, entraría directo al panel con el perfil en blanco.
+        if (esEnlaceDeInvitacion()) {
+            uiManager.renderCompletarInvitacion();
             window.__appBooted = true;
             return;
         }

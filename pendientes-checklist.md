@@ -12,6 +12,30 @@ plazo de préstamo por libro, respaldo automático y invitación de personal.
 
 ## 🔴 Urgente — falta este paso tuyo
 
+- [ ] **Probar en producción, con una invitación real, la pantalla de
+      registro obligatorio.** Recién implementada: al aceptar la invitación
+      ahora pide nombre completo, cargo (opcional) y una contraseña de al
+      menos 12 caracteres antes de dejar entrar al panel — antes entraba
+      directo con el perfil en blanco y sin contraseña. `js/main.js` detecta
+      el enlace (`type=invite`); `js/modules/ui-base.js` tiene la pantalla
+      nueva (`renderCompletarInvitacion`). 106/106 en
+      `pruebas/probar-vistas.mjs` y `verificar_llamadas_rpc.py` en verde —
+      pero eso prueba la lógica en aislado, no el enlace real de un correo de
+      verdad. Probar: invitar a una cuenta de prueba, abrir el enlace del
+      correo, confirmar que pide los tres datos y que después entra
+      normalmente con el rol correcto asignado.
+- [ ] **Personalizar el correo de invitación de personal en el Dashboard de
+      Supabase.** El texto por defecto trae la marca de Supabase y puede dar
+      a entender que el invitado tiene acceso al backend, no solo a la app.
+      Además — más importante — el servidor de correo compartido de
+      Supabase **solo entrega estos correos a direcciones que ya son parte
+      del equipo de la organización**: a una persona nueva de verdad hoy le
+      fallaría en silencio. Instrucciones completas, con la plantilla lista
+      para copiar y pegar, en
+      `supabase/plantilla-invitacion-email.md` — dos partes: (1) cambiar el
+      texto de la plantilla en Authentication → Email Templates (gratis, ya
+      se puede hacer), (2) conectar un SMTP propio, ej. Resend, para que
+      llegue a cualquier persona real (necesita un dominio propio).
 - [ ] **Subir a tu repositorio los archivos de esta ronda.** Todo lo de abajo
       ya está **aplicado en producción** (con la conexión de Supabase de esta
       sesión) — subir es solo para que el repositorio quede tan al día como
@@ -22,8 +46,12 @@ plazo de préstamo por libro, respaldo automático y invitación de personal.
       - `supabase/migrations/010_consolidacion.sql` (editado: `prestar_libro`, `renovar_prestamo`, `buscar_libros`, más la columna `dias_prestamo_override` declarada al principio — ver la nota "EXCEPCIÓN" ahí mismo)
       - `supabase/functions/respaldo-automatico/index.ts` (nuevo Edge Function, ya desplegado)
       - `supabase/functions/invitar-personal/index.ts` (nuevo Edge Function, ya desplegado)
-      - `js/modules/db.js`, `js/modules/ui-base.js`, `js/vistas/admin.js` (UI del plazo por libro, invitación de personal y estado del respaldo)
-      - `sw.js` (`CACHE_VERSION` subido a `v5`)
+      - `supabase/plantilla-invitacion-email.md` (nuevo — la plantilla del correo de invitación y el hallazgo del límite "solo al equipo" del SMTP compartido)
+      - `js/modules/db.js` (editado — plazo por libro e invitación de personal)
+      - `js/modules/ui-base.js` (editado — UI del plazo por libro, respaldo, invitación de personal, y la pantalla nueva `renderCompletarInvitacion()`: nombre, cargo y contraseña obligatorios al aceptar)
+      - `js/vistas/admin.js` (editado — UI de invitar personal y estado del respaldo)
+      - `js/main.js` (editado — detecta el enlace de invitación, `type=invite`)
+      - `sw.js` (`CACHE_VERSION` subido a `v6`)
       - `PROMPT-produccion.md`, `ESTADO.md`, este archivo
 
 ---

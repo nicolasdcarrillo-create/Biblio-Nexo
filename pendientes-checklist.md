@@ -4,19 +4,27 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 21 de agosto de 2026, más tarde el mismo día — los
-dos últimos pendientes de "Ahora" quedaron resueltos.
+Última actualización: 22 de agosto de 2026 — implementadas las tres mejoras
+de la sección "Vista de administrador" de `sugerencias-mejora-2026-08-22.md`:
+plazo de préstamo por libro, respaldo automático y invitación de personal.
 
 ---
 
 ## 🔴 Urgente — falta este paso tuyo
 
-- [ ] **Subir `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql`.**
-      Ya está **aplicada en producción** (se hizo directo con la conexión de
-      Supabase de esta sesión, no falta ningún paso en la base) — el
-      `git add`/`commit`/`push` es solo para que el repositorio quede tan al
-      día como la base. Junto con `PROMPT-produccion.md`, `ESTADO.md` y este
-      archivo.
+- [ ] **Subir a tu repositorio los archivos de esta ronda.** Todo lo de abajo
+      ya está **aplicado en producción** (con la conexión de Supabase de esta
+      sesión) — subir es solo para que el repositorio quede tan al día como
+      la base:
+      - `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql` (de la ronda anterior, seguía sin subir)
+      - `supabase/migrations/017_plazo_prestamo_por_libro.sql` (nuevo)
+      - `supabase/migrations/018_respaldo_automatico.sql` (nuevo)
+      - `supabase/migrations/010_consolidacion.sql` (editado: `prestar_libro`, `renovar_prestamo`, `buscar_libros`, más la columna `dias_prestamo_override` declarada al principio — ver la nota "EXCEPCIÓN" ahí mismo)
+      - `supabase/functions/respaldo-automatico/index.ts` (nuevo Edge Function, ya desplegado)
+      - `supabase/functions/invitar-personal/index.ts` (nuevo Edge Function, ya desplegado)
+      - `js/modules/db.js`, `js/modules/ui-base.js`, `js/vistas/admin.js` (UI del plazo por libro, invitación de personal y estado del respaldo)
+      - `sw.js` (`CACHE_VERSION` subido a `v5`)
+      - `PROMPT-produccion.md`, `ESTADO.md`, este archivo
 
 ---
 
@@ -58,7 +66,6 @@ Sin pendientes en esta categoría — los dos últimos (la política RLS y el
 
 ## ⚫ No es código, pero bloquea el cierre del proyecto
 
-- [ ] Asignar, por nombre, quién aprieta el botón de respaldo de Supabase.
 - [ ] Designar Delegado de Protección de Datos y Encargado de
       Ciberseguridad, y firmar el encargo de tratamiento — **antes del 1 de
       diciembre de 2026** (Ley 21.719).
@@ -69,6 +76,30 @@ Sin pendientes en esta categoría — los dos últimos (la política RLS y el
 
 ## ✅ Ya verificado en esta ronda (referencia, no acción)
 
+- [x] **Plazo de préstamo por libro** (`dias_prestamo_override` en `libros`,
+      migración 017 + edición de `prestar_libro`/`renovar_prestamo`/
+      `buscar_libros` en la 010). Probado en vivo contra producción, en una
+      transacción con rollback (no dejó datos de prueba): un libro con
+      override en 0 rechaza el préstamo ("es de referencia y no circula");
+      un libro con override en 3 días presta y renueva por 3 días, no por
+      los 7 del parámetro global. `pruebas/probar-migraciones.py` (142/142),
+      `verificar_consolidacion.py` y `verificar_llamadas_rpc.py`, en verde.
+- [x] **Respaldo automático real** (`pg_cron` + `pg_net` + Edge Function
+      `respaldo-automatico`, migración 018). Corre todos los días a las
+      07:00 UTC, sube un JSON con todas las tablas del negocio al bucket
+      privado `respaldos` y deja constancia en `public.respaldos_log`
+      (visible en Administración → Cumplimiento). Probado en vivo end-to-end
+      con `net.http_post` real: subió un respaldo de verdad (22 KB) y quedó
+      registrado. El ítem "asignar quién aprieta el botón" ya no aplica —
+      no hay botón que apretar.
+- [x] **Invitación de personal por correo** (Edge Function
+      `invitar-personal`, sin cambios de esquema). Reemplaza el flujo de
+      entrar al panel de Supabase: un administrador escribe correo y rol en
+      Administración → Personal, la persona recibe la invitación y queda con
+      el rol ya asignado al aceptar. Verifica el rol de quien invita contra
+      `mi_perfil()` (RLS real, no un campo que mande el cliente); usa la
+      service_role key solo del lado del Edge Function, nunca pedida ni
+      manejada por esta sesión.
 - [x] CI #33 en verde — Fases 1.2, 1.3 y 1.4 subidas y confirmadas.
 - [x] CI #32 en verde — ítems 11, 12 y 13 ("pulido, no urgente").
 - [x] Fase 1 completa (1.1 a 1.4): funcionamiento sin conexión.

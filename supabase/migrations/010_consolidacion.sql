@@ -62,6 +62,39 @@
 
 
 -- ============================================================================
+-- EXCEPCIÓN: una columna, declarada aquí en vez de en su propia migración
+-- ============================================================================
+-- `dias_prestamo_override` (plazo de préstamo propio de cada libro) la
+-- introdujo 017_plazo_prestamo_por_libro.sql, siguiendo la regla normal de
+-- este proyecto: los cambios de esquema van en un archivo nuevo. Pero
+-- `buscar_libros()`, `prestar_libro()` y `renovar_prestamo()` —que viven
+-- solo aquí, en la 010, por la regla contraria: las funciones no se
+-- redefinen fuera de este archivo— necesitan leer esa columna. Sin ella
+-- declarada ANTES de esas funciones, una instalación desde cero (que aplica
+-- los archivos en orden de nombre: 010 antes que 017) fallaría al crear
+-- `buscar_libros()`, una función en lenguaje SQL cuyas referencias se
+-- resuelven al crearse, no al llamarse — se comprobó en vivo con
+-- `pruebas/probar-migraciones.py`.
+--
+-- La resolución: esta misma sentencia (idempotente, `if not exists`) queda
+-- declarada dos veces — aquí, para que la 010 funcione sola desde cero, y en
+-- 017_plazo_prestamo_por_libro.sql, que es la migración que de verdad
+-- documenta cuándo y por qué se agregó esta columna. Aplicada dos veces no
+-- hace nada la segunda vez.
+alter table public.libros
+  add column if not exists dias_prestamo_override integer null;
+
+alter table public.libros
+  drop constraint if exists libros_dias_prestamo_override_check;
+
+alter table public.libros
+  add constraint libros_dias_prestamo_override_check
+  check (dias_prestamo_override is null or dias_prestamo_override >= 0);
+
+comment on column public.libros.dias_prestamo_override is
+  'Plazo de préstamo en días específico de este libro. NULL = usa el parámetro global dias_prestamo. 0 = material de referencia, no circula.';
+
+-- ============================================================================
 -- AYUDANTES PUROS
 -- ============================================================================
 -- No tocan tablas, así que no necesitan `security definer`: no hay RLS que
@@ -296,7 +329,7 @@ create or replace function public.buscar_libros(
 )
 returns table (
   id bigint, isbn text, titulo text, autor text, genero text, ubicacion text,
-  portada_url text, copias_totales int, stock int, total_coincidencias bigint
+  portada_url text, copias_totales int, stock int, dias_prestamo_override int, total_coincidencias bigint
 )
 language sql
 stable
@@ -311,6 +344,7 @@ as $$
   )
   select f.id::bigint, f.isbn::text, f.titulo::text, f.autor::text, f.genero::text,
          f.ubicacion::text, f.portada_url::text, f.copias_totales::int, f.stock::int,
+         f.dias_prestamo_override::int,
          (select count(*) from filtrados)::bigint
   from filtrados f
   order by f.titulo
@@ -426,9 +460,10 @@ as $$
 declare
   v_lector_id bigint;
   v_stock int;
+  v_override int;
   v_prestamo_id bigint;
   v_hoy date := public.hoy_chile();
-  v_dias int := public.parametro_int('dias_prestamo', 7);
+  v_dias int;
   v_estado record;
 begin
   if not public.es_personal() then
@@ -447,13 +482,20 @@ begin
     raise exception '%', v_estado.motivo_rechazo using errcode = 'P0001';
   end if;
 
-  select stock into v_stock from public.libros where id = p_libro_id for update;
+  select stock, dias_prestamo_override into v_stock, v_override from public.libros where id = p_libro_id for update;
   if v_stock is null then
     raise exception 'Libro no encontrado.' using errcode = 'P0001';
+  end if;
+  -- dias_prestamo_override = 0 marca material de referencia: no se presta,
+  -- sin importar el stock disponible (ver 017_plazo_prestamo_por_libro.sql).
+  if v_override = 0 then
+    raise exception 'Este material es de referencia y no circula.' using errcode = 'P0001';
   end if;
   if v_stock < 1 then
     raise exception 'No hay ejemplares disponibles de este libro.' using errcode = 'P0001';
   end if;
+
+  v_dias := coalesce(v_override, public.parametro_int('dias_prestamo', 7));
 
   update public.libros set stock = stock - 1 where id = p_libro_id;
 
@@ -522,15 +564,17 @@ declare
   v_estado text;
   v_vence date;
   v_renovaciones int;
+  v_libro_id bigint;
+  v_override int;
   v_limite int := public.parametro_int('max_renovaciones', 2);
-  v_dias int := public.parametro_int('dias_prestamo', 7);
+  v_dias int;
 begin
   if not public.es_personal() then
     raise exception 'Debes iniciar sesión para renovar un préstamo.' using errcode = 'P0001';
   end if;
 
-  select estado, fecha_devolucion_esperada, renovaciones
-    into v_estado, v_vence, v_renovaciones
+  select estado, fecha_devolucion_esperada, renovaciones, libro_id
+    into v_estado, v_vence, v_renovaciones, v_libro_id
   from public.prestamos where id = p_prestamo_id for update;
 
   if v_estado is null then
@@ -545,6 +589,14 @@ begin
   if v_vence < public.hoy_chile() then
     raise exception 'El préstamo está atrasado. Debe devolverse antes de volver a prestarlo.' using errcode = 'P0001';
   end if;
+
+  -- El plazo de renovación respeta el mismo plazo propio del libro que usó
+  -- el préstamo original (ver 017_plazo_prestamo_por_libro.sql). Si en algún
+  -- momento el libro pasó a "no circula" (override = 0) después de prestado,
+  -- se usa el plazo global en vez de sumar cero días — 0 solo bloquea
+  -- préstamos NUEVOS, no deja sin renovar uno que ya estaba activo.
+  select dias_prestamo_override into v_override from public.libros where id = v_libro_id;
+  v_dias := coalesce(nullif(v_override, 0), public.parametro_int('dias_prestamo', 7));
 
   update public.prestamos
      set fecha_devolucion_esperada = v_vence + v_dias,

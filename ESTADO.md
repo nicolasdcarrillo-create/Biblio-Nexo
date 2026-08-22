@@ -3,164 +3,159 @@
 No es documentación permanente del proyecto — se borra o se vacía cuando esta
 ronda de trabajo termine. Mientras tanto, es el punto de partida para
 retomar mañana. El detalle completo de hoy (con el porqué de cada cosa) está
-en `PROMPT-produccion.md`, secciones 18 y 19.
+en `PROMPT-produccion.md`.
 
-**Fecha**: 2026-08-21
-**Working tree**: revisar con `git status` — hay un archivo nuevo sin
-confirmar (`git add`/`git commit`/`git push`), la migración 016. Ya está
-**aplicada en producción** (con la conexión de Supabase de esta sesión, no
-manualmente) — subirla es solo para que el repositorio quede igual de
-sincronizado que la base, no falta ningún paso en Supabase.
+**Fecha**: 2026-08-22
+**Working tree**: revisar con `git status` — hay varios archivos nuevos y
+editados sin confirmar. Todo ya está **aplicado y desplegado en producción**
+(con la conexión de Supabase de esta sesión) — subir al repositorio es solo
+para que quede tan al día como la base. Ver la lista completa en
+`pendientes-checklist.md`, sección 🔴.
 
 ---
 
-## Completado hoy: pulido de la lista "Ahora", de punta a punta
+## Completado hoy: las tres mejoras de "Vista de administrador"
 
-**Primera parte** (ver `PROMPT-produccion.md` §18, ya confirmada en CI real,
-run #36): las tres suites de prueba que faltaban enganchadas a CI, una
-prueba intermitente encontrada y corregida antes de engancharla,
-`pruebas/verificar_llamadas_rpc.py` (chequeo nuevo), `CACHE_VERSION` a `v4`,
-y CI alineada a `postgres:17`.
+De `claude/sugerencias-mejora-2026-08-22.md`, sección 2 (🔧 Se puede
+mejorar): plazo de préstamo global único, respaldo 100% manual, alta de
+personal solo desde el panel de Supabase. Las tres implementadas y probadas
+en vivo contra producción.
 
-**Segunda parte, más tarde el mismo día** (ver `PROMPT-produccion.md` §19),
-los dos últimos pendientes de "Ahora":
+### 1. Plazo de préstamo por libro
 
-1. **`migration repair` de 012, 013 y 014: ya no hacía falta.** Verificado
-   en vivo contra `supabase_migrations.schema_migrations` en producción —
-   las tres ya estaban registradas. Se resolvió en algún momento entre el 6
-   de agosto y hoy, sin que quedara anotado en ninguna sesión. Sin acción
-   pendiente.
-2. **La política RLS redundante en `usuarios` (`"Lectura de roles propia"`),
-   eliminada.** Se presentó la decisión (eliminarla / mantenerla y
-   documentar / dejarla pendiente) y se eligió eliminarla. Migración nueva,
-   `016_eliminar_politica_redundante_usuarios.sql`, aplicada directo a
-   producción con la conexión de Supabase de esta sesión. Verificado
-   después: `pg_policies` en `usuarios` bajó de 5 a 4 filas.
+Columna nueva `libros.dias_prestamo_override` (migración
+`017_plazo_prestamo_por_libro.sql`): `NULL` = usa el parámetro global
+`dias_prestamo` de siempre, `0` = material de referencia que no circula,
+cualquier otro número = plazo propio de ese libro. `prestar_libro()`,
+`renovar_prestamo()` y `buscar_libros()` (editadas en `010_consolidacion.sql`)
+la usan.
 
-**Detalle técnico a tener en cuenta para la próxima vez que se use
-`apply_migration` (u otra vía que no sea el CLI) en este proyecto:** la
-herramienta registró la migración con una versión tipo timestamp
-(`20260821042519`) y el nombre con el prefijo numérico incluido, ninguna de
-las dos cosas coincidiendo con la convención `version="016"`,
-`name="eliminar_politica_redundante_usuarios"` que siguen las migraciones
-001-015 — se habría visto como drift la próxima vez que alguien corriera
-`supabase migration list --linked`. Se corrigió a mano con dos `UPDATE`
-sobre la tabla de metadata (no toca el esquema). **Después de aplicar una
-migración por esta vía, siempre revisar cómo quedó registrada, no asumir
-que coincide con el nombre del archivo.**
+**Detalle técnico importante para la próxima vez que una función consolidada
+necesite una columna que agrega una migración nueva:** `010_consolidacion.sql`
+se aplica ANTES que cualquier migración de número mayor en una instalación
+desde cero (el orden es por nombre de archivo). Si la función editada en la
+010 referencia una columna que solo agrega la 017, `pruebas/probar-migraciones.py`
+falla al aplicar la propia 010 — se descubrió así, en vivo, esta ronda. La
+resolución que se usó: la sentencia `alter table` (idempotente) queda
+declarada dos veces, una al principio de `010_consolidacion.sql` (para que
+funcione sola desde cero) y otra en `017_plazo_prestamo_por_libro.sql` (que
+es la que de verdad documenta cuándo se agregó la columna). Ver la nota
+"EXCEPCIÓN" al principio de la 010.
+
+UI: campo nuevo en el modal "Editar libro" del Catálogo (vacío = plazo
+general, `0` = no circula).
+
+### 2. Respaldo automático real
+
+`pg_cron` + `pg_net` (ambos ya disponibles en este proyecto Supabase, solo
+faltaba habilitarlos) disparan el Edge Function `respaldo-automatico` todos
+los días a las 07:00 UTC. Sube un JSON con todas las tablas del negocio al
+bucket privado de Storage `respaldos` y deja constancia en
+`public.respaldos_log` (éxito/falla, archivo, tamaño) — visible en
+Administración → Cumplimiento.
+
+Autenticación cron → Edge Function: un secreto ALEATORIO nuevo en Vault
+(`cron_respaldo_secret`), generado en la propia migración — nunca la
+service_role key del proyecto. El Edge Function lo verifica por RPC contra
+`public.verificar_secreto_cron()`, no leyendo `vault.decrypted_secrets`
+directo por PostgREST (probado en vivo: eso da 401 siempre, el esquema
+`vault` no está expuesto por la API REST — de ahí la función puente).
+
+Migración `018_respaldo_automatico.sql`: cada pieza que depende de algo
+propio de Supabase (`pg_cron`, `pg_net`, Vault) va en su propio
+`do $$ ... exception when others then raise notice ... $$`, para que en un
+Postgres genérico (como el que usa `probar-migraciones.py`) la migración
+avise y siga en vez de abortar. En producción (Supabase) las tres piezas
+existen y todo queda funcionando — confirmado con una llamada real a
+`net.http_post()` que subió un respaldo de 22 KB.
+
+El bucket de Storage y el Edge Function se crearon fuera de las
+migraciones (no son objetos de esquema de Postgres): el bucket con un
+`insert into storage.buckets`, el Edge Function con
+`mcp__Supabase__deploy_edge_function`. Su código fuente sí quedó guardado en
+el repo, en `supabase/functions/respaldo-automatico/index.ts`, para que no
+viva solo en el dashboard de Supabase.
+
+El pendiente de `pendientes-checklist.md` ("asignar quién aprieta el botón")
+ya no aplica: no hay botón que apretar.
+
+### 3. Invitación de personal por correo
+
+Edge Function nuevo `invitar-personal` — recibe `{email, rol}`, comprueba
+que quien llama sea administrador de verdad (RPC `mi_perfil()` con la propia
+sesión de quien llama, no un campo que mande el cliente), manda la
+invitación con `auth.admin.inviteUserByEmail` y asigna el rol en
+`public.usuarios` — todo con la service_role key que el runtime de Edge
+Functions inyecta solo (nunca pedida ni manejada por esta sesión, nunca
+expuesta al cliente). Sin cambios de esquema.
+
+UI: formulario nuevo en Administración → Personal. La descripción de esa
+pestaña ya no dice "las cuentas se crean en Supabase, en Authentication →
+Users" — ahora se invitan desde ahí mismo.
 
 ---
 
 ## Cómo verificar lo de hoy
 
-1. `git add` / `git commit` / `git push` de `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql`
-   (y de `PROMPT-produccion.md`/`ESTADO.md`/`pendientes-checklist.md`, que
-   documentan el cambio).
-2. Nada que correr en Supabase — la migración ya está aplicada. La única
-   comprobación útil, si quieres, es abrir el editor SQL y confirmar que
-   `select policyname from pg_policies where tablename='usuarios'` devuelve
-   4 filas, no 5.
-3. La próxima vez que corras `supabase migration list --linked`, la 016
-   debería aparecer igual de sincronizada que las demás — si no, revisa el
-   "Detalle técnico" de arriba antes de asumir que algo se rompió.
+1. `git add` / `commit` / `push` de todo lo listado en
+   `pendientes-checklist.md` (migraciones 016 a 018, la edición a la 010,
+   los dos Edge Functions, `db.js`/`ui-base.js`/`admin.js`, `sw.js`,
+   `PROMPT-produccion.md`, `ESTADO.md`, este archivo).
+2. Nada que aplicar en Supabase — todo ya está desplegado. Si quieres
+   confirmar tú mismo:
+   - `select * from public.verificar_definiciones() where estado <> 'Correcto';`
+     (con sesión de administrador) → sin filas.
+   - Editar un libro desde el Catálogo, ponerle `0` en "Plazo de préstamo
+     propio", intentar prestarlo → debe rechazarlo con "es de referencia y
+     no circula".
+   - Administración → Cumplimiento → tarjeta "Respaldo automático" → debe
+     mostrar al menos una corrida correcta (la de la prueba de esta ronda).
+   - Administración → Personal → invitar una cuenta de prueba con tu propio
+     correo (o uno que controles) y confirmar que llega la invitación.
+3. `python3 pruebas/verificar_llamadas_rpc.py`,
+   `python3 pruebas/verificar_consolidacion.py` y
+   `python3 pruebas/probar-migraciones.py` — los tres en verde, confirmado
+   en esta sesión (142/142 en el último).
 
 ---
 
 ## Archivos para subir en esta ronda
 
-Nuevo: `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql`.
+Nuevos:
+- `supabase/migrations/017_plazo_prestamo_por_libro.sql`
+- `supabase/migrations/018_respaldo_automatico.sql`
+- `supabase/functions/respaldo-automatico/index.ts`
+- `supabase/functions/invitar-personal/index.ts`
 
-Modificados: `PROMPT-produccion.md`, `ESTADO.md`, `pendientes-checklist.md`.
+Editados:
+- `supabase/migrations/010_consolidacion.sql`
+- `js/modules/db.js`
+- `js/modules/ui-base.js`
+- `js/vistas/admin.js`
+- `sw.js`
+- `pendientes-checklist.md`, `PROMPT-produccion.md`, este archivo
 
-(La parte anterior de hoy — CI, `sw.js`, `probar-vistas.mjs`,
-`verificar_llamadas_rpc.py` — ya se subió y se confirmó, ver §18.)
-
----
-
-## Lista de prioridades (detalle completo en PROMPT-produccion.md §12, §18 y §19)
-
-**Ahora — barato y con impacto real**
-
-Sin pendientes en esta categoría — los cuatro de la sección 18 y los dos de
-la sección 19 quedaron todos resueltos hoy.
-
-**Después — más esfuerzo, sigue siendo importante**
-1. **Fase 2: integración con Aleph 500** — ver `PROMPT-produccion.md` §7,
-   cuando se decida empezarlo.
-2. `verificar_politicas()`: RLS y grants bajo el mismo patrón que
-   `verificar_definiciones()` — habría atrapado la deriva de la política
-   redundante mucho antes que una auditoría manual.
-3. **Terminar de dividir `ui-base.js`** (2900 líneas): las secciones
-   CATÁLOGO y ADMINISTRACIÓN son las candidatas concretas — se solapan con
-   lo que ya existe en `js/vistas/`.
-4. Dividir `js/modules/db.js` (~840 líneas en un solo objeto) por dominio,
-   si sigue creciendo — de menor urgencia que el punto 3.
-5. Script de verificación estático para clases de Tailwind no compiladas.
-   Dos ejemplos preexistentes ya encontrados y sin corregir: `mx-auto` en
-   los círculos numerados de `escaneo-remoto.js` y `hover:bg-rose-100` en el
-   botón de cerrar sesión de `perfil.js` (ambos puramente estéticos).
-6. `actions/setup-node@v4` con `node-version: '20'` está deprecado (visto en
-   el run #36 de CI) — subir el número a mano antes de que deje de avisar y
-   simplemente falle.
-
-**No es código, pero bloquea el cierre del proyecto igual**
-7. Asignar, por nombre, quién aprieta el botón de respaldo de Supabase.
-8. Designar Delegado de Protección de Datos y Encargado de Ciberseguridad,
-   firmar el encargo de tratamiento — antes del 1 de diciembre de 2026.
-9. **Cifrado de disco y bloqueo de sesión en el equipo del mesón** —
-   urgente desde la Fase 1.2, sin cambios. Ver `CUMPLIMIENTO-LEGAL.md` §9 bis.
-
-**Pendiente de verificación manual (no bloquea nada, nadie lo hizo)**
-10. Confirmar en un celular real que el ícono nuevo (512×512) se ve bien.
-11. Probar en producción, con un enlace real: escanear un libro nuevo y uno
-    existente, y usar "Deshacer" en ambos.
+Pendiente de la ronda anterior, seguía sin subir:
+- `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql`
 
 ---
 
-## Decisiones que siguen en pie (heredadas, no reabrir)
+## Cosas que cuesta descubrir solo (nuevo, de hoy)
 
-- **`probar-vistas.mjs` se conserva y corre solo, en CI.**
-- **No tocar `js/config.js` / `ADMIN_EMAILS`.** Respaldo client-side
-  deliberado y documentado.
-- **No tocar los colores/tipografías del sistema de diseño** de
-  `CLAUDE.md`/`PROMPT-produccion.md` ("Patrimonio de Futrono").
-- **Ninguna función RPC de `supabase/migrations/` se toca sin aviso
-  previo.**
-- **Cualquier clase de Tailwind nueva se verifica contra el resto del
-  proyecto antes de usarla.**
-- **El ícono de la app no se inventa ni se escala desde uno más chico.**
-- **El service worker nunca cachea nada que no sea del mismo origen ni nada
-  que no sea GET.**
-- **`CACHE_VERSION` sube no solo cuando cambia la lista de `PRECACHE_URLS`,
-  sino también cuando cambia la firma de un RPC que llama alguno de esos
-  archivos.**
-- **La copia local de lectores nunca es un volcado completo del padrón**
-  (Fase 1.2). Ver `js/modules/persistencia.js` y `CUMPLIMIENTO-LEGAL.md` §9 bis.
-- **Cambios de esquema (tablas, columnas, índices, políticas RLS) van en una
-  migración numerada nueva; cambios a funciones ya consolidadas —o funciones
-  nuevas— van directo en la 010.**
-- **`estadoLector()` sin conexión nunca devuelve `existe:false` en un
-  cache-miss** (Fase 1.3). Ver `estadoLectorSinConexion()` en `js/modules/db.js`.
-- **La cola de sincronización nunca reimplementa la lógica de negocio de
-  préstamo/devolución/renovación** (Fase 1.3).
-- **"Sincronizando", en el indicador de conexión, es solo la cola de
-  escrituras pendientes, nunca la sincronización de catálogo** (Fase 1.4).
-- **El indicador de conexión nunca depende solo del color** (Fase 1.4, por
-  WCAG).
-- **`deshacer_libro_remoto()` nunca resta más ejemplares de los que siguen
-  disponibles, nunca elimina un libro con préstamos, y nunca confía en
-  `p_accion`/`p_cantidad` del cliente** — ver §17 de `PROMPT-produccion.md`.
-- **Cualquier prueba que necesite "la fecha de hoy" usa `hoyEnChile()`
-  (`js/modules/db.js`), nunca `new Date().toISOString()`** — entre las 00:00
-  y las ~04:00 UTC esa fecha va un día adelante de la fecha real en Chile.
-- **Un cambio a `.github/workflows/pruebas.yml` que use un servicio de
-  PostgreSQL real no se puede probar en este entorno de trabajo** — no hay
-  Docker disponible aquí. Se verifica en la CI real, después de subirlo.
+- **Una función consolidada en la 010 no puede referenciar una columna que
+  agrega una migración de número mayor** — se rompe la instalación desde
+  cero. Ver "Detalle técnico" en la sección 1 de arriba.
+- **El esquema `vault` no está expuesto por PostgREST.** Un Edge Function no
+  puede leer `vault.decrypted_secrets` con `supabase.schema('vault').from(...)`
+  — siempre da 401/error, aunque el secreto sea correcto. Hace falta una
+  función SECURITY DEFINER en `public` como puente, llamada por RPC.
+- **`pg_cron`, `pg_net` y el esquema `vault` no existen en el Postgres que usa
+  `pruebas/probar-migraciones.py`** (es un Postgres genérico, no Supabase). Si
+  una migración futura los necesita, hay que envolver cada pieza en su propio
+  `do $$ ... exception when others then raise notice ... $$` para que la
+  prueba local no reviente — en producción (Supabase) sí están disponibles.
 - **Al aplicar una migración con `mcp__Supabase__apply_migration` (o
   cualquier vía que no sea el CLI), siempre revisar después cómo quedó
-  registrada en `supabase_migrations.schema_migrations`** (nuevo, de hoy) —
-  puede no coincidir con el nombre del archivo local, y hay que corregirlo a
-  mano si no coincide. Ver "Detalle técnico" arriba.
-- **La política RLS "de más" en `usuarios` que traía la deriva del 26 de
-  julio ya no existe** (nuevo, de hoy) — no reabrir salvo que aparezca
-  evidencia de que algo la necesitaba.
+  registrada en `supabase_migrations.schema_migrations`** — puede no
+  coincidir con el nombre del archivo local (esta ronda volvió a pasar, con
+  la 017 y la 018, y se corrigió a mano).

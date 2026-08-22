@@ -1700,6 +1700,14 @@ class UIManager {
           disponibles según los préstamos activos${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0) > 0
             ? ` (ahora hay ${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0)} prestado(s))` : ''}.
         </p>
+        <div>
+          ${campo('edit-book-plazo', 'Plazo de préstamo propio (días, opcional)', libro.dias_prestamo_override, 'type="number" min="0" placeholder="Usa el plazo general"')}
+          <p class="text-[11px] text-stone-500 mt-1">
+            Déjalo vacío para usar el plazo general del sistema. Escribe <span class="font-mono">0</span> para
+            material de referencia que no circula (no se puede prestar). Cualquier otro número reemplaza el
+            plazo general solo para este libro.
+          </p>
+        </div>
         ${campo('edit-book-cover', 'URL de portada (opcional)', libro.portada_url, 'placeholder="https://..."')}
         <p class="text-[11px] text-stone-500">Usa este campo para las obras locales y patrimoniales, que no aparecen en catálogos internacionales.</p>
         <div class="flex justify-end gap-3 pt-1">
@@ -1720,13 +1728,16 @@ class UIManager {
       btn.disabled = true;
       try {
         // Los datos descriptivos se actualizan directamente...
+        const plazoTexto = document.getElementById('edit-book-plazo').value.trim();
         await db.actualizarLibro(libro.id, {
           titulo: document.getElementById('edit-book-title').value.trim(),
           autor: document.getElementById('edit-book-author').value.trim(),
           isbn: document.getElementById('edit-book-isbn').value.trim(),
           genero: document.getElementById('edit-book-genre').value.trim(),
           ubicacion: document.getElementById('edit-book-location').value.trim(),
-          portada_url: document.getElementById('edit-book-cover').value.trim()
+          portada_url: document.getElementById('edit-book-cover').value.trim(),
+          // Vacío = null = usa el plazo general (dias_prestamo).
+          diasPrestamoOverride: plazoTexto === '' ? null : Number(plazoTexto)
         });
 
         // ...pero el número de ejemplares pasa por ajustar_copias, que recalcula

@@ -241,7 +241,7 @@ export default {
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
         <div class="catalog-card-header">
           <h3 class="font-serif font-semibold text-lg text-stone-900">Personal con acceso</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Las cuentas se crean en Supabase, en Authentication → Users. Aquí se asigna el rol de cada una. El nombre y el cargo los completa cada persona en su propio perfil.</p>
+          <p class="text-xs text-stone-500 mt-0.5">Invita cuentas nuevas más abajo y asigna el rol de cada una aquí. El nombre y el cargo los completa cada persona en su propio perfil.</p>
         </div>
         <table class="w-full text-sm">
           <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
@@ -282,7 +282,51 @@ export default {
               </tr>`)}
           </tbody>
         </table>
+      </div>
+
+      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mt-4 p-5 max-w-lg">
+        <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Invitar personal nuevo</h3>
+        <p class="text-xs text-stone-500 mb-3">
+          Manda una invitación por correo con el rol ya asignado. La persona la acepta, crea su contraseña y
+          queda con acceso de inmediato — sin pasar por el panel de Supabase.
+        </p>
+        <div class="space-y-3">
+          <div>
+            <label for="invite-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Correo</label>
+            <input id="invite-email" type="email" placeholder="nombre@ejemplo.cl" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+          </div>
+          <div>
+            <label for="invite-rol" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Rol</label>
+            <select id="invite-rol" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">
+              <option value="librero">Librero</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <button id="invite-btn" class="btn-madera text-white font-medium rounded-xl shadow px-4 py-2.5 text-sm w-full">
+            <i aria-hidden="true" class="fas fa-paper-plane mr-1.5"></i> Enviar invitación
+          </button>
+        </div>
       </div>`;
+
+    document.getElementById('invite-btn').addEventListener('click', async e => {
+      const email = document.getElementById('invite-email').value.trim();
+      const rol = document.getElementById('invite-rol').value;
+      if (!email || !email.includes('@')) {
+        this.showToast('Escribe un correo válido.', 'error');
+        return;
+      }
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        await db.invitarPersonal(email, rol);
+        this.showToast(`Invitación enviada a ${email}.`, 'success');
+        document.getElementById('invite-email').value = '';
+        this.renderAdmin();
+      } catch (err) {
+        this.showToast(err.message || 'No se pudo enviar la invitación.', 'error');
+        btn.disabled = false;
+      }
+    });
 
     panel.querySelectorAll('.role-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -467,8 +511,8 @@ export default {
    * seguridad y evidencia para reporte de incidentes (Ley 21.663).
    */
   async _adminCumplimiento(panel) {
-    const [rls, parametros, circulacion] = await Promise.all([
-      db.verificarRls(), db.obtenerParametros(), db.verificarCirculacion()
+    const [rls, parametros, circulacion, respaldos] = await Promise.all([
+      db.verificarRls(), db.obtenerParametros(), db.verificarCirculacion(), db.obtenerRespaldos(5)
     ]);
 
     if (rls === null || parametros === null) {
@@ -478,9 +522,53 @@ export default {
 
     const problemas = rls.filter(r => r.diagnostico !== 'Correcto');
     const rotas = (circulacion || []).filter(f => !f.es_definer);
+    const ultimoRespaldo = respaldos[0] || null;
 
     panel.innerHTML = html`
       <div class="space-y-4">
+
+        <!-- Respaldo automático -->
+        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border ${ultimoRespaldo && !ultimoRespaldo.ok ? 'border-rose-300' : 'border-stone-300'} overflow-hidden">
+          <div class="catalog-card-header">
+            <h3 class="font-serif font-semibold text-lg text-stone-900">Respaldo automático</h3>
+            <p class="text-xs text-stone-500 mt-0.5">
+              Una tarea programada (pg_cron) corre todos los días a las 03:00-04:00, hora de Chile, y sube una
+              copia completa de los datos a un almacenamiento privado, sin que nadie tenga que apretar un botón.
+            </p>
+          </div>
+          ${respaldos.length === 0 ? html`
+            <p class="px-4 py-6 text-center text-sm text-stone-500">
+              Todavía no hay ninguna corrida registrada. Si la migración
+              <code class="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">018_respaldo_automatico.sql</code>
+              recién se aplicó, la primera corrida real llega en la próxima ventana programada.
+            </p>` : html`
+            <div class="px-4 py-3 border-b border-stone-200 ${ultimoRespaldo.ok ? 'bg-patrimonio-bosque/5' : 'bg-rose-50'}">
+              <p class="text-sm font-bold ${ultimoRespaldo.ok ? 'text-patrimonio-bosque' : 'text-rose-800'}">
+                <i aria-hidden="true" class="fas ${ultimoRespaldo.ok ? 'fa-circle-check' : 'fa-triangle-exclamation'} mr-1.5"></i>
+                Último respaldo: ${ultimoRespaldo.ok ? 'correcto' : 'falló'}, ${this._fechaLegible(ultimoRespaldo.ejecutado_en.split('T')[0])}
+              </p>
+              ${!ultimoRespaldo.ok && ultimoRespaldo.mensaje ? html`<p class="text-xs text-rose-700 mt-1">${ultimoRespaldo.mensaje}</p>` : ''}
+            </div>
+            <table class="w-full text-sm">
+              <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+                <tr>
+                  <th class="text-left px-4 py-3">Fecha</th>
+                  <th class="text-center px-4 py-3">Estado</th>
+                  <th class="text-right px-4 py-3">Tamaño</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${respaldos.map(r => html`
+                  <tr class="border-t border-stone-200">
+                    <td class="px-4 py-3 text-stone-600 text-xs">${new Date(r.ejecutado_en).toLocaleString('es-CL')}</td>
+                    <td class="px-4 py-3 text-center">${r.ok
+                      ? crudo('<i aria-hidden="true" class="fas fa-circle-check text-patrimonio-bosque"></i>')
+                      : crudo('<i aria-hidden="true" class="fas fa-circle-xmark text-rose-700"></i>')}</td>
+                    <td class="px-4 py-3 text-right text-stone-500 text-xs tabular-nums">${r.bytes ? `${(r.bytes / 1024).toFixed(1)} KB` : '—'}</td>
+                  </tr>`)}
+              </tbody>
+            </table>`}
+        </div>
 
         <!-- Seguridad de acceso a los datos -->
         <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border ${problemas.length ? 'border-rose-300' : 'border-stone-300'} shadow-sm overflow-hidden">

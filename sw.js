@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v4'; // corrección de seguridad de deshacer_libro_remoto(): bajó de 4 a 2 parámetros y js/escaneo-remoto.js (en PRECACHE_URLS) ya no manda los dos que se quitaron
+const CACHE_VERSION = 'v5'; // plazo de préstamo por libro (js/modules/db.js, js/modules/ui-base.js) e invitación de personal (js/vistas/admin.js): buscar_libros() ahora devuelve una columna más y hay RPCs/Edge Functions nuevas que estos archivos ya llaman
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 

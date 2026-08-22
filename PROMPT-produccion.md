@@ -1316,3 +1316,169 @@ repositorio quede igual de sincronizado que la base, no hace falta ningún
 paso manual adicional).
 
 Modificados: `PROMPT-produccion.md`, `ESTADO.md`, `pendientes-checklist.md`.
+
+---
+
+## 20. Estado al 22 de agosto de 2026 — plazo de préstamo por libro, respaldo automático e invitación de personal
+
+Punto de partida: `claude/sugerencias-mejora-2026-08-22.md` (documento de
+sugerencias entregado esta misma sesión, antes de este bloque), sección 2
+"Vista de administrador" → 🔧 Se puede mejorar, tres puntos citados
+textualmente por la persona con la instrucción "mejora estos puntos de
+vista": el plazo de préstamo único para todo el catálogo, el respaldo
+100% manual, y el alta de personal solo desde el panel de Supabase. Antes de
+implementar se presentaron tres decisiones de arquitectura (una por mejora)
+y se eligió, para las tres, la opción recomendada.
+
+### 1. Plazo de préstamo por libro
+
+Columna nueva `libros.dias_prestamo_override` (integer, nullable), agregada
+en `017_plazo_prestamo_por_libro.sql`. Semántica: `NULL` = usa el parámetro
+global `dias_prestamo` (sin cambios para el 100% del catálogo que no fija
+nada distinto), `0` = material de referencia que no circula, cualquier otro
+número = plazo propio de ese libro. Se evaluó y descartó una tabla de tipos
+de material aparte: el catálogo real no tiene esa taxonomía todavía, y una
+columna opcional resuelve el caso real sin imponerla.
+
+`prestar_libro()`, `renovar_prestamo()` y `buscar_libros()` (las tres viven
+en `010_consolidacion.sql`, por la regla de este proyecto de que las
+funciones no se redefinen fuera de ese archivo) se editaron para leer/
+devolver la columna: `prestar_libro` rechaza con un mensaje claro
+("Este material es de referencia y no circula") si el override es 0, y usa
+`coalesce(override, parametro_int('dias_prestamo', 7))` para calcular la
+fecha de devolución; `renovar_prestamo` respeta el mismo plazo propio del
+libro al renovar (con `nullif(override, 0)`, para que un libro que pasó a
+"no circula" después de prestado no rompa la renovación de un préstamo que
+ya estaba activo); `buscar_libros` ahora devuelve la columna, para que el
+modal de edición del catálogo muestre el valor real guardado.
+
+**Problema real encontrado con `pruebas/probar-migraciones.py` (y su
+resolución):** `010_consolidacion.sql` se aplica ANTES que
+`017_plazo_prestamo_por_libro.sql` en una instalación desde cero (el orden
+es por nombre de archivo). Las tres funciones editadas, viviendo solo en la
+010, referenciaban una columna que la 017 todavía no había agregado en ese
+punto — `buscar_libros`, al ser una función en lenguaje SQL, se valida
+contra el catálogo al crearse (no al llamarse), así que la propia 010
+fallaba al aplicarse. Se comprobó en vivo: `probar-migraciones.py` lo
+detectó de inmediato.
+
+La resolución: la sentencia `alter table ... add column` (idempotente)
+queda declarada DOS veces — una vez al principio de `010_consolidacion.sql`
+(sección nueva "EXCEPCIÓN: una columna, declarada aquí en vez de en su
+propia migración", con la explicación completa), para que la 010 se pueda
+aplicar sola desde cero; y otra vez en `017_plazo_prestamo_por_libro.sql`,
+que es la migración que de verdad documenta cuándo y por qué se agregó la
+columna, y que ya NO redefine ninguna función (para no romper
+`verificar_consolidacion.py`, que prohíbe que una migración posterior a la
+010 redefina funciones consolidadas). Aplicada dos veces, la sentencia no
+hace nada la segunda vez.
+
+Confirmado con las tres comprobaciones automáticas del proyecto, las tres en
+verde: `pruebas/probar-migraciones.py` (142/142),
+`pruebas/verificar_consolidacion.py` y `pruebas/verificar_llamadas_rpc.py`.
+Además, probado en vivo contra producción, en una transacción con
+`rollback` (sin dejar datos de prueba): un libro con override en 0 rechaza
+el préstamo con el mensaje esperado; un libro con override en 3 días presta
+y luego renueva por 3 días, no por los 7 del parámetro global.
+
+UI: campo nuevo "Plazo de préstamo propio (días, opcional)" en el modal
+"Editar libro" del Catálogo (`js/modules/ui-base.js`), con la semántica
+explicada en el propio formulario. `js/modules/db.js` (`actualizarLibro`)
+manda el valor (o `null`) en cada guardado.
+
+### 2. Respaldo automático real
+
+Reemplaza el flujo 100% manual (entrar al panel de Supabase y apretar el
+botón de respaldo) por una tarea programada real. `pg_cron` y `pg_net`
+—ambas extensiones ya estaban disponibles en este proyecto Supabase, solo
+faltaba habilitarlas— disparan, todos los días a las 07:00 UTC
+(~03:00-04:00 hora de Chile), el Edge Function `respaldo-automatico`
+(`supabase/functions/respaldo-automatico/index.ts`, desplegado con
+`mcp__Supabase__deploy_edge_function`). Este junta el contenido completo de
+las tablas del negocio (`usuarios`, `libros`, `lectores`, `prestamos`,
+`parametros`, `auditoria`, `errores`, `enlaces_escaneo_remoto`,
+`elementos_eliminados`), lo sube como un JSON con fecha en el nombre al
+bucket privado de Storage `respaldos` (creado con un `insert into
+storage.buckets`, fuera de las migraciones porque no es un objeto de
+esquema), y deja constancia del resultado (éxito o falla, archivo, tamaño)
+en la tabla nueva `public.respaldos_log` — con RLS: solo un administrador
+puede leerla, y nadie fuera del propio Edge Function (que usa la
+service_role key) puede escribirla.
+
+Autenticación de la llamada de `pg_cron` al Edge Function: un secreto
+ALEATORIO nuevo, generado dentro de la propia migración con
+`encode(gen_random_bytes(32), 'hex')` y guardado en Vault
+(`cron_respaldo_secret`) — explícitamente NO la service_role key del
+proyecto, que nunca se pidió ni se manejó desde esta sesión. Problema real
+encontrado y corregido en vivo: el Edge Function intentando leer el secreto
+con `supabase.schema('vault').from('decrypted_secrets')` (la API REST de
+supabase-js) recibía 401 siempre, aunque el secreto mandado fuera correcto
+— el esquema `vault` no está expuesto por PostgREST, a propósito, por
+diseño de Supabase. La solución: `public.verificar_secreto_cron(p_secreto)`,
+una función SECURITY DEFINER sin permisos de ejecución para
+`authenticated`/`anon` (solo el service_role, que ignora los grants, puede
+llamarla), que el Edge Function invoca por RPC en vez de leer la tabla
+directo. Confirmado en vivo: antes del cambio, 401 siempre; después, 200 y
+el respaldo se subió de verdad.
+
+`018_respaldo_automatico.sql`: cada pieza que depende de algo propio de
+Supabase (las dos extensiones, Vault, la tarea de `cron.schedule`) va en su
+propio bloque `do $$ ... exception when others then raise notice ... $$`,
+para que en un Postgres genérico —como el que usa
+`pruebas/probar-migraciones.py`, que no tiene ni `pg_cron` ni el esquema
+`vault`— la migración avise con un `NOTICE` y siga, en vez de abortar toda
+la aplicación de migraciones. `public.respaldos_log` y
+`public.verificar_secreto_cron()` (esquema puro, sin dependencias externas)
+se crean siempre, sin excepción. Confirmado: `probar-migraciones.py` pasa
+completo (142/142) con la migración degradándose así, y en producción real
+(Supabase, con las tres piezas disponibles) todo queda funcionando —
+probado con una llamada real a `net.http_post()` desde SQL, sin depender de
+que el cron ya hubiera disparado: subió un respaldo real de 22 KB y quedó
+registrado en `respaldos_log`.
+
+UI: tarjeta nueva "Respaldo automático" en Administración → Cumplimiento
+(`js/vistas/admin.js`), con el estado de la última corrida y las últimas 5.
+`db.obtenerRespaldos()` en `js/modules/db.js`.
+
+El pendiente de `pendientes-checklist.md` ("asignar, por nombre, quién
+aprieta el botón de respaldo") se retira: ya no hay botón que apretar.
+
+### 3. Invitación de personal por correo
+
+Reemplaza "las cuentas se crean en Supabase, en Authentication → Users" por
+un flujo desde la propia app. Edge Function nuevo
+`invitar-personal` (`supabase/functions/invitar-personal/index.ts`, sin
+cambios de esquema): recibe `{email, rol}`, primero comprueba que quien
+llama sea administrador de verdad —con un cliente construido con la propia
+sesión (JWT) de quien llama, no la service_role key, llamando a
+`mi_perfil()` por RPC bajo RLS normal— y solo entonces usa un segundo
+cliente con la service_role key (inyectada sola por el runtime, nunca
+pedida ni manejada por esta sesión, nunca expuesta al cliente) para invitar
+por correo (`auth.admin.inviteUserByEmail`) y dejar el rol ya asignado en
+`public.usuarios`, listo para cuando la persona acepte e inicie sesión por
+primera vez.
+
+UI: formulario nuevo "Invitar personal nuevo" en Administración → Personal
+(`js/vistas/admin.js`), con selector de rol. `db.invitarPersonal(email, rol)`
+en `js/modules/db.js` usa `supabase.functions.invoke(...)`, que manda sola
+la sesión de quien está usando la app.
+
+### `sw.js`
+
+`CACHE_VERSION` subido a `v5`: `buscar_libros()` cambió de firma (columna
+de más) y `db.js`/`admin.js` ya llaman al Edge Function nuevo.
+
+### Archivos para subir en esta ronda
+
+Nuevos: `supabase/migrations/017_plazo_prestamo_por_libro.sql`,
+`supabase/migrations/018_respaldo_automatico.sql`,
+`supabase/functions/respaldo-automatico/index.ts`,
+`supabase/functions/invitar-personal/index.ts`.
+
+Editados: `supabase/migrations/010_consolidacion.sql`, `js/modules/db.js`,
+`js/modules/ui-base.js`, `js/vistas/admin.js`, `sw.js`,
+`pendientes-checklist.md`, `ESTADO.md`, este archivo.
+
+Todo ya está aplicado y desplegado en producción (con la conexión de
+Supabase de esta sesión) — subir es solo para que el repositorio quede tan
+al día como la base.

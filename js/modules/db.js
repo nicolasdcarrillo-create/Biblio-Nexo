@@ -440,7 +440,11 @@ export const db = {
             isbn: cambios.isbn,
             genero: cambios.genero || null,
             ubicacion: cambios.ubicacion || null,
-            portada_url: cambios.portada_url || null
+            portada_url: cambios.portada_url || null,
+            // null = usa el plazo global (dias_prestamo); 0 = no circula
+            // (material de referencia); un número = plazo propio de este
+            // libro. Ver 017_plazo_prestamo_por_libro.sql.
+            dias_prestamo_override: cambios.diasPrestamoOverride ?? null
             // El número de ejemplares NO se toca aquí: pasa por ajustar_copias,
             // que recalcula las copias disponibles según los préstamos activos.
         }).eq('id', id), ESPERA);
@@ -1006,6 +1010,44 @@ export const db = {
     async eliminarPersonal(usuarioId) {
         const { error } = await conTiempoLimite(supabase.rpc('eliminar_personal', { p_usuario_id: usuarioId }), ESPERA);
         if (error) throw new Error(error.message || 'No se pudo eliminar la cuenta.');
+    },
+
+    /**
+     * Invita a una persona nueva por correo (Edge Function `invitar-personal`),
+     * ya con su rol asignado. Reemplaza el flujo anterior, que exigía entrar al
+     * panel de Supabase (Authentication → Users) para crear la cuenta a mano.
+     */
+    async invitarPersonal(email, rol) {
+        const { data, error } = await conTiempoLimite(
+            supabase.functions.invoke('invitar-personal', { body: { email, rol } }),
+            ESPERA
+        );
+        if (error) {
+            // FunctionsHttpError trae el cuerpo de la respuesta (con el mensaje
+            // real) en error.context; sin eso, el mensaje genérico del SDK
+            // ("Edge Function returned a non-2xx status code") no dice nada.
+            let mensaje = error.message;
+            try {
+                const cuerpo = await error.context?.json?.();
+                if (cuerpo?.error) mensaje = cuerpo.error;
+            } catch { /* sin cuerpo JSON legible: se usa el mensaje genérico */ }
+            throw new Error(mensaje || 'No se pudo enviar la invitación.');
+        }
+        if (data?.error) throw new Error(data.error);
+        return data;
+    },
+
+    /** Últimas corridas del respaldo automático. Devuelve [] si falta la migración 018. */
+    async obtenerRespaldos(limite = 5) {
+        const { data, error } = await conTiempoLimite(
+            supabase.from('respaldos_log').select('*').order('ejecutado_en', { ascending: false }).limit(limite),
+            ESPERA
+        );
+        if (error) {
+            if (error.code === '42P01' || esFuncionInexistente(error)) return [];
+            throw new Error(error.message || 'No se pudo consultar el estado de los respaldos.');
+        }
+        return data || [];
     },
 
     // ------------------------------------------------------------------

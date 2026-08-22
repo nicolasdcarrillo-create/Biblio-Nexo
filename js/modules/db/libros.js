@@ -85,8 +85,21 @@ export const libros = {
         if (error) throw new Error(error.code === '23505' ? 'El ISBN ya está registrado.' : 'Error al guardar el libro.');
     },
 
+    /**
+     * Pasa por el RPC eliminar_libro (migración 020), no un `delete` directo:
+     * la función distingue si el rechazo es por un préstamo ACTIVO (el único
+     * caso que de verdad bloquea el borrado) de un libro con historial ya
+     * devuelto (que sí se puede eliminar — el título y autor quedan
+     * archivados en cada préstamo cerrado, para que los reportes de períodos
+     * pasados sigan siendo legibles). Antes, cualquier error de un `delete`
+     * directo se convertía en el mismo mensaje genérico ("revise si tiene
+     * préstamos activos"), aunque el motivo real fuera otro.
+     */
     async eliminarLibro(id) {
-        const { error } = await conTiempoLimite(supabase.from('libros').delete().eq('id', id), ESPERA);
-        if (error) throw new Error('No se puede eliminar. Revise si el libro tiene préstamos activos.');
+        const { error } = await conTiempoLimite(supabase.rpc('eliminar_libro', { p_libro_id: id }), ESPERA);
+        if (error) {
+            if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 020 en Supabase.');
+            throw new Error(error.message || 'No se pudo eliminar el libro.');
+        }
     }
 };

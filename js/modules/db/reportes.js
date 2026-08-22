@@ -62,7 +62,7 @@ export const reportes = {
     async obtenerReporte(desde, hasta) {
         const [prestamosRes, devolucionesRes, lectoresRes] = await conTiempoLimite(Promise.all([
             supabase.from('prestamos')
-                .select('id, fecha_prestamo, fecha_devolucion_esperada, fecha_devolucion_real, estado, libros(id, titulo, autor), lectores(id, nombre, rut)')
+                .select('id, fecha_prestamo, fecha_devolucion_esperada, fecha_devolucion_real, estado, libros(id, titulo, autor), libro_titulo_archivado, libro_autor_archivado, lectores(id, nombre, rut)')
                 .gte('fecha_prestamo', desde)
                 .lte('fecha_prestamo', hasta),
             supabase.from('prestamos')
@@ -85,7 +85,18 @@ export const reportes = {
         }
         if (errores.length) throw new Error(errores[0].message || 'No se pudo generar el reporte.');
 
-        const prestamos = prestamosRes.data || [];
+        // Si el libro se eliminó del catálogo (eliminar_libro(), migración 020),
+        // la relación libros(...) vuelve null: se rearma con lo que quedó
+        // archivado en el propio préstamo, para que un reporte de un período
+        // pasado no muestre una fila vacía donde antes había un título. Así
+        // ningún consumidor de `prestamos` (el ranking de abajo, o el CSV en
+        // js/vistas/reportes.js) necesita saber que el libro pudo eliminarse.
+        const prestamos = (prestamosRes.data || []).map(p => ({
+            ...p,
+            libros: p.libros || (p.libro_titulo_archivado
+                ? { id: null, titulo: p.libro_titulo_archivado, autor: p.libro_autor_archivado }
+                : null)
+        }));
         const devoluciones = devolucionesRes.data || [];
         const nuevosLectores = lectoresRes.data || [];
 
@@ -116,7 +127,10 @@ export const reportes = {
             totalDevoluciones: devoluciones.length,
             totalNuevosLectores: nuevosLectores.length,
             devolucionesAtrasadas,
-            topLibros: contar(prestamos, p => p.libros?.id, p => p.libros?.titulo || 'Sin título'),
+            // Si el libro se eliminó, p.libros.id queda en null (ver el mapeo de
+            // arriba): se agrupa por título en ese caso, para que dos libros
+            // eliminados distintos no se junten bajo la misma clave "null".
+            topLibros: contar(prestamos, p => p.libros?.id ?? p.libros?.titulo, p => p.libros?.titulo || 'Sin título'),
             topLectores: contar(prestamos, p => p.lectores?.id, p => p.lectores?.nombre || 'Sin nombre'),
             prestamos,
             nuevosLectores

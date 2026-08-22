@@ -12,6 +12,12 @@ editados sin confirmar. Todo ya está **aplicado y desplegado en producción**
 para que quede tan al día como la base. Ver la lista completa en
 `pendientes-checklist.md`, sección 🔴.
 
+**Lo más reciente (cuarta ronda del día)**: bug reportado — no dejaba
+eliminar una copia de "La mujer justa" — corregido y en producción. Ver la
+sección "Cuarta ronda del día" al final de este archivo para el detalle
+técnico completo, o la entrada ✅ correspondiente en
+`pendientes-checklist.md` para el resumen.
+
 ---
 
 ## Completado hoy: las tres mejoras de "Vista de administrador"
@@ -430,3 +436,100 @@ nuevo con la protección de escritura del bridge, hay que copiarlo a mano),
 `js/modules/db.js` (reescrito) y los 13 archivos nuevos bajo
 `js/modules/db/`, `sw.js` (editado, `v8`), `pendientes-checklist.md`, este
 archivo.
+
+---
+
+## Cuarta ronda del día: `eliminar_libro()` con historial
+
+Reportaste, con dos capturas del panel, que "La mujer justa" (2 copias, 0
+préstamos activos, 1 ya devuelto) rechazaba el borrado con el toast rojo
+"No se puede eliminar. Revise si el libro tiene préstamos activos.".
+
+### Diagnóstico
+
+Confirmado contra producción que el libro no tenía ningún préstamo activo
+(1 solo préstamo, ya devuelto) — el mensaje era falso. La causa real:
+`prestamos.libro_id` tenía una llave foránea hacia `libros(id)` con
+`ON DELETE RESTRICT` **en producción**, confirmado con
+`pg_get_constraintdef`, sin estar declarada así en ningún archivo del
+repo (`pruebas/00_base_supabase.sql` la declara sin `ON DELETE` explícito,
+es decir `NO ACTION` — el mismo efecto bloqueante, pero tampoco coincide
+con lo real). Misma clase de deriva que ya se encontró antes con una
+política RLS de `usuarios` y con las tres políticas de acceso total de la
+ronda anterior: algo creado a mano en algún momento, sin quedar en ningún
+archivo ni documentado en ninguna sesión. Esa llave rechazaba el borrado
+si el libro tenía **cualquier** fila en `prestamos`, sin importar si el
+préstamo seguía activo o ya se había devuelto hace tiempo — y
+`db.eliminarLibro()` convertía cualquier error de ese `delete` directo en
+el mismo mensaje genérico, sin distinguir un caso del otro.
+
+Te pregunté qué preferías: corregir solo el mensaje (rápido, pero el
+problema de fondo — no poder eliminar libros con historial ya cerrado —
+seguía ahí), o el cambio de fondo. Elegiste el cambio de fondo: **permitir
+eliminar un libro si no tiene préstamos activos**, con la idea de que el
+título y autor del historial ya devuelto no debían quedar en blanco en los
+reportes de períodos pasados.
+
+### Solución implementada
+
+- **`eliminar_libro(p_libro_id bigint)`** — RPC nuevo, `SECURITY DEFINER`,
+  declarado en `010_consolidacion.sql` (junto a `corregir_inventario()`,
+  bajo "INVENTARIO Y BLOQUEOS") y registrado en `manifiesto_funciones()`
+  (44 → 45 funciones). Exige administrador (`es_admin()`), bloquea con el
+  mensaje correcto si hay préstamos con `estado = 'activo'`, y si no los
+  hay: archiva `titulo`/`autor` en cada préstamo de ese libro (columnas
+  nuevas `libro_titulo_archivado`/`libro_autor_archivado` en `prestamos`)
+  y recién ahí borra el libro.
+- **Columnas de archivo + la llave foránea** — migración nueva
+  `020_permitir_eliminar_libro_con_historial.sql`: agrega
+  `libro_titulo_archivado`/`libro_autor_archivado` a `prestamos`, y cambia
+  `prestamos_libro_id_fkey` a `ON DELETE SET NULL` (no `CASCADE`: el
+  préstamo no se borra, solo pierde la referencia a un libro que ya no
+  existe — el título y autor ya quedaron archivados por `eliminar_libro()`
+  antes de este paso). Las mismas dos columnas y el mismo cambio de llave
+  quedan TAMBIÉN declarados en el bloque "EXCEPCIÓN" al principio de
+  `010_consolidacion.sql` (mismo patrón que `dias_prestamo_override` en la
+  017), porque `eliminar_libro()` los necesita y la 010 se aplica antes
+  que la 020 en una instalación desde cero.
+- **`js/modules/db/libros.js`** — `eliminarLibro()` ahora llama al RPC en
+  vez de un `.delete()` directo, y distingue el error de la migración 020
+  sin aplicar del error real que devuelva la función.
+- **`js/modules/db/reportes.js`** — `obtenerReporte()` ahora pide también
+  las columnas archivadas y, si el libro ya no existe (el join `libros(...)`
+  vuelve `null`), rearma `{ titulo, autor }` con lo archivado — así ningún
+  consumidor (el ranking "más prestados", el CSV de
+  `js/vistas/reportes.js`) necesita saber que el libro se eliminó. Cuidado
+  aparte: la clave del ranking pasó de `p.libros?.id` a
+  `p.libros?.id ?? p.libros?.titulo`, porque dos libros eliminados
+  distintos tendrían `id: null` los dos y se habrían juntado en una sola
+  fila del ranking.
+- **Pruebas**: 9 comprobaciones nuevas en `pruebas/probar_librero.py`
+  (sección "10 bis"), 116/116 en total. Los dos conteos hardcodeados de
+  "44 funciones" que ya habían roto una vez en la ronda anterior se
+  revisaron y subieron a 45 a propósito, antes de dar el trabajo por
+  terminado. `pruebas/probar-migraciones.py` también en verde (150/150).
+
+### Verificado en vivo contra producción
+
+- La migración 020 se aplicó con `apply_migration` (`{"success":true}`) y
+  el `010_consolidacion.sql` completo con `execute_sql`.
+- `pg_get_constraintdef` confirma `prestamos_libro_id_fkey: FOREIGN KEY
+  (libro_id) REFERENCES libros(id) ON DELETE SET NULL`.
+- `pg_proc` confirma `eliminar_libro(bigint)` existe con
+  `prosecdef = true` (`SECURITY DEFINER`) y sin ninguna firma vieja
+  duplicada.
+- `verificar_definiciones()` y una prueba en vivo con `eliminar_libro()`
+  en una transacción con rollback no se pudieron correr directo desde
+  esta sesión — ambas exigen sesión de administrador real (`es_admin()`
+  vía `auth.uid()`), que el editor SQL de Supabase no tiene. Se puede
+  correr a mano desde el panel, ya con sesión de administrador, con las
+  consultas que quedaron escritas en la propia migración 020, sección
+  "QUÉ REVISAR DESPUÉS DE EJECUTAR ESTO".
+
+### Pendiente de esta ronda: sincronizar al repositorio
+
+`js/modules/db/libros.js` (editado), `js/modules/db/reportes.js`
+(editado), `pruebas/probar_librero.py` (editado),
+`supabase/migrations/010_consolidacion.sql` (editado),
+`supabase/migrations/020_permitir_eliminar_libro_con_historial.sql`
+(nuevo), `pendientes-checklist.md`, este archivo.

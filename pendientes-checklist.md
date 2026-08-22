@@ -4,17 +4,19 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 22 de agosto de 2026 (tercera ronda del día) — de la
-categoría 🟡 se resolvieron dos de las tres cosas: el script de verificación
-estática de clases de Tailwind (que de paso encontró **26 clases más** sin
-compilar, además de las 2 ya corregidas antes hoy) y la división de
-`js/modules/db.js` por dominio. Queda pendiente la más delicada — dividir
-`ui-base.js` — con un plan ya listo para revisar antes de tocar código, ver
-más abajo. Ronda anterior: SMTP propio terminado (ya no queda ningún
-pendiente 🔴), y de la categoría 🟠 se resolvieron dos bugs cosméticos de
-Tailwind, la versión de Node en CI, y `verificar_politicas()` (que encontró
-una falla de seguridad real en producción, ya corregida y verificada en
-vivo — ver el detalle en ✅ abajo).
+Última actualización: 22 de agosto de 2026 (cuarta ronda del día) —
+reportaste que no dejaba eliminar una copia de "La mujer justa" con el
+mensaje "Revise si el libro tiene préstamos activos", aunque el libro no
+tenía ningún préstamo activo. Encontrado y corregido: una llave foránea sin
+documentar bloqueaba el borrado de cualquier libro con historial de
+préstamos, activo o no. Elegiste la solución de fondo (permitir eliminar
+cuando no hay préstamos activos, archivando título y autor del historial ya
+cerrado) — ver el detalle en ✅ abajo. Ronda anterior: de la categoría 🟡 se
+resolvieron dos de las tres cosas: el script de verificación estática de
+clases de Tailwind (que de paso encontró **26 clases más** sin compilar,
+además de las 2 ya corregidas antes hoy) y la división de `js/modules/db.js`
+por dominio. Queda pendiente la más delicada — dividir `ui-base.js` — con un
+plan ya listo para revisar antes de tocar código, ver más abajo.
 
 ---
 
@@ -59,6 +61,37 @@ quedaron resueltas hoy, ver ✅ abajo.
 
 ## ✅ Ya verificado en esta ronda (referencia, no acción)
 
+- [x] **Bug reportado: no dejaba eliminar una copia de un libro con
+      historial ya devuelto — corregido y en producción.** Reportaste que
+      "La mujer justa" (0 préstamos activos, 1 ya devuelto) rechazaba el
+      borrado con "Revise si el libro tiene préstamos activos" — mensaje
+      falso. Causa real: `prestamos.libro_id` tenía una llave foránea hacia
+      `libros(id)` con `ON DELETE RESTRICT` **en producción**, sin declarar
+      así en ningún archivo del repo (la misma clase de deriva ya
+      encontrada antes con una política RLS de `usuarios`) — bloqueaba el
+      borrado si el libro tenía CUALQUIER préstamo, activo o no, y
+      `db.eliminarLibro()` convertía cualquier error del `delete` directo
+      en el mismo mensaje genérico. Elegiste la solución de fondo, no solo
+      corregir el mensaje: **permitir eliminar un libro si no tiene
+      préstamos activos**, archivando título y autor en cada préstamo ya
+      cerrado antes de borrar, para que los reportes de períodos pasados no
+      queden con una fila vacía. Implementado como RPC nuevo
+      `eliminar_libro()` (`010_consolidacion.sql`, con el guardia de
+      administrador y el mensaje correcto en cada caso), columnas
+      `libro_titulo_archivado`/`libro_autor_archivado` en `prestamos` y la
+      llave foránea cambiada a `ON DELETE SET NULL`
+      (`020_permitir_eliminar_libro_con_historial.sql`), `js/modules/db/libros.js`
+      actualizado para llamar al RPC en vez de un `delete` directo, y
+      `js/modules/db/reportes.js` actualizado para rearmar el título/autor
+      de un libro ya eliminado a partir de lo archivado (con cuidado de no
+      juntar dos libros eliminados distintos bajo la misma clave en el
+      ranking de más prestados). 9 comprobaciones nuevas en
+      `pruebas/probar_librero.py` (116/116 en total), aplicado y verificado
+      en vivo contra producción (la llave foránea quedó confirmada con
+      `pg_get_constraintdef` como `ON DELETE SET NULL`, y `eliminar_libro`
+      existe con `SECURITY DEFINER`). Ya puedes volver a intentar eliminar
+      "La mujer justa" (o cualquier libro con solo historial devuelto)
+      desde el panel.
 - [x] **Script de verificación estática de clases de Tailwind no
       compiladas** (`pruebas/verificar_clases_tailwind.py`, mismo espíritu
       que `verificar_llamadas_rpc.py`: sin build step, sin navegador —

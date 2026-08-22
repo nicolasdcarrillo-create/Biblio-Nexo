@@ -446,9 +446,10 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-# 44, no 41: esta ronda sumó manifiesto_tablas_protegidas(), manifiesto_politicas()
-# y verificar_politicas() (RLS/grants, mismo patrón que este autodiagnóstico).
-comprobar('el manifiesto cubre 44 funciones', len(filas) == 44, f'cubre {len(filas)}')
+# 45, no 41: 44 fue manifiesto_tablas_protegidas(), manifiesto_politicas() y
+# verificar_politicas() (RLS/grants, mismo patrón que este autodiagnóstico).
+# 45 sumó eliminar_libro() (020_permitir_eliminar_libro_con_historial.sql).
+comprobar('el manifiesto cubre 45 funciones', len(filas) == 45, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -505,6 +506,64 @@ else:
     omitir('y devolver')
 comprobar('con el stock de vuelta en 3',
           str(valor(f"select stock from public.libros where id = {libro_id};")) == '3')
+
+
+# ===========================================================================
+# ELIMINAR_LIBRO() CON HISTORIAL — migración 020
+# ===========================================================================
+# El bug real que motivó esto: "La mujer justa" (0 préstamos activos, 1
+# devuelto) no se podía eliminar, y el mensaje decía "revise si tiene
+# préstamos activos" — falso, no había ninguno. La llave foránea de
+# `prestamos.libro_id` rechazaba el borrado por CUALQUIER historial, activo
+# o no. Estas dos comprobaciones son el caso que sí debe seguir bloqueado
+# (préstamo activo) y el caso que antes fallaba mal y ahora debe funcionar
+# (historial ya cerrado, con el título archivado).
+print('\n10 bis. ELIMINAR_LIBRO() CON HISTORIAL (migración 020)')
+
+sql("""
+insert into public.libros (isbn, titulo, autor, stock, copias_totales)
+  values ('ELB-ACTIVO', 'Libro Con Préstamo Activo', 'Autora Activa', 1, 1);
+insert into public.libros (isbn, titulo, autor, stock, copias_totales)
+  values ('ELB-DEVUELTO', 'Libro Con Historial Devuelto', 'Autora Devuelta', 2, 2);
+""")
+libro_activo_id = valor("select id from public.libros where isbn = 'ELB-ACTIVO';")
+libro_devuelto_id = valor("select id from public.libros where isbn = 'ELB-DEVUELTO';")
+lector_id_prueba = valor("select id from public.lectores limit 1;")
+
+sql(f"""
+insert into public.prestamos (libro_id, lector_id, fecha_prestamo, fecha_devolucion_esperada, estado)
+  values ({libro_activo_id}, {lector_id_prueba}, current_date, current_date + 7, 'activo');
+insert into public.prestamos (libro_id, lector_id, fecha_prestamo, fecha_devolucion_esperada, fecha_devolucion_real, estado)
+  values ({libro_devuelto_id}, {lector_id_prueba}, current_date - 10, current_date - 3, current_date - 3, 'devuelto');
+""")
+
+ok, out = como(LIBRERO, f"select public.eliminar_libro({libro_devuelto_id});")
+comprobar('un librero NO puede eliminar un libro (solo un administrador)',
+          not ok and 'administrador' in texto(out).lower(), texto(out)[-200:])
+comprobar('...y el libro sigue en el catálogo',
+          valor(f"select count(*) from public.libros where id = {libro_devuelto_id};") == 1)
+
+ok, out = como(ADMIN, f"select public.eliminar_libro({libro_activo_id});")
+comprobar('un admin NO puede eliminar un libro con un préstamo activo',
+          not ok and 'préstamo' in texto(out).lower() and 'activo' in texto(out).lower(),
+          texto(out)[-200:])
+comprobar('...y el libro sigue en el catálogo',
+          valor(f"select count(*) from public.libros where id = {libro_activo_id};") == 1)
+
+ok, out = como(ADMIN, f"select public.eliminar_libro({libro_devuelto_id});")
+comprobar('un admin SÍ puede eliminar un libro con historial ya devuelto (el bug reportado)',
+          ok, texto(out)[-200:] if not ok else '')
+comprobar('...el libro ya no está en el catálogo',
+          valor(f"select count(*) from public.libros where id = {libro_devuelto_id};") == 0)
+comprobar('...el préstamo cerrado sigue existiendo, con el título y autor archivados',
+          valor("select count(*) from public.prestamos where libro_titulo_archivado = 'Libro Con Historial Devuelto' and libro_autor_archivado = 'Autora Devuelta';") == 1)
+comprobar('...y libro_id quedó en null en ese préstamo (la llave foránea, no un borrado en cascada)',
+          valor("select count(*) from public.prestamos where libro_titulo_archivado = 'Libro Con Historial Devuelto' and libro_id is null;") == 1)
+comprobar('...la lápida de eliminación también quedó puesta (015)',
+          valor(f"select count(*) from public.elementos_eliminados where tabla = 'libros' and id = {libro_devuelto_id};") == 1)
+
+sql(f"delete from public.prestamos where libro_id = {libro_activo_id} or libro_titulo_archivado = 'Libro Con Historial Devuelto';")
+sql(f"delete from public.libros where id = {libro_activo_id};")
 
 
 # ===========================================================================
@@ -654,7 +713,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 44,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 45,
           texto(out)[-150:])
 
 

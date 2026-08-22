@@ -94,6 +94,35 @@ alter table public.libros
 comment on column public.libros.dias_prestamo_override is
   'Plazo de préstamo en días específico de este libro. NULL = usa el parámetro global dias_prestamo. 0 = material de referencia, no circula.';
 
+-- Mismo motivo que el bloque de arriba: `libro_titulo_archivado` y
+-- `libro_autor_archivado` (para que un préstamo ya cerrado siga siendo
+-- legible en los reportes aunque el libro se elimine del catálogo), más el
+-- cambio de `prestamos_libro_id_fkey` a `on delete set null` (sin él, borrar
+-- un libro con historial de préstamos ya devueltos seguiría fallando por la
+-- llave foránea, aunque `eliminar_libro()` ya haya archivado el título y
+-- autor) — los introdujo 020_permitir_eliminar_libro_con_historial.sql, pero
+-- `eliminar_libro()` —que vive solo aquí, en la 010, por la misma regla de
+-- arriba— necesita ambos para funcionar. Declarados dos veces por el mismo
+-- motivo: aquí para que la 010 funcione sola desde cero, y en la 020, que es
+-- la que de verdad documenta cuándo y por qué se agregaron.
+alter table public.prestamos
+  add column if not exists libro_titulo_archivado text;
+
+alter table public.prestamos
+  add column if not exists libro_autor_archivado text;
+
+comment on column public.prestamos.libro_titulo_archivado is
+  'Copia del título del libro, solo se llena cuando el libro se elimina del catálogo (ver eliminar_libro()). Mientras el libro exista, los reportes usan el título en vivo vía libro_id → libros.titulo.';
+comment on column public.prestamos.libro_autor_archivado is
+  'Igual que libro_titulo_archivado, pero el autor.';
+
+alter table public.prestamos
+  drop constraint if exists prestamos_libro_id_fkey;
+
+alter table public.prestamos
+  add constraint prestamos_libro_id_fkey
+  foreign key (libro_id) references public.libros(id) on delete set null;
+
 -- ============================================================================
 -- AYUDANTES PUROS
 -- ============================================================================
@@ -684,6 +713,66 @@ begin
 end;
 $$;
 grant execute on function public.corregir_inventario(bigint) to authenticated;
+
+-- ── eliminar_libro ── (nueva: 020_permitir_eliminar_libro_con_historial.sql)
+--
+-- Antes, `db.eliminarLibro()` hacía un `delete` directo contra la tabla, sin
+-- pasar por ningún RPC — la única protección era la llave foránea de
+-- `prestamos.libro_id`, que (sin `on delete` explícito) rechazaba el borrado
+-- si el libro tenía CUALQUIER préstamo asociado, activo o ya devuelto. El
+-- mensaje que veía el personal ("revise si el libro tiene préstamos
+-- activos") no era cierto en ese segundo caso: un libro con historial
+-- 100% devuelto tampoco se podía eliminar, y el aviso hacía pensar que sí
+-- había un préstamo activo cuando no lo había — así se detectó, con "La
+-- mujer justa" (0 préstamos activos, 1 devuelto, igual rechazado).
+--
+-- Esta función reemplaza ese `delete` directo: sigue bloqueando el borrado
+-- si hay un préstamo ACTIVO (con el motivo correcto, esta vez), pero permite
+-- borrar un libro cuyo historial está totalmente cerrado. Antes de borrar,
+-- archiva el título y autor en cada préstamo que lo tenía prestado (columnas
+-- `libro_titulo_archivado`/`libro_autor_archivado`, ver el bloque EXCEPCIÓN
+-- al principio de este archivo), para que un reporte de un período pasado
+-- no muestre una fila vacía donde antes había un título. La llave foránea
+-- pasó de bloquear el borrado a `on delete set null` (mismo motivo).
+drop function if exists public.eliminar_libro(bigint);
+create or replace function public.eliminar_libro(p_libro_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_prestamos_activos int;
+begin
+  if not public.es_admin() then
+    raise exception 'Solo un administrador puede eliminar un libro.' using errcode = 'P0001';
+  end if;
+
+  perform 1 from public.libros where id = p_libro_id for update;
+  if not found then
+    raise exception 'Ese libro ya no está en el catálogo.' using errcode = 'P0001';
+  end if;
+
+  select count(*) into v_prestamos_activos
+    from public.prestamos
+   where libro_id = p_libro_id and estado = 'activo';
+
+  if v_prestamos_activos > 0 then
+    raise exception 'No se puede eliminar: tiene % préstamo(s) activo(s).', v_prestamos_activos
+      using errcode = 'P0001';
+  end if;
+
+  update public.prestamos p
+     set libro_titulo_archivado = l.titulo,
+         libro_autor_archivado = l.autor
+    from public.libros l
+   where p.libro_id = p_libro_id
+     and l.id = p_libro_id;
+
+  delete from public.libros where id = p_libro_id;
+end;
+$$;
+grant execute on function public.eliminar_libro(bigint) to authenticated;
 
 -- ── bloquear_lector ── (última versión: 006_bloqueo_inventario_admin.sql)
 drop function if exists public.bloquear_lector(bigint, boolean, text);
@@ -2049,6 +2138,7 @@ as $manifiesto$
     ('renovar_prestamo', true),
     ('ajustar_copias', true),
     ('corregir_inventario', true),
+    ('eliminar_libro', true),
     ('bloquear_lector', true),
     ('asignar_rol', true),
     ('asegurar_perfil', true),

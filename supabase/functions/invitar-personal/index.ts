@@ -21,14 +21,30 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// El navegador manda un preflight OPTIONS antes de cualquier POST con
+// Authorization/Content-Type a un origen distinto (la app corre en Vercel,
+// el Edge Function en Supabase). Sin estos encabezados en TODAS las
+// respuestas — incluida la del preflight — el navegador bloquea la llamada
+// antes de que llegue nunca al código de abajo, y supabase-js lo reporta
+// como "Failed to send a request to the Edge Function": no es un error de
+// la función, es que la petición ni siquiera salió.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function json(cuerpo: unknown, estado: number): Response {
   return new Response(JSON.stringify(cuerpo), {
     status: estado,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...corsHeaders },
   });
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
     return json({ error: "Método no permitido." }, 405);
   }

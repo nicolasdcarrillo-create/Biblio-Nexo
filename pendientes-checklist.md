@@ -4,62 +4,27 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 22 de agosto de 2026 — implementadas las tres mejoras
-de la sección "Vista de administrador" de `sugerencias-mejora-2026-08-22.md`:
-plazo de préstamo por libro, respaldo automático y invitación de personal.
+Última actualización: 22 de agosto de 2026 (segunda ronda del día) — SMTP
+propio terminado (ya no queda ningún pendiente 🔴), y de la categoría
+🟠 se resolvieron las tres cosas: dos bugs cosméticos de Tailwind, la
+versión de Node en CI, y `verificar_politicas()`. Construir esta última
+encontró una falla de seguridad real en producción — tres políticas RLS que
+daban acceso total a cualquier usuario autenticado — ya corregida y
+verificada en vivo. Ver el detalle en ✅ abajo, primera entrada.
 
 ---
 
 ## 🔴 Urgente — falta este paso tuyo
 
-- [ ] **Probar en producción, con una invitación real, la pantalla de
-      registro obligatorio.** Recién implementada: al aceptar la invitación
-      ahora pide nombre completo, cargo (opcional) y una contraseña de al
-      menos 12 caracteres antes de dejar entrar al panel — antes entraba
-      directo con el perfil en blanco y sin contraseña. `js/main.js` detecta
-      el enlace (`type=invite`); `js/modules/ui-base.js` tiene la pantalla
-      nueva (`renderCompletarInvitacion`). 106/106 en
-      `pruebas/probar-vistas.mjs` y `verificar_llamadas_rpc.py` en verde —
-      pero eso prueba la lógica en aislado, no el enlace real de un correo de
-      verdad. Probar: invitar a una cuenta de prueba, abrir el enlace del
-      correo, confirmar que pide los tres datos y que después entra
-      normalmente con el rol correcto asignado.
-- [ ] **Personalizar el correo de invitación de personal en el Dashboard de
-      Supabase.** El texto por defecto trae la marca de Supabase y puede dar
-      a entender que el invitado tiene acceso al backend, no solo a la app.
-      Además — más importante — el servidor de correo compartido de
-      Supabase **solo entrega estos correos a direcciones que ya son parte
-      del equipo de la organización**: a una persona nueva de verdad hoy le
-      fallaría en silencio. Instrucciones completas, con la plantilla lista
-      para copiar y pegar, en
-      `supabase/plantilla-invitacion-email.md` — dos partes: (1) cambiar el
-      texto de la plantilla en Authentication → Email Templates (gratis, ya
-      se puede hacer), (2) conectar un SMTP propio, ej. Resend, para que
-      llegue a cualquier persona real (necesita un dominio propio).
-- [ ] **Subir a tu repositorio los archivos de esta ronda.** Todo lo de abajo
-      ya está **aplicado en producción** (con la conexión de Supabase de esta
-      sesión) — subir es solo para que el repositorio quede tan al día como
-      la base:
-      - `supabase/migrations/016_eliminar_politica_redundante_usuarios.sql` (de la ronda anterior, seguía sin subir)
-      - `supabase/migrations/017_plazo_prestamo_por_libro.sql` (nuevo)
-      - `supabase/migrations/018_respaldo_automatico.sql` (nuevo)
-      - `supabase/migrations/010_consolidacion.sql` (editado: `prestar_libro`, `renovar_prestamo`, `buscar_libros`, más la columna `dias_prestamo_override` declarada al principio — ver la nota "EXCEPCIÓN" ahí mismo)
-      - `supabase/functions/respaldo-automatico/index.ts` (nuevo Edge Function, ya desplegado)
-      - `supabase/functions/invitar-personal/index.ts` (nuevo Edge Function, ya desplegado)
-      - `supabase/plantilla-invitacion-email.md` (nuevo — la plantilla del correo de invitación y el hallazgo del límite "solo al equipo" del SMTP compartido)
-      - `js/modules/db.js` (editado — plazo por libro e invitación de personal)
-      - `js/modules/ui-base.js` (editado — UI del plazo por libro, respaldo, invitación de personal, y la pantalla nueva `renderCompletarInvitacion()`: nombre, cargo y contraseña obligatorios al aceptar)
-      - `js/vistas/admin.js` (editado — UI de invitar personal y estado del respaldo)
-      - `js/main.js` (editado — detecta el enlace de invitación, `type=invite`)
-      - `sw.js` (`CACHE_VERSION` subido a `v6`)
-      - `PROMPT-produccion.md`, `ESTADO.md`, este archivo
+Sin pendientes en esta categoría — terminaste el SMTP propio hoy.
 
 ---
 
 ## 🟠 Ahora — barato y con impacto real
 
-Sin pendientes en esta categoría — los dos últimos (la política RLS y el
-`migration repair`) quedaron resueltos hoy, ver ✅ abajo.
+Sin pendientes en esta categoría — las tres cosas de esta ronda (los dos
+bugs de Tailwind, la versión de Node en CI y `verificar_politicas()`)
+quedaron resueltas hoy, ver ✅ abajo.
 
 ---
 
@@ -67,8 +32,6 @@ Sin pendientes en esta categoría — los dos últimos (la política RLS y el
 
 - [ ] **Fase 2: integración con Aleph 500** — el siguiente bloque de trabajo
       real, cuando decidas empezarlo (`PROMPT-produccion.md` §7).
-- [ ] `verificar_politicas()` — RLS y grants bajo el mismo patrón que ya
-      existe para funciones (`verificar_definiciones()`).
 - [ ] **Terminar de dividir `ui-base.js`** (todavía 2900 líneas). Candidatas
       concretas encontradas en la auditoría: las secciones internas
       CATÁLOGO y ADMINISTRACIÓN, que se solapan con lo que ya existe en
@@ -79,16 +42,7 @@ Sin pendientes en esta categoría — los dos últimos (la política RLS y el
       menos urgente que lo de arriba, hoy es cohesivo tal como está.
 - [ ] Script de verificación estático de clases de Tailwind no compiladas
       (ítem 12, recomendado pero no construido — evita el build step. Mismo
-      espíritu que `pruebas/verificar_llamadas_rpc.py`, nuevo de hoy).
-- [ ] Corregir dos bugs preexistentes y silenciosos de clases Tailwind ya
-      encontrados (cosméticos, no urgentes): `mx-auto` en los círculos
-      numerados de `escaneo-remoto.js`, y `hover:bg-rose-100` en el botón de
-      cerrar sesión de `perfil.js`.
-- [ ] (Nuevo, visto en el run #36) La CI avisa que `actions/setup-node@v4`
-      con `node-version: '20'` está deprecado y GitHub está forzando
-      Node 24 por su cuenta — no rompe nada hoy, pero conviene subir el
-      número a mano antes de que GitHub deje de dar ese aviso y simplemente
-      falle.
+      espíritu que `pruebas/verificar_llamadas_rpc.py`).
 
 ---
 
@@ -104,6 +58,67 @@ Sin pendientes en esta categoría — los dos últimos (la política RLS y el
 
 ## ✅ Ya verificado en esta ronda (referencia, no acción)
 
+- [x] **Hallazgo de seguridad — tres políticas RLS de acceso total en
+      `libros`, `lectores` y `prestamos`, encontradas y corregidas hoy.**
+      Al construir `verificar_politicas()` (ver el ítem siguiente) y
+      comparar `pg_policies` de producción contra lo que debía haber,
+      aparecieron tres políticas — `"Acceso autenticado libros"`,
+      `"Acceso autenticado lectores"`, `"Acceso autenticado prestamos"` —
+      que ningún archivo de migración local creaba. Las tres daban acceso
+      total (`cmd=ALL`, sin ninguna condición) a **cualquier usuario
+      autenticado**, no solo administradores: cualquier `librero` con
+      sesión iniciada podía leer, modificar o **borrar** cualquier libro,
+      lector o préstamo directamente contra la base de datos (no desde la
+      pantalla — la interfaz nunca ofreció ese botón — pero sí con una
+      llamada directa a la API). Postgres combina las políticas RLS entre
+      sí con OR, así que estas tres anulaban en la práctica a las
+      políticas más estrechas que sí exigían ser administrador. Es la
+      misma clase de deriva que la política redundante de `usuarios`
+      resuelta el 16 de agosto (probablemente creada desde el panel de
+      Supabase, sin quedar en ningún archivo ni documentada en ninguna
+      sesión) pero mucho más grave por el alcance. No hay señales en
+      `auditoria` de que se haya explotado. **Corregido**: las tres
+      políticas se eliminaron en producción (migración
+      `019_eliminar_politicas_acceso_total.sql`), confirmado en vivo con
+      `pg_policies` (bajaron de 5 a 4 políticas en cada una de las tres
+      tablas) y con `verificar_politicas()` reportando todo en verde.
+- [x] **`verificar_politicas()`** — el chequeo que faltaba, mismo patrón
+      que `verificar_definiciones()` para funciones: compara las políticas
+      RLS y los permisos (`grant`) de producción contra un manifiesto
+      esperado, y avisa si algo falta, cambió o sobra sin haber pasado por
+      una migración. Es exactamente lo que habría encontrado la política
+      de `usuarios` del 16 de agosto, y lo que encontró hoy el hallazgo de
+      arriba. De paso corrigió un descuido menor en `verificar_rls()`, que
+      llevaba dos migraciones sin vigilar `enlaces_escaneo_remoto` ni
+      `respaldos_log`. `pruebas/probar-migraciones.py` en 148/148,
+      aplicado y verificado en vivo contra producción.
+- [x] **Dos bugs cosméticos de Tailwind corregidos** — `mx-auto` en los
+      círculos numerados de `escaneo-remoto.js` y `hover:bg-rose-100` en
+      el botón de cerrar sesión de `perfil.js`. Las clases se usaban en el
+      código pero nunca se habían usado antes en ningún otro archivo, así
+      que no estaban en `vendor/css/tailwind.css` (que es estático, no se
+      recompila solo) — no daban error, simplemente no hacían nada.
+      Agregadas a mano al CSS compilado.
+- [x] **Versión de Node en CI subida de 20 a 24** — GitHub venía avisando
+      que `actions/setup-node@v4` con Node 20 está deprecado.
+- [x] **SMTP propio terminado** — confirmado por ti. Ya no falta nada
+      para invitar a cualquier persona real por correo.
+- [x] **Registro obligatorio al aceptar la invitación** — probado en
+      producción con una invitación real: pide nombre completo, cargo
+      (opcional) y contraseña (mínimo 8 caracteres, con mayúscula y número,
+      con verificación de que ambas coincidan) antes de dejar entrar al
+      panel. Confirmado por el usuario.
+- [x] **Plantilla del correo de invitación personalizada** (Parte 1 de
+      `supabase/plantilla-invitacion-email.md`) — pegada en Authentication →
+      Email Templates del Dashboard de Supabase. Ya no trae la marca de
+      Supabase. Queda pendiente la Parte 2 (SMTP propio), ver 🔴 arriba.
+- [x] **Repositorio actualizado** — el usuario confirmó que subió el commit
+      con todos los archivos de esta ronda (migraciones 016 a 018, la
+      edición a la 010, los dos Edge Functions, la plantilla del correo,
+      `db.js`/`ui-base.js`/`admin.js`/`main.js`, `sw.js` en `v7`,
+      `PROMPT-produccion.md`, `ESTADO.md`, este archivo). No confirmado
+      todavía si la CI de GitHub Actions corrió en verde sobre ese commit —
+      vale la pena revisarlo en algún momento, sin urgencia.
 - [x] **Plazo de préstamo por libro** (`dias_prestamo_override` en `libros`,
       migración 017 + edición de `prestar_libro`/`renovar_prestamo`/
       `buscar_libros` en la 010). Probado en vivo contra producción, en una

@@ -63,7 +63,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # Las dos juntas, en un solo comando: sin package.json que las fije,
       # instalarlas por separado hace que npm recalcule node_modules entero y
@@ -219,7 +219,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Instalar el CLI de Supabase
         run: npm install supabase --no-save

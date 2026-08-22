@@ -51,6 +51,20 @@ do $$ begin
   end if;
 end $$;
 
+-- Lo que Supabase hace de fábrica: cualquier tabla nueva de `public` queda
+-- con acceso amplio (select/insert/update/delete) para `anon` Y
+-- `authenticated` desde que se crea, sin que ninguna migración tenga que
+-- pedirlo — RLS es la única barrera real, nunca el GRANT (ver la nota larga
+-- en verificar_politicas(), migración 010). Sin esto, las tablas que las
+-- migraciones crean sin un `grant` explícito (auditoria, parametros,
+-- enlaces_escaneo_remoto, respaldos_log) quedarían con CERO permisos para
+-- authenticated en este Postgres de prueba, aunque en Supabase de verdad sí
+-- funcionan — verificar_politicas() lo habría reportado como una falla
+-- puramente local, sin ningún problema real en producción. Se declara ANTES
+-- de crear ninguna tabla: solo afecta a las que se creen después.
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables to anon;
+
 -- Sustitutos de extensiones que Supabase trae y este PostgreSQL de prueba no
 -- incluye. Imitan la firma y el comportamiento suficiente para validar el SQL;
 -- en producción las reemplazan las extensiones reales.
@@ -290,6 +304,21 @@ def main():
                 finally:
                     como(uid_librero)
             prueba("verificar_rls()", verificar_rls_como_admin)
+
+            def verificar_politicas_sin_fallas():
+                # Exige es_admin(), igual que verificar_rls() arriba. La
+                # comprobación real: el manifiesto (lo que el proyecto declaró
+                # que debía existir) tiene que coincidir con lo instalado —
+                # ninguna fila debería salir con estado distinto de 'Correcto'.
+                como(uid_admin)
+                try:
+                    r = correr(srv, "select categoria, tabla, item, estado, diagnostico from public.verificar_politicas() where estado <> 'Correcto';")
+                    filas = r.split('\n')[2:]
+                    filas = [f for f in filas if f.strip() and not f.strip().startswith('(')]
+                    assert not filas, f"verificar_politicas() encontró desajustes: {filas}"
+                finally:
+                    como(uid_librero)
+            prueba("verificar_politicas() sin desajustes contra el manifiesto", verificar_politicas_sin_fallas)
             prueba("parametro_int() lee de la tabla",
                    lambda: correr(srv, "select public.parametro_int('max_prestamos_por_lector', 0);"))
 
@@ -796,6 +825,24 @@ def main():
                 finally:
                     como(uid_librero)
             prueba("verificar_rls() confirma que elementos_eliminados quedó protegida", verificar_rls_incluye_elementos_eliminados)
+
+            def verificar_rls_incluye_tablas_nuevas():
+                # enlaces_escaneo_remoto (014) y respaldos_log (018) llevaban
+                # dos migraciones sin sumarse a la lista fija de verificar_rls()
+                # — se detectó al construir verificar_politicas() y se corrigió
+                # en la misma edición de la 010. enlaces_escaneo_remoto tiene
+                # RLS activo con CERO políticas a propósito (solo se accede vía
+                # funciones security definer), así que ahí NO debe decir
+                # 'CRÍTICO' pese a no tener ninguna política.
+                como(uid_admin)
+                try:
+                    r = correr(srv, "select tabla, rls_activo, politicas, diagnostico from public.verificar_rls() where tabla in ('enlaces_escaneo_remoto', 'respaldos_log');")
+                    assert 'enlaces_escaneo_remoto' in r, f"verificar_rls() no reportó enlaces_escaneo_remoto, se leyó: {r}"
+                    assert 'respaldos_log' in r, f"verificar_rls() no reportó respaldos_log, se leyó: {r}"
+                    assert 'CRÍTICO' not in r, f"verificar_rls() marcó CRÍTICO alguna de las dos tablas nuevas, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("verificar_rls() incluye enlaces_escaneo_remoto y respaldos_log", verificar_rls_incluye_tablas_nuevas)
 
             # --- Derechos del titular ---
             print("\n  Cumplimiento (Ley 21.719):")

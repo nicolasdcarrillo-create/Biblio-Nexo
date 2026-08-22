@@ -216,3 +216,81 @@ Pendiente de la ronda anterior, seguía sin subir:
   como prueba, pero cualquier persona nueva de verdad va a fallar hasta que
   se conecte el SMTP propio (ver Parte 2 de
   `supabase/plantilla-invitacion-email.md`).
+
+---
+
+## Segunda ronda del mismo día: SMTP propio + las tres de 🟠
+
+El usuario terminó el SMTP propio (ya no queda ningún 🔴). A continuación,
+las tres cosas de la categoría 🟠 elegidas explícitamente ("las tres cosas,
+recomendado"):
+
+### Hallazgo de seguridad: acceso total vía RLS en `libros`/`lectores`/`prestamos`
+
+El más importante de los tres, y no estaba en el plan — apareció al
+construir `verificar_politicas()` (punto siguiente). Producción tenía tres
+políticas RLS (`"Acceso autenticado libros"`, `"Acceso autenticado
+lectores"`, `"Acceso autenticado prestamos"`, las tres `cmd=ALL, roles=
+{authenticated}, qual=true, with_check=true`) que ningún archivo de
+migración local creaba — mismo origen probable que la política redundante
+de `usuarios` resuelta el 16 de agosto (creada desde el panel de Supabase,
+sin quedar registrada). Como Postgres combina las políticas RLS permisivas
+con OR, estas tres anulaban en la práctica a las políticas admin-only ya
+existentes: cualquier usuario autenticado (cualquier `librero`, no solo un
+admin) podía leer, escribir y **borrar** cualquier fila de esas tres
+tablas, sin que la interfaz lo mostrara pero sí disponible por API directa.
+Sin evidencia de explotación en `auditoria`. Corregido con la migración
+`019_eliminar_politicas_acceso_total.sql` (estilo y precedente de la 016),
+aplicada a producción y verificada en vivo: `pg_policies` bajó de 5 a 4
+políticas en cada tabla, `verificar_politicas()` reporta todo en verde.
+
+### `verificar_politicas()`
+
+Mismo patrón que `verificar_definiciones()`/`manifiesto_funciones()`, pero
+para políticas RLS y `grant`s: `manifiesto_tablas_protegidas()` +
+`manifiesto_politicas()` declaran lo esperado, `verificar_politicas()`
+(admin-only, en `010_consolidacion.sql`) lo compara contra `pg_policies` e
+`information_schema.role_table_grants` y reporta FALTA / COMANDO DISTINTO /
+INESPERADA / CRÍTICO. De paso corrigió un descuido real en `verificar_rls()`:
+llevaba dos migraciones (014 y 018) sin vigilar `enlaces_escaneo_remoto` ni
+`respaldos_log`. También se cerró una brecha de fidelidad en el arnés de
+pruebas local (`pruebas/00_base_supabase.sql` y el `esquema_base()` de
+`pruebas/probar-migraciones.py`): no replicaban el `alter default
+privileges` que Supabase aplica de fábrica sobre `anon`/`authenticated`, así
+que tablas sin `grant` explícito (`auditoria`, `parametros`,
+`enlaces_escaneo_remoto`, `respaldos_log`) daban falsos negativos en local.
+`pruebas/probar-migraciones.py` en 148/148. Aplicado a producción y
+verificado en vivo (impersonando a un admin con `set local
+request.jwt.claim.sub`, porque el SQL Editor no tiene JWT propio).
+
+**Nota sobre el registro de la migración**: `apply_migration` volvió a
+registrar la 019 con un número de versión tipo timestamp en vez de `019`
+(el mismo problema que ya había pasado con la 017 y la 018) — se corrigió a
+mano en `supabase_migrations.schema_migrations`. También se descubrió que
+los cambios a funciones ya existentes dentro de la 010 (como los de esta
+ronda) NO deben generar una fila nueva en `schema_migrations` — solo las
+migraciones que corresponden a un archivo local nuevo. Se había registrado
+una fila de más por eso y se eliminó.
+
+### Dos bugs cosméticos de Tailwind
+
+`mx-auto` (círculos numerados de `escaneo-remoto.js`) y
+`hover:bg-rose-100` (botón de cerrar sesión de `perfil.js`) — clases
+usadas en el código pero nunca antes en el proyecto, así que no estaban en
+`vendor/css/tailwind.css` (estático, no se recompila solo). Agregadas a
+mano al CSS compilado.
+
+### Node 20 → 24 en CI
+
+Los dos `node-version: '20'` de `.github/workflows/pruebas.yml` (jobs
+`interfaz` y el par `base-de-datos`/`reconstruccion`) subidos a `'24'` —
+GitHub venía avisando que la 20 está deprecada en `actions/setup-node@v4`.
+
+### Pendiente de esta ronda: sincronizar al repositorio
+
+Todo lo de arriba está aplicado y verificado en producción, pero falta
+subirlo al repositorio: `vendor/css/tailwind.css`,
+`.github/workflows/pruebas.yml`, `supabase/migrations/010_consolidacion.sql`
+(editado), `supabase/migrations/019_eliminar_politicas_acceso_total.sql`
+(nuevo), `pruebas/00_base_supabase.sql`, `pruebas/probar-migraciones.py`,
+`pendientes-checklist.md`, este archivo.

@@ -12,6 +12,22 @@ exception when duplicate_object then null; end $$;
 
 grant usage on schema public to anon, authenticated;
 
+-- Lo que Supabase hace de fábrica y que este arnés no reproducía hasta
+-- ahora: CUALQUIER tabla nueva de `public` queda con acceso amplio
+-- (select/insert/update/delete) para `anon` Y `authenticated` desde el
+-- momento en que se crea, sin que ninguna migración tenga que pedirlo — RLS
+-- es la única barrera real, nunca el GRANT (ver la nota larga en
+-- `verificar_politicas()`, migración 010). Sin esto, las tablas que las
+-- migraciones crean sin un `grant` explícito (`auditoria`, `parametros`,
+-- `enlaces_escaneo_remoto`, `respaldos_log`) quedaban con CERO permisos para
+-- `authenticated` en este Postgres de prueba, aunque en el proyecto real de
+-- Supabase sí funcionan — una diferencia que `verificar_politicas()` habría
+-- reportado como falla local, sin que hubiera ningún problema de verdad en
+-- producción. Se declara ANTES de crear ninguna tabla: solo afecta a las que
+-- se creen después, con esta misma sesión.
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables to anon;
+
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   email text unique,

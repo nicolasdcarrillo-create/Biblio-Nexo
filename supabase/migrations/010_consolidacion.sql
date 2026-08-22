@@ -1911,7 +1911,15 @@ grant execute on function public.purgar_errores(int) to authenticated;
 
 -- ── verificar_rls ── (última versión: 009_registro_de_errores.sql; lista de
 -- tablas ampliada en 015_lapidas_eliminaciones.sql para incluir
--- elementos_eliminados — la función vive aquí igual, según la regla del
+-- elementos_eliminados, y en esta ronda para incluir enlaces_escaneo_remoto
+-- (014) y respaldos_log (018) — se habían agregado esas dos tablas sin
+-- sumarlas aquí, así que esta función llevaba dos migraciones sin vigilarlas.
+-- Se detectó al construir verificar_politicas() (más abajo), que sí las
+-- incluye desde el principio. `enlaces_escaneo_remoto` es la única excepción
+-- a "cero políticas es crítico": tiene RLS activo pero CERO políticas a
+-- propósito, porque solo se accede a través de funciones `security definer`
+-- (crear_enlace_escaneo, validar_enlace_escaneo, etc.), nunca tocando la
+-- tabla directamente — la función vive aquí igual, según la regla del
 -- proyecto de que los cambios a funciones van en este archivo, no en uno nuevo)
 drop function if exists public.verificar_rls();
 create or replace function public.verificar_rls()
@@ -1940,7 +1948,8 @@ select
     (select count(*)::int from pg_policies p where p.tablename = c.relname and p.schemaname = 'public'),
     case
       when not c.relrowsecurity then 'CRÍTICO: sin RLS, cualquiera puede leer y escribir esta tabla'
-      when (select count(*) from pg_policies p where p.tablename = c.relname and p.schemaname = 'public') = 0
+      when c.relname <> 'enlaces_escaneo_remoto'
+        and (select count(*) from pg_policies p where p.tablename = c.relname and p.schemaname = 'public') = 0
         then 'CRÍTICO: RLS activo pero sin políticas, la tabla queda inaccesible o abierta según el rol'
       else 'Correcto'
     end::text
@@ -1948,7 +1957,10 @@ select
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public'
     and c.relkind = 'r'
-    and c.relname in ('libros', 'lectores', 'prestamos', 'usuarios', 'auditoria', 'parametros', 'errores', 'elementos_eliminados')
+    and c.relname in (
+      'libros', 'lectores', 'prestamos', 'usuarios', 'auditoria', 'parametros',
+      'errores', 'elementos_eliminados', 'enlaces_escaneo_remoto', 'respaldos_log'
+    )
   order by c.relrowsecurity, c.relname;
 end;
 $$;
@@ -2130,6 +2142,197 @@ $verif$;
 
 grant execute on function public.manifiesto_funciones() to authenticated;
 grant execute on function public.verificar_definiciones() to authenticated;
+
+
+-- ============================================================================
+-- MANIFIESTO Y VERIFICACIÓN DE POLÍTICAS RLS Y PERMISOS
+-- ============================================================================
+-- Mismo espíritu que `manifiesto_funciones()` / `verificar_definiciones()` de
+-- arriba, pero para lo que protege las TABLAS en vez de las funciones: qué
+-- políticas RLS debe tener cada una, y a quién se le concedió acceso.
+--
+-- `verificar_rls()` (más arriba) ya avisa si a una tabla le falta RLS o se
+-- quedó sin ninguna política — eso alcanza para notar que algo se rompió,
+-- pero no para notar que alguien cambió CUÁL política existe (la borró desde
+-- el SQL Editor del panel de Supabase, por ejemplo, sin pasar por una
+-- migración) ni si agregó una nueva que nadie revisó. Es el mismo hueco que
+-- `verificar_definiciones()` cierra para las funciones, ahora para políticas.
+--
+-- Sobre los permisos (GRANT): Supabase concede automáticamente acceso amplio
+-- a `anon` y `authenticated` sobre cualquier tabla nueva de `public` — es su
+-- comportamiento de fábrica, no una decisión de este proyecto, y por eso no
+-- tiene sentido exigir aquí una lista exacta de privilegios por tabla (ver la
+-- nota larga en `pruebas/00_base_supabase.sql`). Lo que SÍ vale la pena vigilar
+-- son las dos cosas que si pasan son casi siempre un error: que alguien haya
+-- hecho `grant ... to public` (el rol PÚBLICO de Postgres, que le da acceso a
+-- absolutamente cualquiera, ni siquiera pasa por `anon`/`authenticated`) o que
+-- a `authenticated` le falte hasta el `select` en alguna tabla protegida —
+-- eso dejaría a todo el personal sin poder trabajar en ella.
+
+create or replace function public.manifiesto_tablas_protegidas()
+returns table (tabla text)
+language sql
+immutable
+as $manifiesto$
+  values
+    ('libros'), ('lectores'), ('prestamos'), ('usuarios'),
+    ('auditoria'), ('parametros'), ('errores'), ('elementos_eliminados'),
+    ('enlaces_escaneo_remoto'), ('respaldos_log')
+$manifiesto$;
+
+-- Una fila por política que debe existir. `enlaces_escaneo_remoto` no
+-- aparece a propósito: tiene RLS activo y CERO políticas a propósito, porque
+-- solo se accede a través de funciones `security definer`
+-- (`crear_enlace_escaneo`, `validar_enlace_escaneo`, etc.) — no se toca la
+-- tabla directamente. Eso también se comprueba abajo, no solo se ignora.
+--
+-- "Acceso autenticado {libros,lectores,prestamos}" NO están aquí a
+-- propósito, aunque existieron en producción hasta la migración 019: eran
+-- tres políticas de deriva (cmd=ALL, roles={authenticated}, qual=true,
+-- with_check=true) que le daban a CUALQUIER usuario autenticado —
+-- cualquier `librero`, no solo un admin— acceso total de lectura, escritura
+-- y borrado sobre `libros`, `lectores` y `prestamos`. Postgres combina las
+-- políticas RLS permisivas con OR, así que estas tres anulaban en la
+-- práctica a las políticas más estrechas de abajo (`libros borrado admin`,
+-- etc.): bastaba con estar autenticado para borrar lo que fuera, sin
+-- importar el rol. Encontradas el 22 de agosto de 2026 exactamente por lo
+-- que este manifiesto existe — comparar `pg_policies` contra lo que
+-- debería haber — y eliminadas ese mismo día por la migración 019. Ver ese
+-- archivo para el detalle completo.
+create or replace function public.manifiesto_politicas()
+returns table (tabla text, politica text, comando text)
+language sql
+immutable
+as $manifiesto$
+  values
+    ('auditoria', 'auditoria insercion por trigger', 'INSERT'),
+    ('auditoria', 'auditoria solo lectura admin', 'SELECT'),
+    ('elementos_eliminados', 'elementos_eliminados lectura personal', 'SELECT'),
+    ('errores', 'errores borrado admin', 'DELETE'),
+    ('errores', 'errores lectura admin', 'SELECT'),
+    ('lectores', 'lectores borrado admin', 'DELETE'),
+    ('lectores', 'lectores edicion admin', 'UPDATE'),
+    ('lectores', 'lectores insercion personal', 'INSERT'),
+    ('lectores', 'lectores lectura personal', 'SELECT'),
+    ('libros', 'libros borrado admin', 'DELETE'),
+    ('libros', 'libros edicion admin', 'UPDATE'),
+    ('libros', 'libros insercion personal', 'INSERT'),
+    ('libros', 'libros lectura personal', 'SELECT'),
+    ('parametros', 'parametros escritura admin', 'ALL'),
+    ('parametros', 'parametros lectura', 'SELECT'),
+    ('prestamos', 'prestamos borrado admin', 'DELETE'),
+    ('prestamos', 'prestamos lectura personal', 'SELECT'),
+    ('respaldos_log', 'admin_lee_respaldos_log', 'SELECT'),
+    ('usuarios', 'Autoprovisionar fila propia como librero', 'INSERT'),
+    ('usuarios', 'Solo admins cambian roles', 'UPDATE'),
+    ('usuarios', 'usuarios admin gestiona', 'ALL'),
+    ('usuarios', 'usuarios ve su perfil', 'SELECT')
+$manifiesto$;
+
+create or replace function public.verificar_politicas()
+returns table (
+  categoria text,
+  tabla text,
+  item text,
+  estado text,
+  diagnostico text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $verif$
+begin
+  if not public.es_admin() then
+    raise exception 'Solo un administrador puede revisar las políticas y permisos.' using errcode = 'P0001';
+  end if;
+
+  return query
+  select r.categoria, r.tabla, r.item, r.estado, r.diagnostico
+  from (
+  -- 1) RLS activo en cada tabla que debe estar protegida
+  select
+    'RLS'::text as categoria,
+    m.tabla as tabla,
+    'RLS activo'::text as item,
+    case when c.relrowsecurity then 'Correcto' else 'CRÍTICO' end::text as estado,
+    case when c.relrowsecurity then 'Correcto'
+      else 'La tabla no tiene RLS activo: cualquiera con la llave anónima puede leerla y escribirla entera.'
+    end::text as diagnostico
+  from public.manifiesto_tablas_protegidas() m
+  left join pg_class c on c.relname = m.tabla
+    and c.relnamespace = 'public'::regnamespace
+  union all
+  -- 2) Cada política del manifiesto existe de verdad, con el comando esperado
+  select
+    'Política'::text,
+    m.tabla,
+    m.politica,
+    case
+      when p.policyname is null then 'FALTA'
+      when p.cmd <> m.comando then 'COMANDO DISTINTO'
+      else 'Correcto'
+    end::text,
+    case
+      when p.policyname is null then
+        'La política no existe. Alguien la borró fuera de una migración, o falta aplicar una.'
+      when p.cmd <> m.comando then
+        format('Se esperaba para %s, está declarada para %s.', m.comando, p.cmd)
+      else 'Correcto'
+    end::text
+  from public.manifiesto_politicas() m
+  left join pg_policies p on p.schemaname = 'public'
+    and p.tablename = m.tabla and p.policyname = m.politica
+  union all
+  -- 3) Ninguna política viva que no esté en el manifiesto (posible cambio
+  --    hecho a mano desde el panel, sin dejar constancia en una migración)
+  select
+    'Política inesperada'::text,
+    p.tablename::text,
+    p.policyname::text,
+    'INESPERADA'::text,
+    'Existe en la base de datos pero no en manifiesto_politicas(). Si es intencional, agrégala ahí; si no, revisa quién la creó.'::text
+  from pg_policies p
+  where p.schemaname = 'public'
+    and not exists (
+      select 1 from public.manifiesto_politicas() m
+      where m.tabla = p.tablename and m.politica = p.policyname
+    )
+  union all
+  -- 4) Nadie le dio acceso al rol PUBLIC (todo el mundo, ni siquiera pasa por anon/authenticated)
+  select
+    'Permiso'::text,
+    g.table_name::text,
+    'grant a PUBLIC'::text,
+    'CRÍTICO'::text,
+    format('La tabla tiene un GRANT directo al rol PUBLIC (%s). Revócalo: revoke all on public.%I from public.', g.privilege_type, g.table_name)::text
+  from information_schema.role_table_grants g
+  where g.table_schema = 'public' and g.grantee = 'PUBLIC'
+  union all
+  -- 5) authenticated conserva al menos SELECT en cada tabla protegida
+  select
+    'Permiso'::text,
+    m.tabla,
+    'authenticated puede leer'::text,
+    case when g.table_name is null then 'CRÍTICO' else 'Correcto' end::text,
+    case when g.table_name is null
+      then 'authenticated no tiene ni SELECT en esta tabla: el personal no podrá usarla.'
+      else 'Correcto'
+    end::text
+  from public.manifiesto_tablas_protegidas() m
+  left join information_schema.role_table_grants g
+    on g.table_schema = 'public' and g.table_name = m.tabla
+    and g.grantee = 'authenticated' and g.privilege_type = 'SELECT'
+  ) r
+  order by r.categoria,
+    case r.estado when 'Correcto' then 1 else 0 end,
+    r.tabla, r.item;
+end;
+$verif$;
+
+grant execute on function public.manifiesto_tablas_protegidas() to authenticated;
+grant execute on function public.manifiesto_politicas() to authenticated;
+grant execute on function public.verificar_politicas() to authenticated;
 
 
 -- ============================================================================

@@ -40,9 +40,22 @@ for (const [desc, fg, bg, min] of casos) {
 console.log('='.repeat(62));
 console.log(fallos === 0 ? 'Todos cumplen AA' : `${fallos} combinación(es) NO cumplen AA`);
 
-// Además se verifica que los colores descartados no hayan vuelto al código
+// Además se verifica que los colores descartados no hayan vuelto al código.
+// Se lee ui-base.js más cada vista en js/vistas/ — no js/modules/ui.js, que
+// desde la división de ui-base.js (22 de agosto de 2026) es solo un
+// ensamblador de 17 líneas sin clases Tailwind: leer solo ese archivo hacía
+// que esta verificación diera "sin regresiones" siempre, sin revisar nada.
 import fs from 'fs';
-const ui = fs.readFileSync(new URL('../js/modules/ui.js', import.meta.url), 'utf8');
+import path from 'path';
+import { fileURLToPath } from 'url';
+const RAIZ_UI = path.dirname(fileURLToPath(import.meta.url));
+const archivosUi = [
+  path.join(RAIZ_UI, '../js/modules/ui-base.js'),
+  ...fs.readdirSync(path.join(RAIZ_UI, '../js/vistas'))
+    .filter(f => f.endsWith('.js'))
+    .map(f => path.join(RAIZ_UI, '../js/vistas', f))
+];
+const ui = archivosUi.map(f => fs.readFileSync(f, 'utf8')).join('\n');
 const prohibidos = [
   ['text-amber-600', 'solo 3.19:1 sobre blanco, usar amber-700'],
 ];
@@ -51,9 +64,18 @@ for (const [clase, motivo] of prohibidos) {
   const n = (ui.match(new RegExp(clase, 'g')) || []).length;
   if (n > 0) { console.log(`✗ ${clase} reapareció ${n} vez/veces — ${motivo}`); regresiones++; }
 }
-// stone-400 solo se acepta sobre fondo oscuro
+// stone-400 solo se acepta sobre fondo oscuro.
+// "glass-panel" se sacó de esta lista: es un panel de vidrio CLARO
+// (rgba(255,255,255,0.86), ver css/styles.css) sobre el que texto stone-400
+// no cumple AA — no era una excepción válida, era un bug que esta
+// verificación nunca alcanzaba a ver porque leía el archivo equivocado.
+// "current-user-sub" se agregó en su lugar: es el único caso real de
+// stone-400 en fondo oscuro que no queda cerca de un marcador en su misma
+// línea (vive varias líneas dentro de #sidebar, que sí es oscuro — ver
+// css/styles.css). El resto de las excepciones (texto blanco, el encabezado
+// institucional, el fondo lago) sí son fondo oscuro en la misma línea.
 const lineasClaras = ui.split('\n').filter(l =>
-  l.includes('text-stone-400') && !/sidebar|glass-panel|text-white|Región de Los Ríos|bg-patrimonio-lago|stone-300 mt-1/.test(l));
+  l.includes('text-stone-400') && !/sidebar|current-user-sub|text-white|Región de Los Ríos|bg-patrimonio-lago|stone-300 mt-1/.test(l));
 if (lineasClaras.length > 0) {
   console.log(`✗ text-stone-400 sobre fondo claro en ${lineasClaras.length} línea(s) — solo 2.52:1`);
   regresiones++;

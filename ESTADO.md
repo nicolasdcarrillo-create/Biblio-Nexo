@@ -12,11 +12,16 @@ editados sin confirmar. Todo ya está **aplicado y desplegado en producción**
 para que quede tan al día como la base. Ver la lista completa en
 `pendientes-checklist.md`, sección 🔴.
 
-**Lo más reciente (quinta ronda del día)**: papelera de libros — restaurar
-uno eliminado por accidente desde Administración → Eliminados — hecha y en
-producción. Ver la sección "Quinta ronda del día" al final de este archivo
-para el detalle técnico completo, o la entrada ✅ correspondiente en
-`pendientes-checklist.md` para el resumen.
+**Lo más reciente (sexta ronda del día)**: terminada la división de
+`ui-base.js` (3035 → 1626 líneas) en cuatro vistas nuevas bajo
+`js/vistas/`, el pendiente 🟡 que quedaba de la tercera ronda. Sin base de
+datos de por medio — no hace falta aplicar nada a producción, solo
+sincronizar el repositorio. De paso, corregidas dos verificaciones que
+llevaban tiempo ciegas (`probar-contraste.mjs` y `probar-interfaz.mjs`),
+lo que sacó a la luz 4 contrastes de color reales por debajo de WCAG AA,
+también corregidos. Ver la sección "Sexta ronda del día" al final de este
+archivo para el detalle técnico completo, o la entrada ✅ correspondiente
+en `pendientes-checklist.md` para el resumen.
 
 ---
 
@@ -633,3 +638,114 @@ y no hay ninguna función duplicada por firma.
 `supabase/migrations/010_consolidacion.sql` (editado),
 `supabase/migrations/021_papelera_libros.sql` (nuevo),
 `pendientes-checklist.md`, este archivo.
+
+---
+
+## Sexta ronda del día: dividida `ui-base.js` (el pendiente 🟡 de la tercera ronda)
+
+Sin base de datos de por medio — solo JavaScript del cliente y dos scripts
+de verificación. Ejecutado el plan que quedó pendiente de aprobación en la
+tercera ronda, sin cambios respecto a lo planteado ahí.
+
+### La división
+
+`js/modules/ui-base.js` bajó de 3035 a 1626 líneas. Los ~1409 líneas que
+salieron eran, en realidad, cuatro vistas distintas metidas dentro de un
+bloque marcado internamente como "CATÁLOGO" (el marcador "ADMINISTRACIÓN"
+que aparecía justo antes, en cambio, envolvía solo `_avisoMigracion()` — no
+había nada de administración ahí, esa vista ya vivía en `admin.js` desde
+antes; se le quitó el encabezado engañoso de paso). Mismo patrón que ya
+usaban `admin.js`/`dashboard.js`/`perfil.js`/`reportes.js`: cada archivo
+nuevo exporta un objeto plano de métodos, y `js/modules/ui.js` los mezcla
+todos sobre `UIManager.prototype` con `Object.assign(...)` — `this.metodo()`
+sigue funcionando igual sin importar en qué archivo físico quedó cada
+método, porque todos terminan en el mismo prototipo.
+
+Nuevos:
+- **`js/vistas/catalogo.js`** (287 líneas): `renderCatalog`,
+  `_renderBookRows`, `_bindCatalogRowEvents`, `showEditBookModal`,
+  `promptCreateLoan`.
+- **`js/vistas/lectores.js`** (233 líneas): `renderUsers`,
+  `showEditUserModal`.
+- **`js/vistas/prestamos.js`** (482 líneas): `renderLoans`,
+  `showBulkNotifyModal`, más el flujo de circulación compartido —
+  `flujoPrestamo`, `showConfirmarPrestamoModal`, `_resumenLector`,
+  `showNuevoLectorModal`, `showLectorModal` — que también usan Catálogo
+  (`promptCreateLoan`) y Mesón (`_bindFichaCirculacion`) para iniciar un
+  préstamo, así que se quedaron juntos en vez de partir ese flujo en dos
+  archivos.
+- **`js/vistas/mostrador.js`** (474 líneas): `renderScannerView`,
+  `_formularioAltaRapida`, `showQrRemotoModal`, `_fichaCirculacion`,
+  `_bindFichaCirculacion`. Se llama "mostrador.js" y no "escaner.js" o
+  "scanner.js" para no chocar con `js/modules/scanner.js` (el wrapper de la
+  cámara, que esta vista importa).
+
+Lo que se quedó en `ui-base.js` es justo lo transversal: constructor,
+validaciones, widgets genéricos (incluida `_bindPaginacion`, compartida por
+las tres vistas de tabla), navegación, pantallas de login/autenticación y
+`_avisoMigracion`. Import de `db` se mantuvo (se usa en varios lugares que
+no se movieron); `buscarPorIsbnExterno` y `generarSvgQr` se sacaron de
+`ui-base.js` por quedar sin ningún uso ahí tras el movimiento (pasaron a
+importarse en `mostrador.js`, que es donde de verdad se usan); `Scanner`
+se quedó en `ui-base.js` porque `switchView()` (código transversal de
+navegación) todavía llama a `Scanner.stop()` al salir de la vista Mesón.
+
+`sw.js` actualizado con los 4 archivos nuevos en `PRECACHE_URLS` y
+`CACHE_VERSION` de `v9` a `v10`.
+
+### De paso: dos verificaciones que habían quedado ciegas
+
+Ninguna de las dos es un bug de esta ronda — las dos vienen de la división
+de `js/modules/db.js` de hace dos días, que dejó `js/modules/ui.js` como un
+simple ensamblador de 17 líneas. El plan de esta ronda ya había anotado la
+primera como sospecha; la segunda apareció al correr la batería completa
+después de mover el código.
+
+- **`pruebas/probar-contraste.mjs`** comparaba las clases de color
+  descartadas contra `js/modules/ui.js` — desde la división de `db.js` ese
+  archivo no tiene una sola clase de Tailwind, así que la comprobación
+  llevaba tiempo dando "sin regresiones" sin revisar nada de verdad.
+  Corregido para leer `ui-base.js` + cada archivo de `js/vistas/`. Al
+  corregirlo aparecieron **3 usos reales de `text-stone-400` sobre fondo
+  claro** (2.52:1, bajo el mínimo 4.5:1 de WCAG AA): dos en "Enlaces
+  remotos" y uno en "Eliminados" (la pestaña de la ronda anterior) — los
+  tres cambiados a `text-stone-500` (4.80:1). También se encontró que la
+  excepción de esa misma comprobación para `glass-panel` estaba mal desde
+  siempre: ese panel es vidrio CLARO (`rgba(255,255,255,0.86)` en
+  `css/styles.css`), no oscuro — dejaba pasar un cuarto caso real en la
+  pantalla de completar invitación ("Cargo (opcional)"), corregido igual a
+  `text-stone-500`. Se reemplazó esa excepción por una más puntual
+  (`current-user-sub`, el único caso legítimo de `stone-400` en el menú
+  lateral oscuro que la comprobación línea por línea no alcanzaba a
+  detectar de otra forma, porque el `id="sidebar"` que lo envuelve queda
+  varias líneas más arriba).
+- **`pruebas/probar-interfaz.mjs`** buscaba los cinco `r?.encolado` (los
+  que distinguen "se guardó" de "quedó pendiente sin conexión" en cada
+  acción de circulación) contando solo sobre `ui-base.js`. Tras la
+  división quedan repartidos: 2 en `mostrador.js`, 3 en `prestamos.js`.
+  Corregido para juntar `ui-base.js` con todo `js/vistas/` — pero solo
+  para esa comprobación puntual; el resto de la sección (que sí revisa
+  contenido que se quedó en `ui-base.js`, como `renderShell` y el
+  indicador de conexión) se dejó igual.
+
+### Verificado
+
+Las 8 suites de pruebas JS (`probar-vistas.mjs` 106/106,
+`probar-interfaz.mjs` 124/124, `probar-contraste.mjs`, `probar-escaneo-remoto.mjs`
+13/13, `probar-estado-conexion.mjs` 18/18, `probar-persistencia.mjs` 37/37,
+`probar-sync-queue.mjs` 37/37) y los 3 verificadores de Python
+(`verificar_clases_tailwind.py`, `verificar_llamadas_rpc.py`,
+`verificar_consolidacion.py`) en verde. Sin cambios de esquema — no hizo
+falta correr `probar-migraciones.py` ni `probar_librero.py` (nada tocó
+SQL). Se revisó a mano que ningún nombre de método quedara duplicado entre
+`ui-base.js` y los cuatro archivos nuevos (el `Object.assign` sobrescribiría
+uno con otro en silencio si eso pasara).
+
+### Pendiente de esta ronda: sincronizar al repositorio
+
+`js/modules/ui-base.js` (editado), `js/modules/ui.js` (editado),
+`js/vistas/catalogo.js` (nuevo), `js/vistas/lectores.js` (nuevo),
+`js/vistas/prestamos.js` (nuevo), `js/vistas/mostrador.js` (nuevo),
+`js/vistas/admin.js` (editado, 3 clases de color), `sw.js` (editado, `v10`),
+`pruebas/probar-contraste.mjs` (editado), `pruebas/probar-interfaz.mjs`
+(editado), `pendientes-checklist.md`, este archivo.

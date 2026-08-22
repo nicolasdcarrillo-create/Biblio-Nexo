@@ -4,20 +4,16 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 22 de agosto de 2026 (quinta ronda del día) —
-aclaraste que la idea de la ronda anterior era más específica: no eliminar
-el libro entero (para bajar de cantidad ya servía el campo "Ejemplares en
-total" del modal Editar), sino poder **restaurar un libro si se eliminó por
-accidente**, desde una pestaña nueva "Eliminados" en Administración. Hecho:
-ver el detalle en ✅ abajo. Ronda anterior (la del bug de "La mujer justa"):
-encontrado y corregido que una llave foránea sin documentar bloqueaba el
-borrado de cualquier libro con historial de préstamos, activo o no —
-también en ✅ abajo. Ronda antes de esa: de la categoría 🟡 se resolvieron
-dos de las tres cosas: el script de verificación estática de clases de
-Tailwind (que de paso encontró **26 clases más** sin compilar, además de
-las 2 ya corregidas ese día) y la división de `js/modules/db.js` por
-dominio. Queda pendiente la más delicada — dividir `ui-base.js` — con un
-plan ya listo para revisar antes de tocar código, ver más abajo.
+Última actualización: 22 de agosto de 2026 (sexta ronda del día) —
+terminada la división de `ui-base.js` que quedaba pendiente de la ronda
+anterior. Ver el detalle en ✅ abajo. Ronda anterior (la de la papelera):
+aclaraste que la idea era más específica: no eliminar el libro entero (para
+bajar de cantidad ya servía el campo "Ejemplares en total" del modal
+Editar), sino poder **restaurar un libro si se eliminó por accidente**,
+desde una pestaña nueva "Eliminados" en Administración. Ronda antes de esa
+(la del bug de "La mujer justa"): encontrado y corregido que una llave
+foránea sin documentar bloqueaba el borrado de cualquier libro con
+historial de préstamos, activo o no.
 
 ---
 
@@ -39,15 +35,6 @@ quedaron resueltas hoy, ver ✅ abajo.
 
 - [ ] **Fase 2: integración con Aleph 500** — el siguiente bloque de trabajo
       real, cuando decidas empezarlo (`PROMPT-produccion.md` §7).
-- [ ] **Terminar de dividir `ui-base.js`** (3035 líneas — el número de 2900
-      en versiones anteriores de esta lista estaba desactualizado).
-      Candidatas concretas encontradas en la auditoría: las secciones
-      internas CATÁLOGO y ADMINISTRACIÓN, que se solapan con lo que ya
-      existe en `js/vistas/`. Es un refactor de verdad — mejor como su
-      propia ronda, con tiempo para probar cada vista después de moverla.
-      Plan concreto pendiente de tu visto bueno antes de tocar código —
-      te lo paso en esta misma conversación.
-
 ---
 
 ## ⚫ No es código, pero bloquea el cierre del proyecto
@@ -62,6 +49,51 @@ quedaron resueltas hoy, ver ✅ abajo.
 
 ## ✅ Ya verificado en esta ronda (referencia, no acción)
 
+- [x] **División de `ui-base.js` terminada** — bajó de 3035 a 1626 líneas.
+      Las cuatro vistas que se solapaban con `js/vistas/` (CATÁLOGO
+      internamente, más lo que en realidad eran tres vistas separadas:
+      Lectores, Préstamos y Mesón) se movieron a archivos nuevos, siguiendo
+      el mismo patrón que ya usaban `admin.js`/`dashboard.js`/`perfil.js`/
+      `reportes.js` — cada uno exporta un objeto plano de métodos que
+      `js/modules/ui.js` mezcla sobre `UIManager.prototype` con
+      `Object.assign(...)`, así que `this.metodo()` sigue funcionando igual
+      sin importar en qué archivo quedó definido cada método. Nuevos:
+      `js/vistas/catalogo.js` (287 líneas), `js/vistas/lectores.js` (233),
+      `js/vistas/prestamos.js` (482, incluye el flujo de préstamo
+      compartido que usan tanto Catálogo como Mesón) y `js/vistas/mostrador.js`
+      (474, llamado así — no `scanner.js` — para no chocar con
+      `js/modules/scanner.js`, el wrapper de la cámara que importa). Lo que
+      quedó en `ui-base.js` es justo lo transversal: constructor,
+      validaciones, widgets genéricos (incluida `_bindPaginacion`, que
+      comparten las tres vistas de tabla), navegación y pantallas de
+      login/autenticación. `sw.js` actualizado con los 4 archivos nuevos en
+      `PRECACHE_URLS` y `CACHE_VERSION` de `v9` a `v10`. Las 8 suites de
+      pruebas JS y los 3 verificadores de Python, todos en verde (230
+      comprobaciones JS entre `probar-vistas.mjs` y `probar-interfaz.mjs`
+      nada más).
+      De paso, corregidos dos verificadores que habían quedado ciegos por
+      la división anterior de `ui.js` (la de `db.js`, ronda de hace dos
+      días la dejó como puro ensamblador de 17 líneas sin código real que
+      revisar): `pruebas/probar-contraste.mjs` comparaba clases de color
+      contra `js/modules/ui.js` en vez de `ui-base.js` + `js/vistas/*.js`,
+      así que llevaba tiempo dando "sin regresiones" sin revisar nada de
+      verdad — al corregirlo aparecieron **3 usos reales de
+      `text-stone-400` sobre fondo claro** (2.52:1, bajo el mínimo 4.5:1 de
+      WCAG AA): dos en la pestaña "Enlaces remotos" de Administración y uno
+      en "Eliminados" (la papelera de la ronda anterior) — los tres
+      cambiados a `text-stone-500` (4.80:1, cumple). También se encontró
+      que la excepción de esa misma verificación para `glass-panel` estaba
+      mal desde siempre (ese panel es vidrio CLARO, `rgba(255,255,255,0.86)`
+      — no oscuro), lo que dejaba pasar un cuarto caso real en la pantalla
+      de completar invitación ("Cargo (opcional)"), también corregido a
+      `text-stone-500`; se cambió esa excepción por una más precisa
+      (`current-user-sub`, el único caso legítimo de `stone-400` en el
+      menú lateral oscuro que la verificación por línea no alcanzaba a ver
+      de otra forma). Y `pruebas/probar-interfaz.mjs` buscaba los cinco
+      `r?.encolado` (que distinguen "se guardó" de "quedó pendiente sin
+      conexión") solo en `ui-base.js`, donde ya no viven más que dos —
+      ahora junta `ui-base.js` con todo `js/vistas/` para esa comprobación
+      puntual.
 - [x] **Papelera de libros: restaurar uno eliminado por accidente, desde
       Administración → Eliminados.** Aclaraste el pedido real de la ronda
       anterior: no hacía falta un botón para quitar una sola copia (ya

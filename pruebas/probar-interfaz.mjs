@@ -404,6 +404,17 @@ comprobar('también se reintenta al recuperar la conexión (evento "online")',
 console.log('\n12. Fase 1.3 — cola de sincronización: el enganche, no la lógica interna');
 
 const uiBaseJs = fs.readFileSync('js/modules/ui-base.js', 'utf8');
+// Los cinco lugares que escriben "r?.encolado" vivían todos en ui-base.js
+// hasta la división del 22 de agosto de 2026; ahora quedaron repartidos entre
+// js/vistas/prestamos.js (renovar, prestar x2) y js/vistas/mostrador.js
+// (devolver, renovar de la ficha de circulación) — se juntan aquí solo para
+// esta comprobación puntual, sin tocar uiBaseJs (las demás comprobaciones de
+// esta sección sí son sobre contenido que se quedó en ui-base.js).
+const todasLasVistasJs = fs.readdirSync('js/vistas')
+  .filter(f => f.endsWith('.js'))
+  .map(f => fs.readFileSync(`js/vistas/${f}`, 'utf8'))
+  .join('\n');
+const uiCompletoJs = uiBaseJs + '\n' + todasLasVistasJs;
 
 comprobar('db.js define la clase SyncQueue y exporta colaSync',
   /class SyncQueue/.test(dbJs) && /export const colaSync = new SyncQueue\(\)/.test(dbJs));
@@ -432,9 +443,9 @@ comprobar('db.js se suscribe él mismo al evento "online" para reintentar la col
   '(no depende de que main.js se acuerde de hacerlo)',
   /addEventListener\(\s*['"]online['"][\s\S]{0,60}colaSync\.reintentarPendientes\(\)/.test(dbJs));
 
-comprobar('ui-base.js distingue el resultado "encolado" del éxito normal en los cinco lugares que ' +
+comprobar('la interfaz distingue el resultado "encolado" del éxito normal en los cinco lugares que ' +
   'escriben (renovar, devolver x2, prestar x2 — la persona del mesón ve un aviso distinto, no un falso "listo")',
-  (uiBaseJs.match(/r\?\.encolado/g) || []).length === 5);
+  (uiCompletoJs.match(/r\?\.encolado/g) || []).length === 5);
 
 // ---------------------------------------------------------------------------
 // 13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna

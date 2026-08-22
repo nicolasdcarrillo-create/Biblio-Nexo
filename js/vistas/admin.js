@@ -415,7 +415,7 @@ export default {
               <tr class="border-t border-stone-200">
                 <td class="px-4 py-3">
                   <div class="text-xs text-stone-500">${e.creado_por_email || 'Cuenta eliminada'}</div>
-                  <div class="text-[11px] text-stone-400">${this._fechaHoraLegible(e.creado_en)}</div>
+                  <div class="text-[11px] text-stone-500">${this._fechaHoraLegible(e.creado_en)}</div>
                 </td>
                 <td class="px-4 py-3 text-stone-600 text-xs">${this._fechaHoraLegible(e.expira_en)}</td>
                 <td class="px-4 py-3">
@@ -426,7 +426,7 @@ export default {
                       : '<span class="stamp !rotate-0 bg-stone-200 text-stone-600"><i aria-hidden="true" class="fas fa-clock"></i> Vencido</span>'}
                 </td>
                 <td class="px-4 py-3 text-stone-600 text-xs">
-                  ${e.usos}${e.ultimo_uso_en ? html`<div class="text-[11px] text-stone-400">último: ${this._fechaHoraLegible(e.ultimo_uso_en)}</div>` : ''}
+                  ${e.usos}${e.ultimo_uso_en ? html`<div class="text-[11px] text-stone-500">último: ${this._fechaHoraLegible(e.ultimo_uso_en)}</div>` : ''}
                 </td>
                 <td class="px-4 py-3 text-right">
                   ${e.vigente ? html`
@@ -510,7 +510,7 @@ export default {
                 <td class="px-4 py-3 text-center tabular-nums">${f.copias_totales ?? '—'}</td>
                 <td class="px-4 py-3 text-stone-500 text-xs">
                   ${this._fechaHoraLegible(f.eliminado_en)}
-                  ${f.eliminado_por ? html`<div class="text-[11px] text-stone-400">${f.eliminado_por}</div>` : ''}
+                  ${f.eliminado_por ? html`<div class="text-[11px] text-stone-500">${f.eliminado_por}</div>` : ''}
                 </td>
                 <td class="px-4 py-3 text-right">
                   <button class="restore-book-btn btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold" data-id="${f.libro_id}">Restaurar</button>

@@ -11,7 +11,11 @@ import dashboard from '../vistas/dashboard.js';
 import reportes from '../vistas/reportes.js';
 import perfil from '../vistas/perfil.js';
 import admin from '../vistas/admin.js';
+import catalogo from '../vistas/catalogo.js';
+import lectores from '../vistas/lectores.js';
+import prestamos from '../vistas/prestamos.js';
+import mostrador from '../vistas/mostrador.js';
 
-Object.assign(UIManager.prototype, dashboard, reportes, perfil, admin);
+Object.assign(UIManager.prototype, dashboard, reportes, perfil, admin, catalogo, lectores, prestamos, mostrador);
 
 export default new UIManager();

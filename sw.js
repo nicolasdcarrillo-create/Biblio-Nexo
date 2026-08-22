@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v9'; // eliminar_libro() con papelera/restaurar (22 de agosto de 2026) — RPC nuevos en js/modules/db/libros.js, pestaña "Eliminados" en admin.js
+const CACHE_VERSION = 'v10'; // división de ui-base.js (22 de agosto de 2026) — catalogo.js, lectores.js, prestamos.js y mostrador.js nuevos en js/vistas/
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 
@@ -109,8 +109,12 @@ const PRECACHE_URLS = [
   '/js/modules/ui.js',
   '/js/modules/utilidades.js',
   '/js/vistas/admin.js',
+  '/js/vistas/catalogo.js',
   '/js/vistas/dashboard.js',
+  '/js/vistas/lectores.js',
+  '/js/vistas/mostrador.js',
   '/js/vistas/perfil.js',
+  '/js/vistas/prestamos.js',
   '/js/vistas/reportes.js'
 ];
 

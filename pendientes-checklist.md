@@ -4,13 +4,17 @@ Checklist de trabajo, no documentación permanente del proyecto (esa vive en
 `PROMPT-produccion.md` y `ESTADO.md`, dentro del repo). Pensada para ir
 tachando a medida que se resuelve cada cosa.
 
-Última actualización: 22 de agosto de 2026 (segunda ronda del día) — SMTP
-propio terminado (ya no queda ningún pendiente 🔴), y de la categoría
-🟠 se resolvieron las tres cosas: dos bugs cosméticos de Tailwind, la
-versión de Node en CI, y `verificar_politicas()`. Construir esta última
-encontró una falla de seguridad real en producción — tres políticas RLS que
-daban acceso total a cualquier usuario autenticado — ya corregida y
-verificada en vivo. Ver el detalle en ✅ abajo, primera entrada.
+Última actualización: 22 de agosto de 2026 (tercera ronda del día) — de la
+categoría 🟡 se resolvieron dos de las tres cosas: el script de verificación
+estática de clases de Tailwind (que de paso encontró **26 clases más** sin
+compilar, además de las 2 ya corregidas antes hoy) y la división de
+`js/modules/db.js` por dominio. Queda pendiente la más delicada — dividir
+`ui-base.js` — con un plan ya listo para revisar antes de tocar código, ver
+más abajo. Ronda anterior: SMTP propio terminado (ya no queda ningún
+pendiente 🔴), y de la categoría 🟠 se resolvieron dos bugs cosméticos de
+Tailwind, la versión de Node en CI, y `verificar_politicas()` (que encontró
+una falla de seguridad real en producción, ya corregida y verificada en
+vivo — ver el detalle en ✅ abajo).
 
 ---
 
@@ -32,17 +36,14 @@ quedaron resueltas hoy, ver ✅ abajo.
 
 - [ ] **Fase 2: integración con Aleph 500** — el siguiente bloque de trabajo
       real, cuando decidas empezarlo (`PROMPT-produccion.md` §7).
-- [ ] **Terminar de dividir `ui-base.js`** (todavía 2900 líneas). Candidatas
-      concretas encontradas en la auditoría: las secciones internas
-      CATÁLOGO y ADMINISTRACIÓN, que se solapan con lo que ya existe en
-      `js/vistas/`. Es un refactor de verdad — mejor como su propia ronda,
-      con tiempo para probar cada vista después de moverla.
-- [ ] Dividir `js/modules/db.js` (~840 líneas en un solo objeto) por
-      dominio (préstamos, lectores, libros, reportes), si sigue creciendo —
-      menos urgente que lo de arriba, hoy es cohesivo tal como está.
-- [ ] Script de verificación estático de clases de Tailwind no compiladas
-      (ítem 12, recomendado pero no construido — evita el build step. Mismo
-      espíritu que `pruebas/verificar_llamadas_rpc.py`).
+- [ ] **Terminar de dividir `ui-base.js`** (3035 líneas — el número de 2900
+      en versiones anteriores de esta lista estaba desactualizado).
+      Candidatas concretas encontradas en la auditoría: las secciones
+      internas CATÁLOGO y ADMINISTRACIÓN, que se solapan con lo que ya
+      existe en `js/vistas/`. Es un refactor de verdad — mejor como su
+      propia ronda, con tiempo para probar cada vista después de moverla.
+      Plan concreto pendiente de tu visto bueno antes de tocar código —
+      te lo paso en esta misma conversación.
 
 ---
 
@@ -58,6 +59,67 @@ quedaron resueltas hoy, ver ✅ abajo.
 
 ## ✅ Ya verificado en esta ronda (referencia, no acción)
 
+- [x] **Script de verificación estática de clases de Tailwind no
+      compiladas** (`pruebas/verificar_clases_tailwind.py`, mismo espíritu
+      que `verificar_llamadas_rpc.py`: sin build step, sin navegador —
+      compara toda clase usada en `class="..."`, `className=`, y
+      `classList.add/remove/toggle(...)` en el JS y el HTML contra las
+      clases que de verdad existen en `vendor/css/*.css` y `css/*.css`).
+      Ya enganchado a `.github/workflows/pruebas.yml` como un paso más del
+      job `consolidacion`. **Al construirlo y correrlo por primera vez
+      encontró 26 clases de Tailwind más que se usaban en el código pero
+      nunca se habían compilado** — además de las dos ya corregidas antes
+      hoy (`mx-auto`, `hover:bg-rose-100`). Ninguna daba error: simplemente
+      no hacían nada, silenciosamente, en `perfil.js`, `ui-base.js`,
+      `admin.js`, `dashboard.js` y `escaneo-remoto.html`. Se agregaron a
+      mano a `vendor/css/tailwind.css`, con los valores tomados de las
+      reglas de Tailwind v3 por defecto (confirmado que el tema no está
+      personalizado, comparando contra reglas ya compiladas equivalentes).
+      El checker corrió limpio después. Clases usadas para
+      delegación de eventos en JS (nunca aparecen literalmente en un CSS,
+      por diseño — `admin-tab-btn`, `delete-book-btn`, etc.) quedaron en
+      una lista de excepciones documentada dentro del script, no
+      ignoradas a ciegas.
+- [x] **`js/modules/db.js` dividido por dominio.** Bajó de 1242 a 535
+      líneas; el resto se movió, sin cambiar ni una línea de lógica, a 12
+      archivos nuevos bajo `js/modules/db/` (uno por dominio: libros,
+      lectores, préstamos, administración, personal, perfil, diagnóstico,
+      errores del servidor, enlaces de escaneo, respaldos, cumplimiento
+      Ley 21.719, reportes) más un `compartido.js` con lo común
+      (`supabase`, `conTiempoLimite`, `hoyEnChile`, etc.). Lo que se quedó
+      en `db.js` no es arbitrario: `pruebas/probar-interfaz.mjs` revisa el
+      texto literal de ese archivo con ~14 expresiones regulares (busca
+      `class SyncQueue`, la cola de sincronización sin conexión, y los
+      métodos de circulación con su llamada a `colaSync.encolar(...)` a
+      pocas líneas de distancia) — todo eso se dejó físicamente en
+      `db.js` a propósito, para que esas comprobaciones sigan pasando sin
+      tocarlas. La superficie pública no cambió un carácter: los 7
+      archivos que hacen `import { db }`, `import { hoyEnChile }` o
+      `import { colaSync }` siguen funcionando igual. `sw.js` actualizado
+      con los 13 archivos nuevos en `PRECACHE_URLS` (si no, la app sin
+      conexión fallaría al pedir un archivo que nunca se precargó) y
+      `CACHE_VERSION` subida de `v7` a `v8`. Las 6 suites de pruebas JS y
+      los 3 verificadores de Python, todos en verde.
+- [x] **CI en rojo tras subir el commit — dos causas, ambas corregidas.**
+      Al revisar por qué fallaban "Consolidación de funciones" y "Base de
+      datos (PostgreSQL 17)" aparecieron dos cosas más, ninguna relacionada
+      con las políticas RLS de arriba: (1) las tres funciones nuevas de
+      `verificar_politicas()` no se habían agregado a `manifiesto_funciones()`
+      (el catálogo que vigila `verificar_definiciones()`) — corregido, y de
+      paso reveló (2) **`deshacer_libro_remoto()` no existía en producción**,
+      aunque sí está en los archivos de migración: el botón "Deshacer" del
+      escaneo remoto llevaba quién sabe cuánto tiempo roto en la base real,
+      sin que nada lo hubiera avisado hasta que `verificar_definiciones()`
+      lo empezó a vigilar con el manifiesto ya al día. No tiene relación con
+      el hallazgo de las políticas de acceso total — es un caso separado de
+      "el archivo dice una cosa, la base de datos vivía con otra". Ya
+      restaurada en producción y confirmada con `verificar_definiciones()`
+      (44 funciones, 0 fuera de norma). Dos comprobaciones más que estaban
+      mal escritas (esperaban que el anónimo no pudiera leer `parametros` ni
+      la tabla de enlaces directo, cuando en realidad la primera es pública
+      a propósito desde la migración 007, y la segunda vuelve vacía por RLS
+      en vez de dar error) también corregidas — las descubrió el mismo
+      arreglo de fidelidad del arnés de pruebas de más arriba.
 - [x] **Hallazgo de seguridad — tres políticas RLS de acceso total en
       `libros`, `lectores` y `prestamos`, encontradas y corregidas hoy.**
       Al construir `verificar_politicas()` (ver el ítem siguiente) y

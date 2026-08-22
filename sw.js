@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v7'; // reglas de contraseña de la pantalla de registro (js/modules/ui-base.js): 8 caracteres + mayúscula + número, en vez de 12 caracteres
+const CACHE_VERSION = 'v8'; // db.js se dividió por dominio en js/modules/db/*.js (22 de agosto de 2026) — archivos nuevos en PRECACHE_URLS
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 
@@ -85,6 +85,19 @@ const PRECACHE_URLS = [
   '/js/escaneo-remoto.js',
   '/js/modules/auth.js',
   '/js/modules/db.js',
+  '/js/modules/db/administracion.js',
+  '/js/modules/db/compartido.js',
+  '/js/modules/db/cumplimiento.js',
+  '/js/modules/db/diagnostico.js',
+  '/js/modules/db/enlaces-escaneo.js',
+  '/js/modules/db/errores-servidor.js',
+  '/js/modules/db/lectores.js',
+  '/js/modules/db/libros.js',
+  '/js/modules/db/perfil.js',
+  '/js/modules/db/personal.js',
+  '/js/modules/db/prestamos.js',
+  '/js/modules/db/reportes.js',
+  '/js/modules/db/respaldos.js',
   '/js/modules/errores.js',
   '/js/modules/estado-conexion.js',
   '/js/modules/libros-externos.js',

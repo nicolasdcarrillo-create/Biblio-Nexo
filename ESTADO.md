@@ -286,6 +286,48 @@ Los dos `node-version: '20'` de `.github/workflows/pruebas.yml` (jobs
 `interfaz` y el par `base-de-datos`/`reconstruccion`) subidos a `'24'` —
 GitHub venía avisando que la 20 está deprecada en `actions/setup-node@v4`.
 
+### CI en rojo tras el primer push: dos causas más, sin relación con lo anterior
+
+Al subir el commit fallaron "Consolidación de funciones" y "Base de datos
+(PostgreSQL 17)". Ninguna de las dos tiene que ver con las políticas RLS de
+arriba:
+
+1. **Las tres funciones nuevas no estaban en `manifiesto_funciones()`.**
+   `verificar_consolidacion.py` exige que toda función declarada en la 010
+   aparezca en el manifiesto que vigila `verificar_definiciones()` — se me
+   pasó agregar `manifiesto_tablas_protegidas`, `manifiesto_politicas` y
+   `verificar_politicas`. Corregido (41 → 44 funciones), aplicado a
+   producción, y actualizados los dos conteos que quedaban fijos en
+   `pruebas/probar_librero.py` (línea "el manifiesto cubre N funciones" y
+   la de "un admin SÍ puede ver el autodiagnóstico").
+2. **`deshacer_libro_remoto()` no existía en producción — hallazgo real,
+   sin relación con nada de hoy.** Al corregir lo anterior, `verificar_definiciones()`
+   contra producción (impersonando a un admin con `set local
+   request.jwt.claim.sub`) mostró una función `FALTA`: `deshacer_libro_remoto`
+   está en `010_consolidacion.sql` y en la prueba local (que instala desde
+   cero y por eso nunca lo notó), pero en la base de datos REAL no existía
+   — el botón "Deshacer" del escaneo remoto llevaba rota. Restaurada
+   directamente en producción con el mismo cuerpo que tiene el archivo
+   local; `verificar_definiciones()` vuelve a dar 44/44 en verde.
+3. **De paso, dos comprobaciones de `pruebas/probar_librero.py` estaban mal
+   escritas** — las descubrió el mismo arreglo de fidelidad del arnés
+   (`alter default privileges`) de más arriba, que ahora deja que el
+   anónimo local tenga los mismos GRANT de fábrica que en producción:
+   - Esperaba que el anónimo NO pudiera leer `parametros`, pero esa tabla
+     es pública a propósito desde la migración 007 (`using (true)`, sin
+     restringir el rol — son valores de configuración, no datos
+     personales). Se cambió por dos comprobaciones correctas: sí puede
+     leer, no puede escribir.
+   - Esperaba que leer `enlaces_escaneo_remoto` diera un error de permiso,
+     pero con RLS activo y cero políticas Postgres no da error: deja pasar
+     la consulta y la filtra a cero filas. Se corrigió la comprobación
+     para pedir "vuelve vacía" en vez de "falla".
+
+`pruebas/verificar_consolidacion.py`, `pruebas/verificar_llamadas_rpc.py`,
+`pruebas/probar-migraciones.py` (148/148) y `pruebas/probar_librero.py`
+(107/107, corrido localmente con `pgserver`) en verde, todo aplicado y
+verificado en producción antes de este segundo push.
+
 ### Pendiente de esta ronda: sincronizar al repositorio
 
 Todo lo de arriba está aplicado y verificado en producción, pero falta
@@ -293,4 +335,98 @@ subirlo al repositorio: `vendor/css/tailwind.css`,
 `.github/workflows/pruebas.yml`, `supabase/migrations/010_consolidacion.sql`
 (editado), `supabase/migrations/019_eliminar_politicas_acceso_total.sql`
 (nuevo), `pruebas/00_base_supabase.sql`, `pruebas/probar-migraciones.py`,
-`pendientes-checklist.md`, este archivo.
+`pruebas/probar_librero.py`, `pendientes-checklist.md`, este archivo.
+
+---
+
+## Completado hoy, tercera ronda: script de Tailwind + división de `db.js`
+
+De los tres pendientes 🟡: el checker de clases de Tailwind, la división de
+`js/modules/db.js`, y el plan (sin implementar todavía) para dividir
+`ui-base.js`.
+
+### Script de verificación estática de clases de Tailwind
+
+`pruebas/verificar_clases_tailwind.py`, mismo espíritu que
+`verificar_llamadas_rpc.py` (sin base de datos, sin navegador, sin build
+step): extrae toda clase compilada de `vendor/css/*.css` y `css/*.css` con
+una regex que entiende el escape de Tailwind (`.hover\:bg-rose-100:hover`,
+`.mb-1\.5`), y toda clase usada en `class="..."`, `className=` y
+`classList.add/remove/toggle(...)` en `js/**/*.js` y `*.html`. Reporta
+cualquier clase usada que no esté compilada ni en la lista de excepciones
+(clases usadas solo como marcador para delegación de eventos, como
+`admin-tab-btn` — nunca aparecen en un CSS por diseño, y están documentadas
+una por una en el propio script).
+
+Punto delicado: el código genera algunas clases con interpolación
+(`class="momento-${momento}"`, o un ternario multilínea dentro de
+`${...}`). El script protege todo el contenido entre `${` y `}` (incluyendo
+saltos de línea, no solo espacios) antes de partir por espacios en blanco, y
+descarta cualquier token que todavía contenga `${` — así no genera falsos
+positivos con fragmentos sueltos como `momento-` ni rompe un ternario largo
+en basura.
+
+**Al correrlo por primera vez encontró 26 clases más sin compilar** —
+además de las 2 ya corregidas antes hoy (`mx-auto`,
+`hover:bg-rose-100`) — repartidas en `perfil.js`, `ui-base.js`, `admin.js`,
+`dashboard.js` y `escaneo-remoto.html`. Ninguna daba error: simplemente no
+hacían nada. Se agregaron a mano a `vendor/css/tailwind.css`, con valores
+tomados de Tailwind v3 por defecto (confirmado que el tema del proyecto no
+está personalizado, comparando contra reglas ya compiladas equivalentes
+como `max-w-lg` = 32rem o `w-8` = 2rem). Ya enganchado como paso nuevo del
+job `consolidacion` en `.github/workflows/pruebas.yml`.
+
+### `js/modules/db.js` dividido por dominio
+
+Bajó de 1242 a 535 líneas. El resto se movió — sin cambiar ni una línea de
+lógica, solo reubicando código — a 12 archivos nuevos bajo `js/modules/db/`:
+`compartido.js` (lo común: `supabase`, `conTiempoLimite`, `hoyEnChile`,
+`ESPERA`), y uno por dominio — `libros.js`, `lectores.js`, `prestamos.js`,
+`administracion.js`, `personal.js`, `perfil.js`, `diagnostico.js`,
+`errores-servidor.js`, `enlaces-escaneo.js`, `respaldos.js`,
+`cumplimiento.js`, `reportes.js`.
+
+Lo que se quedó físicamente en `db.js` no es arbitrario:
+`pruebas/probar-interfaz.mjs` inspecciona el TEXTO LITERAL de ese archivo
+con ~14 expresiones regulares (busca `class SyncQueue`, la cola de
+sincronización sin conexión completa, y los métodos de circulación —
+`registrarPrestamo`, `devolverPrestamo`, `renovarPrestamo`,
+`consultarLibro`, `estadoLector` — con su llamada a `colaSync.encolar(...)`
+o su fallback sin conexión a pocas líneas de distancia). Convertir `db.js`
+en un archivo puente que solo reexporta habría roto esas comprobaciones en
+silencio, así que ese código se dejó tal cual, en el mismo archivo.
+
+La superficie pública no cambió ni un carácter: los 7 archivos que hacen
+`import { db }`, `import { hoyEnChile }` o `import { colaSync }` desde
+`js/modules/db.js` (`ui-base.js`, `estado-conexion.js`,
+`js/vistas/{perfil,dashboard,admin,reportes}.js`, `main.js`) siguen
+funcionando exactamente igual — `db` sigue siendo el mismo objeto con los
+mismos métodos, ahora armado con spreads: `{ ...métodosDeCirculación,
+...libros, ...lectores, ...prestamos, ...administracion, ...personal,
+...perfil, ...diagnostico, ...erroresServidor, ...enlacesEscaneo,
+...respaldos, ...cumplimiento, ...reportes }`.
+
+`sw.js` actualizado: los 13 archivos nuevos agregados a `PRECACHE_URLS`
+justo después de `/js/modules/db.js` (si no, la app sin conexión fallaría
+al pedir un archivo que nunca se precargó), y `CACHE_VERSION` subida de
+`v7` a `v8`.
+
+Las 6 suites de pruebas JS (`probar-interfaz.mjs` 124/124, `probar-vistas.mjs`
+106/106, `probar-escaneo-remoto.mjs` 13/13, `probar-persistencia.mjs`
+37/37, `probar-sync-queue.mjs` 37/37, `probar-estado-conexion.mjs` 18/18) y
+los 3 verificadores de Python (`verificar_consolidacion.py`,
+`verificar_llamadas_rpc.py`, `verificar_clases_tailwind.py`) en verde.
+
+### Plan para dividir `ui-base.js` (sin implementar todavía)
+
+Pediste el plan primero, antes de tocar código — ver el mensaje de esta
+conversación con el detalle. Queda como el único pendiente 🟡 de esta ronda.
+
+### Pendiente de esta ronda: sincronizar al repositorio
+
+`pruebas/verificar_clases_tailwind.py` (nuevo), `vendor/css/tailwind.css`
+(editado, 26 clases más), `.github/workflows/pruebas.yml` (editado — de
+nuevo con la protección de escritura del bridge, hay que copiarlo a mano),
+`js/modules/db.js` (reescrito) y los 13 archivos nuevos bajo
+`js/modules/db/`, `sw.js` (editado, `v8`), `pendientes-checklist.md`, este
+archivo.

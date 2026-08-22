@@ -2075,7 +2075,10 @@ as $manifiesto$
     ('marcar_error_visto', true),
     ('purgar_errores', true),
     ('verificar_rls', true),
-    ('verificar_circulacion', true)
+    ('verificar_circulacion', true),
+    ('manifiesto_tablas_protegidas', false),
+    ('manifiesto_politicas', false),
+    ('verificar_politicas', true)
 $manifiesto$;
 
 

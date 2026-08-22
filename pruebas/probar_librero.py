@@ -357,10 +357,12 @@ print('\n7. AUTODIAGNÓSTICOS QUE VE EL ADMINISTRADOR EN PANTALLA')
 ok, filas = como(ADMIN, "select tabla, diagnostico from public.verificar_rls();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_rls() no reporta ninguna tabla en problemas', ok and not malas, texto(malas))
-# 8, no 7: desde la migración 015 (Fase 1.2, lápidas de eliminación) también
-# se revisa "elementos_eliminados" — ver el comentario junto a la definición
-# de verificar_rls() en la 010.
-comprobar('verificar_rls() revisa las 8 tablas con datos', len(filas) == 8, f'revisó {len(filas)}')
+# 10, no 8: desde la migración 015 (Fase 1.2, lápidas de eliminación) se sumó
+# "elementos_eliminados", y en esta ronda (verificar_politicas(), 22 de
+# agosto de 2026) se corrigió que "enlaces_escaneo_remoto" (014) y
+# "respaldos_log" (018) llevaban dos migraciones sin vigilarse — ver el
+# comentario junto a la definición de verificar_rls() en la 010.
+comprobar('verificar_rls() revisa las 10 tablas con datos', len(filas) == 10, f'revisó {len(filas)}')
 
 ok, filas = como(ADMIN, "select funcion, es_definer from public.verificar_circulacion();")
 rotas = [f[0] for f in filas if not f[1]]
@@ -444,7 +446,9 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-comprobar('el manifiesto cubre 41 funciones', len(filas) == 41, f'cubre {len(filas)}')
+# 44, no 41: esta ronda sumó manifiesto_tablas_protegidas(), manifiesto_politicas()
+# y verificar_politicas() (RLS/grants, mismo patrón que este autodiagnóstico).
+comprobar('el manifiesto cubre 44 funciones', len(filas) == 44, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -568,10 +572,20 @@ for desc, consulta in [
     ('no puede anonimizar un lector',  "select public.anonimizar_lector('12345678-5')"),
     ('no puede leer los errores',      "select * from public.listar_errores(5, false)"),
     ('no puede leer la auditoría',     "select * from public.auditoria"),
-    ('no puede leer los parámetros',   "select * from public.parametros"),
 ]:
     ok, r = como_anonimo(consulta)
     comprobar('el anónimo ' + desc, not ok, f'se ejecutó y devolvió: {texto(r)[:100]}')
+
+# `parametros` es la única tabla protegida donde el anónimo SÍ puede leer
+# directo, a propósito: la política "parametros lectura" (migración 007) usa
+# `using (true)` sin restringir el rol — son valores de configuración
+# globales (máximo de préstamos, días de plazo, etc.), no datos personales.
+# Solo la escritura exige es_admin() ("parametros escritura admin").
+ok, r = como_anonimo("select clave from public.parametros")
+comprobar('el anónimo SÍ puede leer los parámetros (config pública, a propósito)',
+          ok and len(r) > 0, f'ok={ok}, filas={texto(r)[:150]}')
+ok, out = como_anonimo("update public.parametros set valor = '999' where clave = 'dias_prestamo'")
+comprobar('...pero no puede escribirlos', not ok, texto(out)[-150:] if not ok else '')
 
 # El autodiagnóstico revela el estado de la protección: es reconocimiento útil
 for desc, consulta in [
@@ -596,10 +610,23 @@ for desc, consulta in [
     ('no puede generar un enlace de escaneo', "select * from public.crear_enlace_escaneo(4)"),
     ('no puede listar los enlaces de escaneo', "select * from public.listar_enlaces_escaneo()"),
     ('no puede revocar un enlace de escaneo', "select public.revocar_enlace_escaneo(1)"),
-    ('no puede leer la tabla de enlaces directo', "select * from public.enlaces_escaneo_remoto"),
 ]:
     ok, r = como_anonimo(consulta)
     comprobar('el anónimo ' + desc, not ok, f'se ejecutó y devolvió: {texto(r)[:100]}')
+
+# `enlaces_escaneo_remoto` tiene RLS activo y CERO políticas a propósito (ver
+# el comentario junto a manifiesto_politicas() en la 010): con RLS activo y
+# ninguna política, Postgres no da "permiso denegado" — deja pasar la
+# consulta y filtra TODAS las filas, así que el resultado correcto es una
+# lista vacía, no un error. Antes esta comprobación pedía `not ok` (que la
+# consulta fallara) y solo pasaba en local por una brecha ya corregida en
+# `pruebas/00_base_supabase.sql`: el arnés no le daba a `anon` el SELECT de
+# fábrica que sí tiene en producción, así que la consulta fallaba por falta
+# de GRANT, no por RLS. Con el arnés ya fiel a producción, lo que hay que
+# comprobar es que vuelve vacía.
+ok, r = como_anonimo("select * from public.enlaces_escaneo_remoto")
+comprobar('el anónimo no ve ninguna fila de enlaces_escaneo_remoto (RLS sin políticas)',
+          ok and len(r) == 0, f'ok={ok}, filas={texto(r)[:150]}')
 
 ok, r = como_anonimo("select valido, motivo from public.validar_enlace_escaneo('token-inventado')")
 comprobar('el anónimo SÍ puede llamar a validar_enlace_escaneo, pero un token inventado no es válido',
@@ -627,7 +654,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 41,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 44,
           texto(out)[-150:])
 
 

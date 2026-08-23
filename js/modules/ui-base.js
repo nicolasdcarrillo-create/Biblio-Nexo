@@ -1,6 +1,5 @@
 import * as auth from './auth.js';
 import { db, hoyEnChile } from './db.js';
-import Scanner from './scanner.js';
 import registroErrores from './errores.js';
 import { CONFIG } from '../config.js';
 import { escapeHtml, html } from './utilidades.js';
@@ -850,14 +849,6 @@ class UIManager {
     this._controlInactividadActivo = true;
   }
 
-  _isDuplicateScan(code) {
-    const now = Date.now();
-    if (code === this._lastScannedCode && now - this._lastScanTimestamp < 3000) return true;
-    this._lastScannedCode = code;
-    this._lastScanTimestamp = now;
-    return false;
-  }
-
   // ==========================================
   // NAVEGACIÓN Y LAYOUT
   // ==========================================
@@ -980,11 +971,6 @@ class UIManager {
   }
 
   async switchView(viewName) {
-    // Si veníamos de la vista de escáner y nos vamos a otra, apagamos la cámara
-    if (this.currentView === 'scanner' && viewName !== 'scanner') {
-      Scanner.stop();
-    }
-
     this.currentView = viewName;
     this._setActiveNavButton(viewName);
     

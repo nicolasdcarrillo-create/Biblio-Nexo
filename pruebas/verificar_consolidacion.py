@@ -156,8 +156,25 @@ def main():
         # el punto del enlace). Su guarda no es es_admin()/es_personal() sino
         # el token de un solo objetivo, que cada una valida por su cuenta
         # contra su huella SHA-256 en enlaces_escaneo_remoto — ver 010,
-        # sección «ESCANEO REMOTO SIN SESIÓN».
-        'validar_enlace_escaneo', 'agregar_libro_remoto', 'deshacer_libro_remoto',
+        # sección «ESCANEO REMOTO SIN SESIÓN». `consultar_libro_remoto`
+        # (22 de agosto de 2026) además LEE y devuelve nombre/RUT de quien
+        # tiene el libro prestado o reservado sin exigir sesión — decisión
+        # explícita de quien administra el sistema (ver el punto 4 del mismo
+        # comentario en 010), no un descuido de esta comprobación.
+        'validar_enlace_escaneo', 'consultar_libro_remoto', 'agregar_libro_remoto', 'deshacer_libro_remoto',
+        # Reservas (022_reservas.sql, sección RESERVAS de 010): ninguna de
+        # estas dos es un RPC que la aplicación llame con sesión de usuario.
+        # `expirar_reservas_vencidas` la invoca el Edge Function
+        # `expirar-reservas` con la service_role key (auth.uid() es NULL en
+        # ese contexto, así que exigir es_personal() bloquearía la llamada
+        # legítima) — su guarda es que NO se concede EXECUTE a
+        # `authenticated`/`anon` (revoke explícito en 010), igual que
+        # `verificar_secreto_cron()` en 018. `promover_siguiente_reserva` es
+        # un ayudante interno, no un RPC público — mismo motivo, mismo
+        # revoke — pensado para que solo lo llame otra función SECURITY
+        # DEFINER dentro de la misma transacción (devolver_prestamo,
+        # cancelar_reserva, expirar_reservas_vencidas).
+        'expirar_reservas_vencidas', 'promover_siguiente_reserva',
     }
     bloques = re.split(r'(?=create or replace function public\.)', texto_consolidado)
     definer_sin_guarda = []

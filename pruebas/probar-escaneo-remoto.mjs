@@ -54,6 +54,12 @@ const libros = [{ ...LIBRO_EXISTENTE }];
 // esa respuesta al celular.
 const historialEscaneoRemoto = []; // { libroId, token, tipo: 'escaneo_remoto'|'deshacer_escaneo_remoto', accion: 'INSERT'|'UPDATE', cantidad }
 
+// Circulación simulada de LIBRO_EXISTENTE para consultar_libro_remoto(): []
+// significa "nadie lo tiene ahora mismo"; cada prueba que necesita otro caso
+// (préstamo, reserva) la fija ella misma y la deja en [] al terminar, para
+// no afectar a las siguientes — mismo espíritu que `libros`, arriba.
+let circulacionLibroExistente = [];
+
 function esTokenValido(token) {
   return token === ENLACE_VALIDO.token || token === OTRO_ENLACE_VALIDO.token;
 }
@@ -65,18 +71,37 @@ function respuestaRpc(nombre, cuerpo) {
     }
     return { ok: true, datos: [{ valido: false, motivo: 'Este enlace no es válido.', expira_en: null }] };
   }
+  if (nombre === 'consultar_libro_remoto') {
+    if (!esTokenValido(cuerpo.p_token)) {
+      return { ok: false, datos: { message: 'Este enlace no es válido o ya expiró. Pide uno nuevo.' } };
+    }
+    const libro = libros.find(l => l.isbn === cuerpo.p_codigo);
+    const vacio = { tipo: null, persona_nombre: null, persona_rut: null, prestamo_id: null, prestamo_fecha_devolucion_esperada: null, prestamo_dias_restantes: null, reserva_id: null, reserva_estado: null, reserva_posicion_en_fila: null, reserva_vence_apartado_en: null };
+    if (!libro) {
+      return { ok: true, datos: [{ encontrado: false, libro_id: null, isbn: cuerpo.p_codigo, titulo: null, autor: null, genero: null, ubicacion: null, portada_url: null, copias_totales: null, stock: null, ...vacio }] };
+    }
+    const libroId = libros.indexOf(libro) + 1;
+    const base = {
+      encontrado: true, libro_id: libroId, isbn: libro.isbn, titulo: libro.titulo, autor: libro.autor,
+      genero: libro.genero || null, ubicacion: libro.ubicacion || null, portada_url: libro.portada_url || null,
+      copias_totales: libro.copias_totales, stock: libro.stock
+    };
+    const circulacion = libro.isbn === LIBRO_EXISTENTE.isbn ? circulacionLibroExistente : [];
+    if (circulacion.length === 0) return { ok: true, datos: [{ ...base, ...vacio }] };
+    return { ok: true, datos: circulacion.map(c => ({ ...base, ...vacio, ...c })) };
+  }
   if (nombre === 'agregar_libro_remoto') {
     if (!esTokenValido(cuerpo.p_token)) {
       return { ok: false, datos: { message: 'Este enlace no es válido o ya expiró. Pide uno nuevo.' } };
     }
     const existente = libros.find(l => l.isbn === cuerpo.p_isbn);
     if (existente) {
-      const suma = cuerpo.p_stock ?? 1;
-      existente.stock += suma;
-      existente.copias_totales += suma;
+      // Desde el 22 de agosto de 2026 ya no suma ejemplares aquí: eso lo
+      // decide consultar_libro_remoto, arriba, ANTES de llegar a este RPC en
+      // el flujo real. Esta rama solo se ejercita cuando alguien lo agregó
+      // justo entre la consulta y este intento (carrera poco probable).
       const libroId = libros.indexOf(existente) + 1;
-      historialEscaneoRemoto.push({ libroId, token: cuerpo.p_token, tipo: 'escaneo_remoto', accion: 'UPDATE', cantidad: suma });
-      return { ok: true, datos: [{ estado: 'incrementado', libro_id: libroId, isbn: existente.isbn, titulo: existente.titulo, autor: existente.autor, stock: existente.stock, copias_totales: existente.copias_totales }] };
+      return { ok: true, datos: [{ estado: 'existe', libro_id: libroId, isbn: existente.isbn, titulo: existente.titulo, autor: existente.autor, stock: existente.stock, copias_totales: existente.copias_totales }] };
     }
     if (!cuerpo.p_titulo) {
       return { ok: true, datos: [{ estado: 'falta_info', libro_id: null, isbn: cuerpo.p_isbn, titulo: null, autor: null, stock: null, copias_totales: null }] };
@@ -201,21 +226,46 @@ await prueba('con un token válido, muestra la pantalla de escaneo y cuándo ven
   assert(!document.querySelector('input[type="password"]'), 'no debería haber ningún campo de contraseña');
 });
 
-await prueba('escanear un ISBN que ya existe suma ejemplares de inmediato', async () => {
+await prueba('escanear un ISBN que ya existe muestra que ya está en el catálogo, sin sumar ejemplares', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch();
+  circulacionLibroExistente = []; // nadie lo tiene, en este caso
   const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
   await iniciar();
 
   const antesStock = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
+  const filasAntes = document.getElementById('er-escaneados').querySelectorAll('li').length;
   document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
   document.getElementById('er-buscar').click();
   await new Promise(r => setTimeout(r, 30));
 
   const resultado = document.getElementById('er-resultado').textContent;
-  assert(/Se repuso/.test(resultado), `no confirmó la reposición: ${resultado}`);
+  assert(/ya está en el catálogo/.test(resultado), `no avisó que ya existe: ${resultado}`);
+  assert(!/Se agregó al catálogo/.test(resultado), 'no debería decir que se agregó — ya existía');
   const despuesStock = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
-  assert(despuesStock === antesStock + 1, `el stock no subió: antes=${antesStock} después=${despuesStock}`);
+  assert(despuesStock === antesStock, `el stock NO debía cambiar: antes=${antesStock} después=${despuesStock}`);
+  const filasDespues = document.getElementById('er-escaneados').querySelectorAll('li').length;
+  assert(filasDespues === filasAntes, 'no debería agregar una fila a la lista de "escaneados": no cambió nada');
+});
+
+await prueba('escanear un ISBN que ya existe y está prestado muestra el nombre y RUT de quien lo tiene', async () => {
+  crearDom(`?token=${ENLACE_VALIDO.token}`);
+  mockFetch();
+  circulacionLibroExistente = [{
+    tipo: 'prestamo', persona_nombre: 'Lector De Prueba', persona_rut: '11111111-1',
+    prestamo_id: 1, prestamo_fecha_devolucion_esperada: '2026-09-01', prestamo_dias_restantes: 10
+  }];
+  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  await iniciar();
+
+  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
+  document.getElementById('er-buscar').click();
+  await new Promise(r => setTimeout(r, 30));
+
+  const resultado = document.getElementById('er-resultado').textContent;
+  assert(/Lector De Prueba/.test(resultado), `no mostró el nombre de quien lo tiene: ${resultado}`);
+  assert(/11111111-1/.test(resultado), `no mostró el RUT de quien lo tiene: ${resultado}`);
+  circulacionLibroExistente = []; // se limpia para no afectar otras pruebas
 });
 
 await prueba('escanear un ISBN nuevo pide los datos, con ayuda de Open Library', async () => {
@@ -254,11 +304,15 @@ await prueba('un enlace que expira a mitad de sesión corta el escaneo con un av
   await iniciar();
 
   // Se simula que el enlace vence justo después de abrir la página: la
-  // próxima llamada a agregar_libro_remoto() debe rechazarse igual, aunque
-  // validar_enlace_escaneo() ya hubiera dicho que era válido al principio.
+  // próxima llamada (consultar_libro_remoto, la primera que intenta
+  // manejarCodigo ahora) debe rechazarse igual, aunque validar_enlace_escaneo()
+  // ya hubiera dicho que era válido al principio. Se intercepta también
+  // agregar_libro_remoto por si acaso, aunque con el nuevo orden no debería
+  // llegar a llamarse: manejarCodigo cae a ese RPC solo cuando la consulta de
+  // arriba no lanza error, y aquí sí lanza.
   const fetchAnterior = global.fetch;
   global.fetch = async (url, opciones) => {
-    if (String(url).includes('/rpc/agregar_libro_remoto')) {
+    if (String(url).includes('/rpc/consultar_libro_remoto') || String(url).includes('/rpc/agregar_libro_remoto')) {
       return { ok: false, json: async () => ({ message: 'Este enlace no es válido o ya expiró. Pide uno nuevo.' }) };
     }
     return fetchAnterior(url, opciones);
@@ -350,50 +404,31 @@ console.log('\n=== Lista de lo escaneado, con portada y "deshacer" (ítem 11) ==
 
 await prueba('escanear agrega el libro a la lista, con su portada de Open Library', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
-  mockFetch();
+  mockFetch({ openLibraryOk: false }); // sin depender de esa ruta para el título
   const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
   await iniciar();
 
-  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
+  // Un ISBN nuevo, no el de LIBRO_EXISTENTE: desde el 22 de agosto de 2026 un
+  // código que YA existe ya no se agrega a esta lista (consultar_libro_remoto
+  // lo intercepta antes — ver las dos pruebas de más arriba), así que la
+  // única forma de ejercitar "se agregó, con portada" es con un libro nuevo.
+  const isbnNuevo = '3333333333';
+  document.getElementById('er-manual').value = isbnNuevo;
   document.getElementById('er-buscar').click();
+  await new Promise(r => setTimeout(r, 30)); // agregar_libro_remoto() responde "falta_info"
+
+  document.getElementById('er-nuevo-titulo').value = 'Libro Con Portada De Prueba';
+  document.getElementById('er-nuevo-guardar').click();
   await new Promise(r => setTimeout(r, 30));
 
   const lista = document.getElementById('er-escaneados');
   assert(lista.querySelector('li'), 'no agregó ninguna fila a la lista de lo escaneado');
-  assert(new RegExp(LIBRO_EXISTENTE.titulo).test(lista.textContent), `la fila no muestra el título: ${lista.textContent}`);
+  assert(/Libro Con Portada De Prueba/.test(lista.textContent), `la fila no muestra el título: ${lista.textContent}`);
   const img = lista.querySelector('img.portada-img');
   assert(img, 'no dibujó la miniatura de portada');
-  assert(img.src.includes('covers.openlibrary.org') && img.src.includes(LIBRO_EXISTENTE.isbn),
+  assert(img.src.includes('covers.openlibrary.org') && img.src.includes(isbnNuevo),
     `la portada no apunta a Open Library con el ISBN correcto: ${img.src}`);
   assert(lista.querySelector('[data-deshacer]'), 'no ofreció el botón «Deshacer»');
-});
-
-await prueba('«Deshacer» sobre un libro repuesto le resta exactamente lo que se agregó', async () => {
-  crearDom(`?token=${ENLACE_VALIDO.token}`);
-  mockFetch();
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
-  await iniciar();
-
-  const antes = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
-  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
-  document.getElementById('er-buscar').click();
-  await new Promise(r => setTimeout(r, 30));
-  assert(libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock === antes + 1, 'no sumó el ejemplar antes de poder deshacerlo');
-
-  // El arreglo `escaneados` es un módulo con estado en memoria que persiste
-  // entre pruebas de este archivo (igual que `libros`, arriba): la fila que
-  // acaba de agregar ESTA prueba queda primera (unshift), así que el primer
-  // botón «Deshacer» del documento siempre corresponde a ella. Por eso la
-  // comprobación de abajo es "una fila menos", no "cero filas": puede haber
-  // filas de pruebas anteriores conviviendo en la misma lista.
-  const filasAntes = document.getElementById('er-escaneados').querySelectorAll('li').length;
-  document.getElementById('er-escaneados').querySelector('[data-deshacer]').click();
-  await new Promise(r => setTimeout(r, 30));
-
-  const despues = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
-  assert(despues === antes, `«Deshacer» no dejó el stock como estaba: antes=${antes} después=${despues}`);
-  const filasDespues = document.getElementById('er-escaneados').querySelectorAll('li').length;
-  assert(filasDespues === filasAntes - 1, `la fila deshecha debería desaparecer de la lista: antes=${filasAntes} después=${filasDespues}`);
 });
 
 await prueba('«Deshacer» sobre un libro recién creado lo elimina del catálogo', async () => {
@@ -423,13 +458,22 @@ await prueba('«Deshacer» sobre un libro recién creado lo elimina del catálog
 
 await prueba('si «Deshacer» falla, el botón se reactiva y la fila no desaparece', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
-  mockFetch();
+  mockFetch({ openLibraryOk: false });
   const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
   await iniciar();
 
-  document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
+  // Un ISBN nuevo, no el de LIBRO_EXISTENTE: por el mismo motivo que la
+  // prueba de la portada, más arriba — un código que ya existe ya no llega a
+  // esta lista, así que hace falta el camino "creado" para tener una fila
+  // con botón «Deshacer» que probar.
+  const isbnNuevo = '4444444444';
+  document.getElementById('er-manual').value = isbnNuevo;
   document.getElementById('er-buscar').click();
   await new Promise(r => setTimeout(r, 30));
+  document.getElementById('er-nuevo-titulo').value = 'Libro Para Probar Deshacer Fallido';
+  document.getElementById('er-nuevo-guardar').click();
+  await new Promise(r => setTimeout(r, 30));
+  assert(libros.some(l => l.isbn === isbnNuevo), 'el libro nuevo no quedó creado antes de la prueba');
 
   const fetchAnterior = global.fetch;
   global.fetch = async (url, opciones) => {

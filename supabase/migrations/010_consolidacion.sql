@@ -437,28 +437,47 @@ end;
 $$;
 grant execute on function public.consultar_libro(text) to authenticated;
 
--- ── revisar_inventario ── (última versión: 007_correcciones_y_cumplimiento_legal.sql)
+-- ── revisar_inventario ── (última versión: 007_correcciones_y_cumplimiento_legal.sql;
+-- pasó de `language sql` a `language plpgsql` en 022_reservas.sql para poder
+-- sumar `public.reservas` al balance sin necesitar el bloque EXCEPCIÓN del
+-- principio de este archivo — ver la nota grande de la sección RESERVAS más
+-- arriba y el comentario en 014_enlaces_escaneo_remoto.sql sobre por qué
+-- PL/pgSQL no necesita ese tratamiento.)
 drop function if exists public.revisar_inventario();
 create or replace function public.revisar_inventario()
 returns table (
   libro_id bigint, titulo text, isbn text,
   copias_totales int, stock int, prestados int, diferencia int
 )
-language sql
+language plpgsql
 stable
 set search_path = public
 as $$
+-- Igual que consultar_libro(): esta función devuelve una tabla, así que sus
+-- columnas de salida (libro_id, titulo...) existen también como variables
+-- dentro del cuerpo. Los subselect de abajo agrupan por `libro_id` de
+-- `prestamos`/`reservas` — sin esta directiva, PostgreSQL no sabe si eso se
+-- refiere a esa columna o a la variable de salida, y rechaza la consulta con
+-- "ambiguous". Preferimos la columna de la tabla.
+#variable_conflict use_column
+begin
+  return query
   select l.id::bigint, l.titulo::text, l.isbn::text,
          l.copias_totales::int, l.stock::int,
          coalesce(p.activos, 0)::int,
-         (l.copias_totales - l.stock - coalesce(p.activos, 0))::int
+         (l.copias_totales - l.stock - coalesce(p.activos, 0) - coalesce(r.apartados, 0))::int
   from public.libros l
   left join (
     select libro_id, count(*) as activos
     from public.prestamos where estado = 'activo' group by libro_id
   ) p on p.libro_id = l.id
-  where l.copias_totales - l.stock - coalesce(p.activos, 0) <> 0 or l.stock < 0
-  order by abs(l.copias_totales - l.stock - coalesce(p.activos, 0)) desc;
+  left join (
+    select libro_id, count(*) as apartados
+    from public.reservas where estado = 'apartada' group by libro_id
+  ) r on r.libro_id = l.id
+  where l.copias_totales - l.stock - coalesce(p.activos, 0) - coalesce(r.apartados, 0) <> 0 or l.stock < 0
+  order by abs(l.copias_totales - l.stock - coalesce(p.activos, 0) - coalesce(r.apartados, 0)) desc;
+end;
 $$;
 grant execute on function public.revisar_inventario() to authenticated;
 
@@ -549,6 +568,7 @@ declare
   v_libro_id bigint;
   v_estado text;
   v_filas int;
+  v_promovido boolean;
 begin
   if not public.es_personal() then
     raise exception 'Debes iniciar sesión para registrar una devolución.' using errcode = 'P0001';
@@ -576,7 +596,14 @@ begin
     raise exception 'No se pudo actualizar el préstamo. Revisa las políticas de acceso.' using errcode = 'P0001';
   end if;
 
-  update public.libros set stock = stock + 1 where id = v_libro_id;
+  -- Si hay alguien esperando este título, el ejemplar no vuelve a `stock`
+  -- general: se aparta para quien encabeza la fila (ver 022_reservas.sql y
+  -- promover_siguiente_reserva() más arriba). Solo si nadie espera, vuelve a
+  -- estar disponible para cualquiera.
+  v_promovido := public.promover_siguiente_reserva(v_libro_id);
+  if not v_promovido then
+    update public.libros set stock = stock + 1 where id = v_libro_id;
+  end if;
 end;
 $$;
 grant execute on function public.devolver_prestamo(bigint) to authenticated;
@@ -638,6 +665,363 @@ $$;
 grant execute on function public.renovar_prestamo(bigint) to authenticated;
 
 -- ============================================================================
+-- RESERVAS — fila de espera cuando no hay ejemplares disponibles
+-- ============================================================================
+-- La tabla vive en 022_reservas.sql, no aquí (regla de siempre: esquema en su
+-- propia migración, funciones solo en la 010). Estas funciones pueden
+-- referenciar `public.reservas` sin que exista todavía en el momento en que
+-- ESTE archivo se ejecuta, porque son `language plpgsql`: PL/pgSQL no valida
+-- los nombres que usa el cuerpo contra el catálogo al crearse, solo al
+-- ejecutarse (mismo motivo documentado en 014_enlaces_escaneo_remoto.sql). Si
+-- se instala desde cero, la 022 corre después y para cuando alguien de verdad
+-- llama a `reservar_libro()` la tabla ya existe.
+--
+-- Diseño del balance de ejemplares: antes `copias_totales = stock +
+-- prestados_activos`. Con reservas se suma un tercer estado, "apartado" — un
+-- ejemplar físicamente en la biblioteca, separado para quien encabeza la fila
+-- de espera de un título, pero NI en `stock` (no es de cualquiera) NI
+-- prestado (no salió de la biblioteca):
+--
+--   copias_totales = stock + prestados_activos + apartados
+--
+-- `devolver_prestamo()` (más arriba) no libera el ejemplar a `stock` cuando
+-- hay fila de espera: se lo apila a la reserva más antigua
+-- (`promover_siguiente_reserva`). Así `stock` sigue significando exactamente
+-- "disponible para cualquiera ahora mismo", sin tocar `buscar_libros()` ni
+-- `consultar_libro()`. `ajustar_copias()`, `corregir_inventario()` y
+-- `revisar_inventario()` sí se actualizan más abajo para conocer el tercer
+-- estado — si no, cualquier ejemplar apartado se vería como una discrepancia
+-- de inventario y "Corregir" lo liberaría a cualquiera sin querer.
+
+-- ── promover_siguiente_reserva ── (nueva: 022_reservas.sql)
+--
+-- Ayudante interno: cuando un ejemplar queda libre (se devuelve un préstamo,
+-- se cancela una reserva apartada, o vence el plazo de retiro), decide si
+-- ese ejemplar pasa a la fila de espera o vuelve a `stock` general. NO es un
+-- RPC público — no se concede EXECUTE a `authenticated` — porque solo tiene
+-- sentido invocarla desde otra función `security definer` que ya tomó el
+-- lock de fila (`for update`) sobre el libro dentro de la misma transacción.
+--
+-- Devuelve `true` si encontró a quién apartárselo (y ya la dejó en estado
+-- 'apartada'), `false` si la fila estaba vacía — quien llama usa ese
+-- resultado para decidir si debe sumar 1 a `stock` o no.
+--
+-- Lee `horas_retiro_reserva` directo de `public.parametros`, sin pasar por
+-- `parametro_int()`: ese ayudante devuelve el valor por defecto (no el
+-- configurado) cuando `es_personal()` es falso, y esta función también la
+-- invoca `expirar_reservas_vencidas()` desde un cron sin sesión de usuario,
+-- donde `es_personal()` siempre da falso. Es seguro leer la tabla
+-- directamente aquí porque esta función ya es `security definer` y no está
+-- expuesta como RPC (ver arriba).
+drop function if exists public.promover_siguiente_reserva(bigint);
+create or replace function public.promover_siguiente_reserva(p_libro_id bigint)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reserva_id bigint;
+  v_horas int;
+begin
+  select id into v_reserva_id
+  from public.reservas
+  where libro_id = p_libro_id and estado = 'activa'
+  order by creado_en
+  limit 1
+  for update;
+
+  if v_reserva_id is null then
+    return false;
+  end if;
+
+  select coalesce((select valor::int from public.parametros where clave = 'horas_retiro_reserva'), 48)
+    into v_horas;
+
+  update public.reservas
+     set estado = 'apartada',
+         apartada_en = now(),
+         vence_apartado_en = now() + (v_horas || ' hours')::interval
+   where id = v_reserva_id;
+
+  return true;
+end;
+$$;
+-- Sin grant a authenticated a propósito: ayudante interno, ver arriba.
+
+-- ── reservar_libro ── (nueva: 022_reservas.sql)
+--
+-- Pone a un lector en la fila de espera de un título. Solo tiene sentido
+-- cuando no hay ejemplares disponibles ahora mismo: si los hay, se dirige a
+-- `prestar_libro()` directamente, para no acumular reservas de libros que
+-- se podrían prestar sin esperar.
+drop function if exists public.reservar_libro(bigint, text);
+create or replace function public.reservar_libro(p_libro_id bigint, p_lector_rut text)
+returns table (reserva_id bigint, posicion_en_fila int)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_lector_id bigint;
+  v_stock int;
+  v_override int;
+  v_reserva_id bigint;
+  v_estado record;
+  v_posicion int;
+begin
+  if not public.es_personal() then
+    raise exception 'Debes iniciar sesión para registrar una reserva.' using errcode = 'P0001';
+  end if;
+
+  select id into v_lector_id from public.lectores where rut = p_lector_rut;
+  if v_lector_id is null then
+    raise exception 'RUT no encontrado.' using errcode = 'P0001';
+  end if;
+
+  perform pg_advisory_xact_lock(v_lector_id);
+
+  select * into v_estado from public.estado_lector(p_lector_rut);
+  if not v_estado.puede_prestar then
+    raise exception '%', v_estado.motivo_rechazo using errcode = 'P0001';
+  end if;
+
+  select stock, dias_prestamo_override into v_stock, v_override
+  from public.libros where id = p_libro_id for update;
+  if v_stock is null then
+    raise exception 'Libro no encontrado.' using errcode = 'P0001';
+  end if;
+  if v_override = 0 then
+    raise exception 'Este material es de referencia y no circula: no se puede reservar.' using errcode = 'P0001';
+  end if;
+  if v_stock > 0 then
+    raise exception 'Hay ejemplares disponibles ahora mismo: registra un préstamo en vez de una reserva.' using errcode = 'P0001';
+  end if;
+
+  begin
+    insert into public.reservas (libro_id, lector_id, estado)
+    values (p_libro_id, v_lector_id, 'activa')
+    returning id into v_reserva_id;
+  exception when unique_violation then
+    raise exception 'Este lector ya tiene una reserva vigente para este libro.' using errcode = 'P0001';
+  end;
+
+  select count(*) into v_posicion
+  from public.reservas
+  where libro_id = p_libro_id and estado in ('activa', 'apartada')
+    and creado_en <= (select creado_en from public.reservas where id = v_reserva_id);
+
+  return query select v_reserva_id::bigint, v_posicion::int;
+end;
+$$;
+grant execute on function public.reservar_libro(bigint, text) to authenticated;
+
+-- ── cancelar_reserva ── (nueva: 022_reservas.sql)
+--
+-- El lector desiste, o el personal la cancela por otro motivo (RUT
+-- equivocado, ya no le interesa, etc.). Si la reserva ya estaba 'apartada'
+-- (ejemplar físicamente separado, fuera de `stock`), el ejemplar pasa a
+-- quien sigue en la fila, o vuelve a `stock` general si no hay nadie
+-- esperando.
+drop function if exists public.cancelar_reserva(bigint);
+create or replace function public.cancelar_reserva(p_reserva_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_libro_id bigint;
+  v_estado text;
+  v_promovido boolean;
+begin
+  if not public.es_personal() then
+    raise exception 'Debes iniciar sesión para cancelar una reserva.' using errcode = 'P0001';
+  end if;
+
+  select libro_id, estado into v_libro_id, v_estado
+  from public.reservas where id = p_reserva_id for update;
+
+  if v_libro_id is null then
+    raise exception 'Reserva no encontrada.' using errcode = 'P0001';
+  end if;
+  if v_estado not in ('activa', 'apartada') then
+    raise exception 'Esta reserva ya no está vigente.' using errcode = 'P0001';
+  end if;
+
+  update public.reservas
+     set estado = 'cancelada', atendida_en = now(), atendida_por = auth.uid()
+   where id = p_reserva_id;
+
+  if v_estado = 'apartada' then
+    v_promovido := public.promover_siguiente_reserva(v_libro_id);
+    if not v_promovido then
+      update public.libros set stock = stock + 1 where id = v_libro_id;
+    end if;
+  end if;
+end;
+$$;
+grant execute on function public.cancelar_reserva(bigint) to authenticated;
+
+-- ── retirar_reserva ── (nueva: 022_reservas.sql)
+--
+-- El lector viene a buscar el ejemplar que le quedó apartado: convierte la
+-- reserva en un préstamo real. No toca `stock` — el ejemplar ya estaba
+-- descontado de ahí desde que la reserva pasó a 'apartada'
+-- (`promover_siguiente_reserva`).
+--
+-- No repite la comprobación completa de `estado_lector()` (máximo de
+-- préstamos activos, atraso en otro préstamo): ese cupo ya se evaluó al
+-- reservar, y negar la entrega de un ejemplar que la biblioteca ya
+-- físicamente apartó para esta persona, por algo que cambió mientras
+-- esperaba en la fila, sería peor que permitirlo. Sí se sigue negando si
+-- está bloqueado manualmente — esa es una decisión explícita del personal,
+-- no un conteo que varía con el tiempo.
+drop function if exists public.retirar_reserva(bigint);
+create or replace function public.retirar_reserva(p_reserva_id bigint)
+returns table (prestamo_id bigint, fecha_devolucion_esperada date)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_libro_id bigint;
+  v_lector_id bigint;
+  v_estado text;
+  v_bloqueado boolean;
+  v_override int;
+  v_dias int;
+  v_hoy date := public.hoy_chile();
+  v_prestamo_id bigint;
+begin
+  if not public.es_personal() then
+    raise exception 'Debes iniciar sesión para registrar un retiro.' using errcode = 'P0001';
+  end if;
+
+  select r.libro_id, r.lector_id, r.estado into v_libro_id, v_lector_id, v_estado
+  from public.reservas r where r.id = p_reserva_id for update;
+
+  if v_libro_id is null then
+    raise exception 'Reserva no encontrada.' using errcode = 'P0001';
+  end if;
+  if v_estado <> 'apartada' then
+    raise exception 'Esta reserva no tiene un ejemplar apartado esperando retiro.' using errcode = 'P0001';
+  end if;
+
+  select bloqueado_manual into v_bloqueado from public.lectores where id = v_lector_id;
+  if v_bloqueado then
+    raise exception 'Este lector está bloqueado por la biblioteca.' using errcode = 'P0001';
+  end if;
+
+  select dias_prestamo_override into v_override from public.libros where id = v_libro_id;
+  v_dias := coalesce(nullif(v_override, 0), public.parametro_int('dias_prestamo', 7));
+
+  update public.reservas
+     set estado = 'cumplida', atendida_en = now(), atendida_por = auth.uid()
+   where id = p_reserva_id;
+
+  insert into public.prestamos (libro_id, lector_id, fecha_prestamo, fecha_devolucion_esperada, estado)
+  values (v_libro_id, v_lector_id, v_hoy, v_hoy + v_dias, 'activo')
+  returning id into v_prestamo_id;
+
+  return query select v_prestamo_id::bigint, (v_hoy + v_dias)::date;
+end;
+$$;
+grant execute on function public.retirar_reserva(bigint) to authenticated;
+
+-- ── listar_reservas ── (nueva: 022_reservas.sql)
+--
+-- Para la pestaña "Reservas" de Administración y para mostrar en el mesón /
+-- escaneo remoto quién está en la fila. `p_libro_id` filtra a un título;
+-- NULL trae todas. `p_incluir_historial` en `true` trae además
+-- cumplidas/canceladas/expiradas (para revisar qué pasó con una reserva
+-- vieja); por omisión solo trae las vigentes ('activa', 'apartada').
+drop function if exists public.listar_reservas(bigint, boolean);
+create or replace function public.listar_reservas(p_libro_id bigint default null, p_incluir_historial boolean default false)
+returns table (
+  reserva_id bigint, libro_id bigint, libro_titulo text, libro_isbn text,
+  lector_id bigint, lector_nombre text, lector_rut text,
+  estado text, creado_en timestamptz, apartada_en timestamptz, vence_apartado_en timestamptz,
+  posicion_en_fila int
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.es_personal() then
+    raise exception 'Debes iniciar sesión para consultar las reservas.' using errcode = 'P0001';
+  end if;
+
+  return query
+  select
+    r.id::bigint, r.libro_id::bigint, l.titulo::text, l.isbn::text,
+    r.lector_id::bigint, lec.nombre::text, lec.rut::text,
+    r.estado::text, r.creado_en, r.apartada_en, r.vence_apartado_en,
+    case when r.estado in ('activa', 'apartada') then
+      (select count(*)::int from public.reservas r2
+       where r2.libro_id = r.libro_id and r2.estado in ('activa', 'apartada') and r2.creado_en <= r.creado_en)
+    else null end
+  from public.reservas r
+  join public.libros l on l.id = r.libro_id
+  join public.lectores lec on lec.id = r.lector_id
+  where (p_libro_id is null or r.libro_id = p_libro_id)
+    and (p_incluir_historial or r.estado in ('activa', 'apartada'))
+  order by r.libro_id, r.creado_en;
+end;
+$$;
+grant execute on function public.listar_reservas(bigint, boolean) to authenticated;
+
+-- ── expirar_reservas_vencidas ── (nueva: 022_reservas.sql)
+--
+-- La invoca el Edge Function `expirar-reservas` (cron, mismo patrón que
+-- `respaldo-automatico` — ver 018_respaldo_automatico.sql) con la
+-- service_role key: no hay sesión de usuario en ese contexto, así que a
+-- propósito NO exige `es_personal()` — `auth.uid()` sería NULL ahí y la
+-- llamada legítima del cron fallaría. En su lugar la protección es que no se
+-- concede EXECUTE a `authenticated` ni `anon` (igual que
+-- `verificar_secreto_cron()` en 018): nadie con sesión normal puede
+-- invocarla vía RPC, solo el service_role, que ya salta RLS y grants por
+-- diseño de Supabase.
+drop function if exists public.expirar_reservas_vencidas();
+create or replace function public.expirar_reservas_vencidas()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reserva record;
+  v_total int := 0;
+  v_promovido boolean;
+begin
+  for v_reserva in
+    select id, libro_id from public.reservas
+    where estado = 'apartada' and vence_apartado_en < now()
+    order by vence_apartado_en
+    for update
+  loop
+    update public.reservas
+       set estado = 'expirada', atendida_en = now()
+     where id = v_reserva.id;
+
+    v_promovido := public.promover_siguiente_reserva(v_reserva.libro_id);
+    if not v_promovido then
+      update public.libros set stock = stock + 1 where id = v_reserva.libro_id;
+    end if;
+
+    v_total := v_total + 1;
+  end loop;
+
+  return v_total;
+end;
+$$;
+revoke all on function public.expirar_reservas_vencidas() from public;
+revoke all on function public.expirar_reservas_vencidas() from authenticated;
+revoke all on function public.expirar_reservas_vencidas() from anon;
+
+-- ============================================================================
 -- INVENTARIO Y BLOQUEOS
 -- ============================================================================
 
@@ -651,6 +1035,7 @@ set search_path = public
 as $$
 declare
   v_prestadas int;
+  v_apartadas int;
 begin
   if not public.es_admin() then
     raise exception 'Solo un administrador puede ajustar los ejemplares.' using errcode = 'P0001';
@@ -665,17 +1050,25 @@ begin
   from public.prestamos
   where libro_id = p_libro_id and estado = 'activo';
 
-  if p_copias_totales < v_prestadas then
-    raise exception 'No puedes dejar % ejemplares: hay % prestados en este momento.',
-      p_copias_totales, v_prestadas using errcode = 'P0001';
+  -- Balance de tres estados desde que existen reservas (022_reservas.sql):
+  -- copias_totales = stock + prestadas + apartadas. Un ejemplar "apartado"
+  -- está tan comprometido como uno prestado — no se puede recortar por
+  -- debajo de lo que ya está prometido a alguien.
+  select count(*) into v_apartadas
+  from public.reservas
+  where libro_id = p_libro_id and estado = 'apartada';
+
+  if p_copias_totales < v_prestadas + v_apartadas then
+    raise exception 'No puedes dejar % ejemplares: hay % prestados y % apartados para reservas en este momento.',
+      p_copias_totales, v_prestadas, v_apartadas using errcode = 'P0001';
   end if;
 
   update public.libros
      set copias_totales = p_copias_totales,
-         stock = p_copias_totales - v_prestadas
+         stock = p_copias_totales - v_prestadas - v_apartadas
    where id = p_libro_id;
 
-  return query select p_copias_totales, p_copias_totales - v_prestadas;
+  return query select p_copias_totales, p_copias_totales - v_prestadas - v_apartadas;
 end;
 $$;
 grant execute on function public.ajustar_copias(bigint, int) to authenticated;
@@ -690,6 +1083,7 @@ set search_path = public
 as $$
 declare
   v_prestadas int;
+  v_apartadas int;
   v_totales int;
 begin
   if not public.es_admin() then
@@ -705,11 +1099,17 @@ begin
   from public.prestamos
   where libro_id = p_libro_id and estado = 'activo';
 
+  -- Un ejemplar "apartado" para una reserva (022_reservas.sql) tampoco
+  -- vuelve a stock: sigue reservado hasta que se retire o venza el plazo.
+  select count(*) into v_apartadas
+  from public.reservas
+  where libro_id = p_libro_id and estado = 'apartada';
+
   update public.libros
-     set stock = greatest(0, v_totales - v_prestadas)
+     set stock = greatest(0, v_totales - v_prestadas - v_apartadas)
    where id = p_libro_id;
 
-  return query select v_totales, greatest(0, v_totales - v_prestadas);
+  return query select v_totales, greatest(0, v_totales - v_prestadas - v_apartadas);
 end;
 $$;
 grant execute on function public.corregir_inventario(bigint) to authenticated;
@@ -743,6 +1143,7 @@ set search_path = public
 as $$
 declare
   v_prestamos_activos int;
+  v_reservas_vigentes int;
 begin
   if not public.es_admin() then
     raise exception 'Solo un administrador puede eliminar un libro.' using errcode = 'P0001';
@@ -759,6 +1160,19 @@ begin
 
   if v_prestamos_activos > 0 then
     raise exception 'No se puede eliminar: tiene % préstamo(s) activo(s).', v_prestamos_activos
+      using errcode = 'P0001';
+  end if;
+
+  -- Mismo motivo que arriba, para reservas (022_reservas.sql): borrar el
+  -- libro con `on delete cascade` sobre `reservas.libro_id` haría
+  -- desaparecer en silencio la fila de espera de quien está esperando un
+  -- ejemplar apartado. Hay que cancelar esas reservas primero.
+  select count(*) into v_reservas_vigentes
+    from public.reservas
+   where libro_id = p_libro_id and estado in ('activa', 'apartada');
+
+  if v_reservas_vigentes > 0 then
+    raise exception 'No se puede eliminar: tiene % reserva(s) vigente(s).', v_reservas_vigentes
       using errcode = 'P0001';
   end if;
 
@@ -1214,20 +1628,38 @@ grant execute on function public.eliminar_personal(uuid) to authenticated;
 --      antes: desde Administración → Enlaces remotos, o por quien lo creó,
 --      con el botón "Revocar este enlace ahora" en la propia ventana del
 --      código QR.
---   3. Angosto a propósito: agregar_libro_remoto SOLO puede crear un libro o
---      sumarle ejemplares a uno que ya existe. No toca lectores ni préstamos.
---      Aunque el enlace se filtrara, lo máximo que permite es escribir
---      entradas de catálogo — nunca leer datos de personas ni mover un
---      préstamo.
+--   3. Angosto a propósito PARA ESCRIBIR: agregar_libro_remoto solo puede
+--      crear un libro nuevo. Hasta el 22 de agosto de 2026, si el código ya
+--      existía en el catálogo, esta función le sumaba ejemplares en
+--      silencio ("reponer") sin que quien escaneaba supiera si en realidad
+--      ese libro estaba prestado o apartado para alguien. Ya no: cuando el
+--      código ya existe, no escribe nada — ni stock, ni auditoría, ni cuenta
+--      como uso del enlace — y devuelve 'existe' para que el celular llame a
+--      consultar_libro_remoto y muestre el estado real en vez de sumar un
+--      ejemplar de más sin darse cuenta. Nunca mueve un préstamo ni una
+--      reserva.
+--   4. Decisión explícita de quien administra este sistema (22 de agosto de
+--      2026, ver claude/reservas-whatsapp-meson-2026-08-22.md):
+--      consultar_libro_remoto SÍ puede leer y mostrar, sin sesión, el
+--      nombre y RUT de la persona que tiene el libro prestado o lo tiene
+--      reservado. Es una excepción consciente y deliberada al resto del
+--      sistema —donde ese dato solo lo ve personal con sesión (ver
+--      consultar_libro más arriba)— tomada a propósito para que el mesón (o
+--      quien escanea desde el celular) sepa de inmediato a quién
+--      reclamarle o para quién está apartado un libro, sin tener que ir a
+--      buscarlo en Administración. El control de acceso sigue siendo el
+--      mismo token de un solo objetivo que el resto de esta sección: el
+--      enlace ya de por sí requiere que alguien del mesón lo haya generado
+--      y compartido a propósito.
 --
--- validar_enlace_escaneo, agregar_libro_remoto y deshacer_libro_remoto NO
--- llevan la guarda es_admin()/es_personal(): las llama, a propósito, un
--- celular sin sesión. Están en SIN_GUARDA_JUSTIFICADO en
--- pruebas/verificar_consolidacion.py, con el motivo escrito ahí. Su única
--- barrera es el token, y por eso las dos últimas lo vuelven a validar por su
+-- validar_enlace_escaneo, consultar_libro_remoto, agregar_libro_remoto y
+-- deshacer_libro_remoto NO llevan la guarda es_admin()/es_personal(): las
+-- llama, a propósito, un celular sin sesión. Están en SIN_GUARDA_JUSTIFICADO
+-- en pruebas/verificar_consolidacion.py, con el motivo escrito ahí. Su única
+-- barrera es el token, y por eso las tres últimas lo vuelven a validar por su
 -- cuenta —nunca confían en que el celular ya llamó a validar_enlace_escaneo
 -- antes— para que un enlace que expira justo entre la comprobación y la
--- escritura no alcance a hacer nada.
+-- lectura o escritura no alcance a hacer nada.
 
 -- ── crear_enlace_escaneo ── (nueva)
 --
@@ -1322,16 +1754,138 @@ end;
 $$;
 grant execute on function public.validar_enlace_escaneo(text) to authenticated;
 
+-- ── consultar_libro_remoto ── (nueva: sección "Escaneo/Mesón" de
+-- claude/reservas-whatsapp-meson-2026-08-22.md, 22 de agosto de 2026)
+--
+-- Punto de LECTURA que puede llamar el celular sin sesión: busca un código
+-- en el catálogo y devuelve el libro más quién lo tiene ahora mismo —RUT y
+-- nombre de la persona con el préstamo activo, o de quien lo tiene
+-- reservado/apartado—. No escribe nada (`stable`) y no cuenta como uso del
+-- enlace. Ver el punto 4 del comentario grande de esta sección para la
+-- decisión explícita que autoriza mostrar estos datos sin sesión.
+--
+-- `manejarCodigo()` en escaneo-remoto.js la llama PRIMERO en cada escaneo;
+-- solo si no encuentra el código cae a agregar_libro_remoto (crear libro
+-- nuevo). Devuelve una fila por cada préstamo activo y cada reserva vigente
+-- (`activa`/`apartada`) de ese libro —normalmente una sola, pero un título
+-- con varios ejemplares puede tener más de uno a la vez—; si el libro existe
+-- pero nadie lo tiene ni lo espera, devuelve una única fila con `tipo` nulo;
+-- si el código no está en el catálogo, `encontrado = false` y el resto de
+-- columnas viene nulo (salvo `isbn`, que devuelve el código buscado tal
+-- cual, para que el celular pueda ofrecer "agregarlo" con ese mismo dato).
+drop function if exists public.consultar_libro_remoto(text, text);
+create or replace function public.consultar_libro_remoto(
+  p_token  text,
+  p_codigo text
+)
+returns table (
+  encontrado boolean,
+  libro_id bigint, isbn text, titulo text, autor text, genero text, ubicacion text,
+  portada_url text, copias_totales int, stock int,
+  tipo text, persona_nombre text, persona_rut text,
+  prestamo_id bigint, prestamo_fecha_devolucion_esperada date, prestamo_dias_restantes int,
+  reserva_id bigint, reserva_estado text, reserva_posicion_en_fila int,
+  reserva_vence_apartado_en timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  -- Mismo motivo que en validar_enlace_escaneo/agregar_libro_remoto para no
+  -- usar %ROWTYPE de enlaces_escaneo_remoto: esa tabla la crea una migración
+  -- posterior a este archivo (014_enlaces_escaneo_remoto.sql).
+  v_enlace_revocado boolean;
+  v_enlace_expira   timestamptz;
+  v_codigo text := nullif(btrim(coalesce(p_codigo, '')), '');
+  v_libro  public.libros;
+  v_alguna_fila boolean := false;
+begin
+  select revocado, enlaces_escaneo_remoto.expira_en
+    into v_enlace_revocado, v_enlace_expira
+    from public.enlaces_escaneo_remoto
+   where token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex');
+
+  -- Se revalida aquí, no solo en validar_enlace_escaneo, por el mismo motivo
+  -- que agregar_libro_remoto: puede haber pasado tiempo de sobra entre que
+  -- el celular comprobó el enlace y llegó a escanear el primer código.
+  if not found or v_enlace_revocado or v_enlace_expira < now() then
+    raise exception 'Este enlace no es válido o ya expiró. Pide uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_codigo is null then
+    raise exception 'Falta el código del libro.' using errcode = 'P0001';
+  end if;
+
+  select * into v_libro from public.libros
+   where libros.isbn = v_codigo or libros.isbn = replace(v_codigo, '-', '')
+   limit 1;
+
+  if not found then
+    return query select false, null::bigint, v_codigo, null::text, null::text, null::text, null::text,
+      null::text, null::int, null::int,
+      null::text, null::text, null::text,
+      null::bigint, null::date, null::int,
+      null::bigint, null::text, null::int, null::timestamptz;
+    return;
+  end if;
+
+  for tipo, persona_nombre, persona_rut, prestamo_id, prestamo_fecha_devolucion_esperada,
+      prestamo_dias_restantes, reserva_id, reserva_estado, reserva_posicion_en_fila,
+      reserva_vence_apartado_en in
+    select 'prestamo'::text, lec.nombre::text, lec.rut::text,
+           p.id::bigint, p.fecha_devolucion_esperada,
+           (p.fecha_devolucion_esperada - public.hoy_chile())::int,
+           null::bigint, null::text, null::int, null::timestamptz
+      from public.prestamos p
+      join public.lectores lec on lec.id = p.lector_id
+     where p.libro_id = v_libro.id and p.estado = 'activo'
+    union all
+    select 'reserva'::text, lec.nombre::text, lec.rut::text,
+           null::bigint, null::date, null::int,
+           r.id::bigint, r.estado::text,
+           (select count(*)::int from public.reservas r2
+             where r2.libro_id = r.libro_id and r2.estado in ('activa', 'apartada')
+               and r2.creado_en <= r.creado_en),
+           r.vence_apartado_en
+      from public.reservas r
+      join public.lectores lec on lec.id = r.lector_id
+     where r.libro_id = v_libro.id and r.estado in ('activa', 'apartada')
+     order by 1, 9 nulls last, 5 nulls last
+  loop
+    v_alguna_fila := true;
+    encontrado := true; libro_id := v_libro.id; isbn := v_libro.isbn; titulo := v_libro.titulo;
+    autor := v_libro.autor; genero := v_libro.genero; ubicacion := v_libro.ubicacion;
+    portada_url := v_libro.portada_url; copias_totales := v_libro.copias_totales; stock := v_libro.stock;
+    return next;
+  end loop;
+
+  if not v_alguna_fila then
+    return query select true, v_libro.id::bigint, v_libro.isbn::text, v_libro.titulo::text,
+      v_libro.autor::text, v_libro.genero::text, v_libro.ubicacion::text,
+      v_libro.portada_url::text, v_libro.copias_totales, v_libro.stock,
+      null::text, null::text, null::text,
+      null::bigint, null::date, null::int,
+      null::bigint, null::text, null::int, null::timestamptz;
+  end if;
+end;
+$$;
+grant execute on function public.consultar_libro_remoto(text, text) to authenticated;
+
 -- ── agregar_libro_remoto ── (nueva)
 --
 -- Único punto de escritura que puede llamar el celular sin sesión: crea un
--- libro nuevo o le suma ejemplares a uno que ya existe. Nunca toca lectores
--- ni préstamos.
+-- libro nuevo cuando el código escaneado no existe todavía. Nunca toca
+-- lectores ni préstamos.
 --
--- Devuelve estado = 'falta_info' cuando el ISBN no está en el catálogo y no
--- llegó título: así el celular puede pedir los datos (con la ayuda de Open
--- Library, ver libros-externos.js) y volver a llamar, en vez de que la
--- función falle con una excepción por cada libro nuevo.
+-- Devuelve estado = 'existe' (y no escribe nada) cuando el código ya está en
+-- el catálogo — ver el punto 3 del comentario grande de esta sección; el
+-- celular debe llamar entonces a consultar_libro_remoto para mostrar el
+-- estado real. Devuelve estado = 'falta_info' cuando el ISBN no está en el
+-- catálogo y no llegó título: así el celular puede pedir los datos (con la
+-- ayuda de Open Library, ver libros-externos.js) y volver a llamar, en vez
+-- de que la función falle con una excepción por cada libro nuevo.
 --
 -- El movimiento SÍ pasa por el disparador automático de auditoría (como
 -- cualquier escritura en libros), que lo deja sin atribuir porque quien llama
@@ -1391,25 +1945,17 @@ begin
     raise exception 'Falta el código del libro.' using errcode = 'P0001';
   end if;
 
-  select * into v_libro from public.libros where libros.isbn = v_isbn for update;
+  select * into v_libro from public.libros where libros.isbn = v_isbn;
 
+  -- Hasta el 22 de agosto de 2026 esta rama sumaba ejemplares en silencio
+  -- ("reponer") cuando el ISBN ya existía. Ya no: no escribe nada —ni
+  -- stock, ni auditoría, ni cuenta como uso del enlace (por eso no hay
+  -- `for update` en el select de arriba: ya no hace falta bloquear la fila
+  -- para escribir)—, solo avisa que el libro ya existe. El celular llama a
+  -- consultar_libro_remoto para mostrar el estado real (prestado, apartado,
+  -- o disponible) en vez de sumar un ejemplar de más sin darse cuenta.
   if found then
-    update public.libros
-       set copias_totales = v_libro.copias_totales + v_stock,
-           stock = v_libro.stock + v_stock
-     where libros.id = v_libro.id
-    returning * into v_libro;
-
-    insert into public.auditoria (tabla, registro_id, accion, usuario_id, usuario_email, datos_despues)
-    values ('libros', v_libro.id::text, 'UPDATE', v_creado_por, v_creado_por_email,
-            jsonb_build_object('operacion', 'escaneo_remoto', 'enlace_id', v_enlace_id,
-                                'ejemplares_agregados', v_stock, 'copias_totales', v_libro.copias_totales));
-
-    update public.enlaces_escaneo_remoto
-       set usos = usos + 1, ultimo_uso_en = now()
-     where enlaces_escaneo_remoto.id = v_enlace_id;
-
-    return query select 'incrementado'::text, v_libro.id::bigint, v_libro.isbn::text, v_libro.titulo::text,
+    return query select 'existe'::text, v_libro.id::bigint, v_libro.isbn::text, v_libro.titulo::text,
                         v_libro.autor::text, v_libro.stock, v_libro.copias_totales;
     return;
   end if;
@@ -1446,6 +1992,13 @@ grant execute on function public.agregar_libro_remoto(text, text, text, text, te
 -- Revierte UNA acción de agregar_libro_remoto, para el botón "Deshacer" de la
 -- lista de lo escaneado en la propia pantalla del celular — pensado para el
 -- caso típico de escanear el código equivocado o repetir uno por error.
+--
+-- Desde el 22 de agosto de 2026 agregar_libro_remoto ya no genera acciones
+-- 'incrementado' (ver el punto 3 de la sección y su propio comentario): esta
+-- función deshace, de aquí en más, solo el caso 'creado'. La rama
+-- 'incrementado' de más abajo queda igual, sin quitarla, para poder deshacer
+-- movimientos VIEJOS que quedaron registrados así en auditoria antes de ese
+-- cambio.
 --
 -- CORREGIDO tras la primera versión: esa primera versión recibía p_accion y
 -- p_cantidad del celular y confiaba en ellos a ciegas. El único control era
@@ -1764,6 +2317,7 @@ set search_path = public
 as $$
 declare
   v_activos int;
+  v_reservas_vigentes int;
 begin
   if not public.es_admin() then
     raise exception 'Solo un administrador puede anonimizar a un titular.' using errcode = 'P0001';
@@ -1774,6 +2328,18 @@ begin
 
   if v_activos > 0 then
     raise exception 'Este lector tiene % préstamo(s) activo(s). Debe devolverlos antes de suprimir sus datos.', v_activos
+      using errcode = 'P0001';
+  end if;
+
+  -- Mismo motivo, para reservas (022_reservas.sql): anonimizar a alguien con
+  -- una reserva vigente (activa o con un ejemplar ya apartado esperándolo)
+  -- dejaría esa reserva huérfana — el RUT y el nombre que vería el personal
+  -- en la fila de espera pasarían a ser "Lector anonimizado" sin aviso.
+  select count(*) into v_reservas_vigentes
+  from public.reservas where lector_id = p_lector_id and estado in ('activa', 'apartada');
+
+  if v_reservas_vigentes > 0 then
+    raise exception 'Este lector tiene % reserva(s) vigente(s). Debe cancelarlas antes de suprimir sus datos.', v_reservas_vigentes
       using errcode = 'P0001';
   end if;
 
@@ -1826,6 +2392,10 @@ begin
     select l.id from public.lectores l
     where l.rut not like 'ANON-%'
       and not exists (select 1 from public.prestamos p where p.lector_id = l.id and p.estado = 'activo')
+      -- Igual que con préstamos activos: una reserva vigente (022_reservas.sql)
+      -- también debe excluir al lector de la purga automática, o
+      -- anonimizar_lector() rechazaría la llamada y detendría todo el bucle.
+      and not exists (select 1 from public.reservas r where r.lector_id = l.id and r.estado in ('activa', 'apartada'))
       and coalesce((select max(p.fecha_prestamo) from public.prestamos p where p.lector_id = l.id),
                    l.created_at::date) < v_corte
   loop
@@ -2138,16 +2708,19 @@ grant execute on function public.purgar_errores(int) to authenticated;
 
 -- ── verificar_rls ── (última versión: 009_registro_de_errores.sql; lista de
 -- tablas ampliada en 015_lapidas_eliminaciones.sql para incluir
--- elementos_eliminados, y en esta ronda para incluir enlaces_escaneo_remoto
--- (014) y respaldos_log (018) — se habían agregado esas dos tablas sin
--- sumarlas aquí, así que esta función llevaba dos migraciones sin vigilarlas.
--- Se detectó al construir verificar_politicas() (más abajo), que sí las
--- incluye desde el principio. `enlaces_escaneo_remoto` es la única excepción
--- a "cero políticas es crítico": tiene RLS activo pero CERO políticas a
--- propósito, porque solo se accede a través de funciones `security definer`
--- (crear_enlace_escaneo, validar_enlace_escaneo, etc.), nunca tocando la
--- tabla directamente — la función vive aquí igual, según la regla del
--- proyecto de que los cambios a funciones van en este archivo, no en uno nuevo)
+-- elementos_eliminados, en una ronda anterior para incluir
+-- enlaces_escaneo_remoto (014) y respaldos_log (018) — se habían agregado
+-- esas dos tablas sin sumarlas aquí, así que esta función llevaba dos
+-- migraciones sin vigilarlas, y se detectó al construir verificar_politicas()
+-- (más abajo), que sí las incluye desde el principio — y ahora para incluir
+-- `reservas` (022). `enlaces_escaneo_remoto` y `reservas` son las únicas
+-- excepciones a "cero políticas es crítico": tienen RLS activo pero CERO
+-- políticas a propósito, porque solo se accede a través de funciones
+-- `security definer` (crear_enlace_escaneo/validar_enlace_escaneo/... y
+-- reservar_libro/cancelar_reserva/retirar_reserva/listar_reservas/
+-- expirar_reservas_vencidas), nunca tocando la tabla directamente — la
+-- función vive aquí igual, según la regla del proyecto de que los cambios a
+-- funciones van en este archivo, no en uno nuevo)
 drop function if exists public.verificar_rls();
 create or replace function public.verificar_rls()
 returns table (
@@ -2175,7 +2748,7 @@ select
     (select count(*)::int from pg_policies p where p.tablename = c.relname and p.schemaname = 'public'),
     case
       when not c.relrowsecurity then 'CRÍTICO: sin RLS, cualquiera puede leer y escribir esta tabla'
-      when c.relname <> 'enlaces_escaneo_remoto'
+      when c.relname not in ('enlaces_escaneo_remoto', 'reservas')
         and (select count(*) from pg_policies p where p.tablename = c.relname and p.schemaname = 'public') = 0
         then 'CRÍTICO: RLS activo pero sin políticas, la tabla queda inaccesible o abierta según el rol'
       else 'Correcto'
@@ -2186,7 +2759,8 @@ select
     and c.relkind = 'r'
     and c.relname in (
       'libros', 'lectores', 'prestamos', 'usuarios', 'auditoria', 'parametros',
-      'errores', 'elementos_eliminados', 'enlaces_escaneo_remoto', 'respaldos_log'
+      'errores', 'elementos_eliminados', 'enlaces_escaneo_remoto', 'respaldos_log',
+      'reservas'
     )
   order by c.relrowsecurity, c.relname;
 end;
@@ -2227,7 +2801,8 @@ select
     and p.proname in (
       'prestar_libro', 'devolver_prestamo', 'renovar_prestamo',
       'ajustar_copias', 'corregir_inventario', 'bloquear_lector',
-      'actualizar_contacto_lector', 'actualizar_mi_perfil', 'mi_perfil'
+      'actualizar_contacto_lector', 'actualizar_mi_perfil', 'mi_perfil',
+      'reservar_libro', 'cancelar_reserva', 'retirar_reserva'
     )
   order by p.prosecdef, p.proname;
 end;
@@ -2288,6 +2863,7 @@ as $manifiesto$
     ('eliminar_personal', true),
     ('crear_enlace_escaneo', true),
     ('validar_enlace_escaneo', true),
+    ('consultar_libro_remoto', true),
     ('agregar_libro_remoto', true),
     ('deshacer_libro_remoto', true),
     ('listar_enlaces_escaneo', true),
@@ -2308,7 +2884,18 @@ as $manifiesto$
     ('verificar_circulacion', true),
     ('manifiesto_tablas_protegidas', false),
     ('manifiesto_politicas', false),
-    ('verificar_politicas', true)
+    ('verificar_politicas', true),
+    -- Reservas (022_reservas.sql / sección RESERVAS más arriba).
+    -- `promover_siguiente_reserva` se registra igual que las demás aunque no
+    -- se conceda EXECUTE a `authenticated`: es un ayudante interno, no un
+    -- RPC público, pero sigue siendo una función `security definer` real que
+    -- este manifiesto debe poder verificar como cualquier otra.
+    ('promover_siguiente_reserva', true),
+    ('reservar_libro', true),
+    ('cancelar_reserva', true),
+    ('retirar_reserva', true),
+    ('listar_reservas', true),
+    ('expirar_reservas_vencidas', true)
 $manifiesto$;
 
 
@@ -2410,14 +2997,16 @@ as $manifiesto$
   values
     ('libros'), ('lectores'), ('prestamos'), ('usuarios'),
     ('auditoria'), ('parametros'), ('errores'), ('elementos_eliminados'),
-    ('enlaces_escaneo_remoto'), ('respaldos_log')
+    ('enlaces_escaneo_remoto'), ('respaldos_log'), ('reservas')
 $manifiesto$;
 
--- Una fila por política que debe existir. `enlaces_escaneo_remoto` no
--- aparece a propósito: tiene RLS activo y CERO políticas a propósito, porque
--- solo se accede a través de funciones `security definer`
--- (`crear_enlace_escaneo`, `validar_enlace_escaneo`, etc.) — no se toca la
--- tabla directamente. Eso también se comprueba abajo, no solo se ignora.
+-- Una fila por política que debe existir. `enlaces_escaneo_remoto` y
+-- `reservas` no aparecen a propósito: tienen RLS activo y CERO políticas a
+-- propósito, porque solo se accede a través de funciones `security definer`
+-- (`crear_enlace_escaneo`/`validar_enlace_escaneo`/... y
+-- `reservar_libro`/`cancelar_reserva`/`retirar_reserva`/`listar_reservas`/
+-- `expirar_reservas_vencidas`, ver 022_reservas.sql) — no se toca la tabla
+-- directamente. Eso también se comprueba abajo, no solo se ignora.
 --
 -- "Acceso autenticado {libros,lectores,prestamos}" NO están aquí a
 -- propósito, aunque existieron en producción hasta la migración 019: eran
@@ -2661,5 +3250,6 @@ revoke all on function public.marcar_actualizacion() from public, anon;
 -- objetivo que cada una exige y valida por su cuenta (ver 010, sección
 -- «ESCANEO REMOTO SIN SESIÓN»).
 grant execute on function public.validar_enlace_escaneo(text) to anon;
+grant execute on function public.consultar_libro_remoto(text, text) to anon;
 grant execute on function public.agregar_libro_remoto(text, text, text, text, text, text, int) to anon;
 grant execute on function public.deshacer_libro_remoto(text, bigint) to anon;

@@ -214,7 +214,15 @@ window.Html5Qrcode = class {
   stop() { return Promise.resolve(); }
   clear() { return Promise.resolve(); }
 };
-await uiManager.switchView('scanner');
+// Desde el 22 de agosto de 2026 (Fase 2 de
+// claude/reservas-whatsapp-meson-2026-08-22.md) la vista "scanner" del
+// propio sistema (ui-base.js/mostrador.js) ya NO tiene cámara ni el div
+// #reader que Scanner.start() necesita — todo el escaneo con cámara se mudó
+// a escaneo-remoto.js, la página aparte del enlace sin sesión. Este bloque
+// prueba scanner.js en sí mismo (el módulo compartido, ver el comentario al
+// inicio de ese archivo), así que arma su propio #reader en vez de depender
+// de switchView('scanner') para tenerlo.
+document.body.appendChild(document.createElement('div')).id = 'reader';
 // start() es asíncrono desde que la librería se carga bajo demanda (368 KB que
 // antes se descargaban en todas las vistas).
 await Scanner.start(() => {}, () => {});
@@ -443,9 +451,9 @@ comprobar('db.js se suscribe él mismo al evento "online" para reintentar la col
   '(no depende de que main.js se acuerde de hacerlo)',
   /addEventListener\(\s*['"]online['"][\s\S]{0,60}colaSync\.reintentarPendientes\(\)/.test(dbJs));
 
-comprobar('la interfaz distingue el resultado "encolado" del éxito normal en los cinco lugares que ' +
-  'escriben (renovar, devolver x2, prestar x2 — la persona del mesón ve un aviso distinto, no un falso "listo")',
-  (uiCompletoJs.match(/r\?\.encolado/g) || []).length === 5);
+comprobar('la interfaz distingue el resultado "encolado" del éxito normal en los seis lugares que ' +
+  'escriben (renovar, devolver x2, prestar x2, reservar — la persona del mesón ve un aviso distinto, no un falso "listo")',
+  (uiCompletoJs.match(/r\?\.encolado/g) || []).length === 6);
 
 // ---------------------------------------------------------------------------
 // 13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna

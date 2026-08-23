@@ -60,6 +60,16 @@ const PRESTAMOS = [
   { id: 103, fecha_prestamo: masDias(-2), fecha_devolucion_esperada: masDias(5), fecha_devolucion_real: null, estado: 'activo', renovaciones: 0, libros: null, lectores: null }
 ];
 
+// Una reserva vigente sobre LIBROS[1] (La Araucana, stock=0), para probar
+// que la ficha de circulación del mesón (_fichaCirculacion, mostrador.js)
+// también muestra la fila de espera — no solo los préstamos activos.
+const RESERVAS = [
+  { reserva_id: 1, libro_id: 2, libro_titulo: 'La Araucana', libro_isbn: '9788437604947',
+    lector_id: 11, lector_nombre: 'Pedro Huenchumán', lector_rut: '11111111-1',
+    estado: 'activa', creado_en: '2026-08-15T10:00:00Z', apartada_en: null, vence_apartado_en: null,
+    posicion_en_fila: 1 }
+];
+
 // ---------------------------------------------------------------------------
 // Supabase simulado
 // ---------------------------------------------------------------------------
@@ -202,6 +212,12 @@ const supabaseFalso = {
       if (!fila) return Promise.resolve({ data: null, error: { message: 'Ese enlace no existe.' } });
       fila.revocado = true;
       return Promise.resolve({ data: null, error: null });
+    }
+    if (nombre === 'listar_reservas') {
+      const filtradas = RESERVAS.filter(r =>
+        (args?.p_libro_id == null || r.libro_id === args.p_libro_id) &&
+        (args?.p_incluir_historial || r.estado === 'activa' || r.estado === 'apartada'));
+      return Promise.resolve({ data: filtradas, error: null });
     }
     return Promise.resolve({ data: null, error: null });
   },
@@ -563,14 +579,18 @@ await prueba('renovarPrestamo devuelve la fecha nueva', async () => {
   assert(r.nueva_fecha, 'no devolvió fecha nueva');
 });
 
-console.log('\n=== Escáner sin HTTPS ===');
-await prueba('avisa cuando no hay contexto seguro', () => {
+console.log('\n=== Escanear libro (sin cámara desde el 22 de agosto de 2026) ===');
+await prueba('ofrece el enlace remoto y la entrada manual, sin botones de cámara', () => {
   ui.currentView = 'scanner';
   ui.renderScannerView();
   const html = document.getElementById('views-container').innerHTML;
-  // jsdom con URL https:// es contexto seguro, así que se comprueba que
-  // el botón exista y no esté roto en ninguno de los dos casos
-  assert(html.includes('start-scan-btn'), 'falta el botón de cámara');
+  assert(html.includes('qr-remoto-btn'), 'falta el botón «Escanear desde el celular»');
+  assert(html.includes('manual-scan-input'), 'falta la entrada manual del ISBN');
+  // Todo el escaneo con cámara se mudó al celular (escaneo-remoto.js): esta
+  // vista ya no debe ofrecer «Iniciar/Detener cámara» ni el visor #reader.
+  assert(!html.includes('start-scan-btn'), 'no debería quedar el botón de cámara');
+  assert(!html.includes('stop-scan-btn'), 'no debería quedar el botón de detener cámara');
+  assert(!document.getElementById('reader'), 'no debería quedar el visor de la cámara');
 });
 
 console.log('\n=== Recuperación de contraseña ===');
@@ -610,6 +630,29 @@ await prueba('la ficha de un libro sin préstamos ofrece prestarlo', async () =>
   const html = ui._fichaCirculacion(r);
   assert(html.includes('Sin préstamos activos'), 'no indica que está disponible');
   assert(html.includes('Prestar este libro'), 'falta el botón de prestar');
+});
+
+await prueba('la ficha muestra la fila de espera cuando hay reservas vigentes', async () => {
+  const r = await db.consultarLibro(LIBROS[1].isbn); // La Araucana, tiene una reserva (RESERVAS)
+  const reservas = await db.listarReservas(LIBROS[1].id);
+  const html = ui._fichaCirculacion(r, reservas);
+  assert(html.includes('Pedro Huenchumán'), 'no muestra el nombre de quien espera');
+  assert(html.includes('11111111-1'), 'no muestra el RUT de quien espera');
+  assert(/En fila/.test(html), 'no indica que está en fila de espera');
+});
+
+await prueba('la ficha no muestra ninguna fila de espera si no se le pasan reservas', async () => {
+  const r = await db.consultarLibro(LIBROS[4].isbn); // La Odisea, sin reservas en el fixture
+  const html = ui._fichaCirculacion(r);
+  assert(!/En fila|Apartado para/.test(html), 'no debería inventar una fila de espera sin datos');
+});
+
+await prueba('escanear un libro con reserva vigente la muestra en pantalla', async () => {
+  ui.currentView = 'scanner';
+  ui.renderScannerView();
+  await ui._mostrarResultadoEscaneo(LIBROS[1].isbn);
+  const html = document.getElementById('scan-result').innerHTML;
+  assert(html.includes('Pedro Huenchumán'), 'el flujo completo (consultarLibro + listarReservas) no mostró a quien espera');
 });
 
 await prueba('estadoLector detecta lector bloqueado', async () => {

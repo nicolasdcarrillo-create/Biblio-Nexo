@@ -81,3 +81,27 @@ export function html(partesFijas, ...valores) {
     }
     return new HtmlSeguro(resultado);
 }
+
+/**
+ * Nombre del canal de Supabase Realtime (Broadcast) para avisar, en vivo, que
+ * se escaneó un libro desde el enlace remoto — sección "Escaneo/Mesón" del
+ * 22 de agosto de 2026 (ver claude/reservas-whatsapp-meson-2026-08-22.md).
+ *
+ * Se deriva del propio token del enlace con SHA-256 en vez de mandar el
+ * enlace_id: cualquiera de las dos partes —el celular sin sesión
+ * (escaneo-remoto.js) y el mesón con sesión (mostrador.js)— puede calcular
+ * el mismo nombre de canal por su cuenta a partir del token que ya tiene
+ * (el celular, de la URL; el mesón, de la respuesta de crear_enlace_escaneo),
+ * sin una ida y vuelta extra al servidor y sin necesidad de exponer el
+ * enlace_id numérico en la URL pública. Usa Broadcast, no postgres_changes:
+ * el camino "el código ya existe, solo mostrar los datos" no escribe nada en
+ * la base (a propósito, ver agregar_libro_remoto en 010_consolidacion.sql),
+ * así que no habría ninguna fila que cambiara para que postgres_changes
+ * pudiera detectar.
+ */
+export async function canalEscaneo(token) {
+    const datos = new TextEncoder().encode(token || '');
+    const huella = await crypto.subtle.digest('SHA-256', datos);
+    const hex = Array.from(new Uint8Array(huella)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return `escaneo-remoto-${hex}`;
+}

@@ -357,12 +357,13 @@ print('\n7. AUTODIAGNÓSTICOS QUE VE EL ADMINISTRADOR EN PANTALLA')
 ok, filas = como(ADMIN, "select tabla, diagnostico from public.verificar_rls();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_rls() no reporta ninguna tabla en problemas', ok and not malas, texto(malas))
-# 10, no 8: desde la migración 015 (Fase 1.2, lápidas de eliminación) se sumó
-# "elementos_eliminados", y en esta ronda (verificar_politicas(), 22 de
+# 11, no 8: desde la migración 015 (Fase 1.2, lápidas de eliminación) se sumó
+# "elementos_eliminados", en una ronda anterior (verificar_politicas(), 22 de
 # agosto de 2026) se corrigió que "enlaces_escaneo_remoto" (014) y
-# "respaldos_log" (018) llevaban dos migraciones sin vigilarse — ver el
-# comentario junto a la definición de verificar_rls() en la 010.
-comprobar('verificar_rls() revisa las 10 tablas con datos', len(filas) == 10, f'revisó {len(filas)}')
+# "respaldos_log" (018) llevaban dos migraciones sin vigilarse, y en esta
+# ronda (022_reservas.sql) se sumó "reservas" — ver el comentario junto a la
+# definición de verificar_rls() en la 010.
+comprobar('verificar_rls() revisa las 11 tablas con datos', len(filas) == 11, f'revisó {len(filas)}')
 
 ok, filas = como(ADMIN, "select funcion, es_definer from public.verificar_circulacion();")
 rotas = [f[0] for f in filas if not f[1]]
@@ -446,11 +447,16 @@ print('\n10. CONSOLIDACIÓN DE FUNCIONES')
 ok, filas = como(ADMIN, "select nombre, estado, diagnostico from public.verificar_definiciones();")
 malas = [f for f in filas if f[1] != 'Correcto']
 comprobar('verificar_definiciones() responde', ok, texto(filas)[-200:] if not ok else '')
-# 47, no 41: 44 fue manifiesto_tablas_protegidas(), manifiesto_politicas() y
+# 53, no 41: 44 fue manifiesto_tablas_protegidas(), manifiesto_politicas() y
 # verificar_politicas() (RLS/grants, mismo patrón que este autodiagnóstico).
 # 45 sumó eliminar_libro() (020_permitir_eliminar_libro_con_historial.sql).
 # 47 sumó listar_libros_eliminados() y restaurar_libro() (021_papelera_libros.sql).
-comprobar('el manifiesto cubre 47 funciones', len(filas) == 47, f'cubre {len(filas)}')
+# 53 sumó las seis de reservas: promover_siguiente_reserva(), reservar_libro(),
+# cancelar_reserva(), retirar_reserva(), listar_reservas() y
+# expirar_reservas_vencidas() (022_reservas.sql).
+# 54 sumó consultar_libro_remoto() (Fase 2 de escaneo/mesón, 22 de agosto de
+# 2026, sección ESCANEO REMOTO SIN SESIÓN de 010_consolidacion.sql).
+comprobar('el manifiesto cubre 54 funciones', len(filas) == 54, f'cubre {len(filas)}')
 comprobar('ninguna función está fuera de norma', not malas, texto(malas)[:300])
 
 # La prueba de fuego: ¿detecta la deriva que causó el fallo del librero?
@@ -765,7 +771,7 @@ else:
     omitir('un librero SÍ puede consultar un lector')
     omitir('un librero SÍ puede consultar un libro')
 ok, out = como(ADMIN, "select count(*) from public.verificar_definiciones();")
-comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 47,
+comprobar('un admin SÍ puede ver el autodiagnóstico', ok and out and out[0][0] == 54,
           texto(out)[-150:])
 
 

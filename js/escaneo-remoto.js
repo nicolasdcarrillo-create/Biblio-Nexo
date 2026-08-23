@@ -12,14 +12,51 @@
  *
  * El módulo de escaneo (scanner.js) y la búsqueda por ISBN en Open Library
  * (libros-externos.js) se reutilizan tal cual: no dependen de si hay sesión.
+ *
+ * Desde el 22 de agosto de 2026 SÍ carga vendor/js/supabase.js (ver
+ * escaneo-remoto.html) — no para hablar con la base (eso lo sigue haciendo
+ * rpc() por fetch() plano, más abajo) sino solo para avisar en vivo al mesón
+ * que se escaneó un libro (Realtime Broadcast), que necesita un canal de
+ * WebSocket. El cliente que se arma aquí es aparte del de supabase-init.js:
+ * nunca inicia sesión, así que no levanta el candado entre pestañas de
+ * gotrue-js que ese archivo documenta y esquiva.
  */
 import { CONFIG } from './config.js';
-import { escapeHtml } from './modules/utilidades.js';
+import { escapeHtml, canalEscaneo } from './modules/utilidades.js';
 import { buscarPorIsbnExterno } from './modules/libros-externos.js';
 import { portadaHtml, vigilarPortadas } from './modules/portadas.js';
 import Scanner from './modules/scanner.js';
 
 const ESPERA_MS = 15000;
+
+const supabaseRealtime = window.supabase
+    ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false }
+    })
+    : null;
+
+let canalActual = null;
+
+/**
+ * Avisa, en vivo, que se resolvió un escaneo (libro nuevo o ya existente) —
+ * lo recibe el mesón si tiene abierta la ventana del código QR de este mismo
+ * enlace (ver showQrRemotoModal() en mostrador.js). Es "mejor esfuerzo": si
+ * el canal no se pudo abrir (por ejemplo, sin conexión de WebSocket en una
+ * red restringida) el escaneo ya se guardó igual por rpc(), así que un fallo
+ * acá nunca debe impedir seguir escaneando.
+ */
+async function avisarEscaneo(payload) {
+    if (!supabaseRealtime) return;
+    try {
+        if (!canalActual) {
+            canalActual = supabaseRealtime.channel(await canalEscaneo(token()));
+            canalActual.subscribe();
+        }
+        canalActual.send({ type: 'broadcast', event: 'libro-escaneado', payload });
+    } catch (e) {
+        // silencioso a propósito — ver el comentario de arriba
+    }
+}
 
 /**
  * Llama a una función RPC de Postgres directo por la API REST de Supabase.
@@ -192,7 +229,8 @@ function pintarPrincipal(vence) {
           <i aria-hidden="true" class="fas fa-barcode text-3xl text-patrimonio-madera"></i>
           <h1 class="font-serif text-xl font-bold text-stone-900 mt-2">Escaneo remoto de libros</h1>
           <p class="text-xs text-stone-500 mt-1.5 leading-relaxed">
-            Sin iniciar sesión. Solo agrega o suma ejemplares al catálogo — nada más.
+            Sin iniciar sesión. Si el libro es nuevo, lo agrega al catálogo; si ya existe,
+            muestra quién lo tiene ahora mismo en vez de sumarle ejemplares.
             ${vence ? `Este enlace vence a las ${escapeHtml(vence)}.` : ''}
           </p>
         </div>
@@ -282,11 +320,74 @@ function pintarPrincipal(vence) {
     });
 }
 
-/** Intenta agregar/reponer un libro por su ISBN; si falta info, pide los datos. */
+/**
+ * Ficha de solo lectura de consultar_libro_remoto(): el libro escaneado ya
+ * está en el catálogo, así que se muestra quién lo tiene ahora mismo —RUT y
+ * nombre de quien tiene el préstamo activo, o de quien lo tiene reservado o
+ * apartado— en vez de sumarle ejemplares en silencio. Decisión explícita del
+ * 22 de agosto de 2026 (ver claude/reservas-whatsapp-meson-2026-08-22.md y
+ * el punto 4 de «ESCANEO REMOTO SIN SESIÓN» en 010_consolidacion.sql): esta
+ * página, sin sesión, SÍ puede mostrar esos datos.
+ */
+function fichaConsultaRemota(filas) {
+    const libro = filas[0];
+    const circulacion = filas.filter(f => f.tipo);
+
+    const filaCirculacion = c => c.tipo === 'prestamo' ? `
+        <div class="border-t border-stone-200 pt-2 mt-2 text-left">
+          <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">En préstamo</p>
+          <p class="text-sm font-bold text-stone-800">${escapeHtml(c.persona_nombre || 'Lector desconocido')}</p>
+          <p class="text-xs font-mono text-stone-500">${escapeHtml(c.persona_rut || '—')}</p>
+          ${c.prestamo_fecha_devolucion_esperada ? `<p class="text-xs text-stone-500 mt-0.5">Vuelve el ${escapeHtml(c.prestamo_fecha_devolucion_esperada)}</p>` : ''}
+        </div>` : `
+        <div class="border-t border-stone-200 pt-2 mt-2 text-left">
+          <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">
+            ${c.reserva_estado === 'apartada' ? 'Apartado para' : `Reservado para (posición ${c.reserva_posicion_en_fila ?? '?'} en la fila)`}
+          </p>
+          <p class="text-sm font-bold text-stone-800">${escapeHtml(c.persona_nombre || 'Lector desconocido')}</p>
+          <p class="text-xs font-mono text-stone-500">${escapeHtml(c.persona_rut || '—')}</p>
+        </div>`;
+
+    return `
+      <div class="border border-stone-300 rounded-xl p-4 text-center">
+        <p class="font-bold text-stone-800">${escapeHtml(libro.titulo)}</p>
+        ${libro.autor ? `<p class="text-sm text-stone-500">${escapeHtml(libro.autor)}</p>` : ''}
+        <p class="text-xs text-stone-500 mt-1">${libro.stock} de ${libro.copias_totales} ejemplar(es) disponibles</p>
+        <p class="text-[11px] text-stone-500 mt-2">Este libro ya está en el catálogo — no se sumó ningún ejemplar.</p>
+        ${circulacion.length === 0
+            ? '<p class="text-xs text-emerald-700 mt-2"><i aria-hidden="true" class="fas fa-circle-check mr-1"></i>Nadie lo tiene ahora mismo.</p>'
+            : circulacion.map(filaCirculacion).join('')}
+      </div>`;
+}
+
+/**
+ * Resuelve un código escaneado. Primero consulta (consultar_libro_remoto,
+ * de solo lectura): si el libro ya está en el catálogo, muestra sus datos de
+ * circulación y termina ahí — ya NO le suma ejemplares en silencio (hasta el
+ * 22 de agosto de 2026 sí lo hacía, ver agregar_libro_remoto en
+ * 010_consolidacion.sql). Solo si el código no está en el catálogo cae al
+ * camino de agregar_libro_remoto, para crear el libro (o pedir los datos que
+ * falten).
+ */
 async function manejarCodigo(codigo) {
     const resultado = document.getElementById('er-resultado');
     if (!resultado) return;
     resultado.innerHTML = '<p class="text-xs text-stone-500"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Consultando…</p>';
+
+    try {
+        const filasConsulta = await rpc('consultar_libro_remoto', { p_token: token(), p_codigo: codigo });
+        if (filasConsulta?.[0]?.encontrado) {
+            resultado.innerHTML = fichaConsultaRemota(filasConsulta);
+            toast('Este libro ya está en el catálogo.', 'success');
+            avisarEscaneo({ isbn: filasConsulta[0].isbn, titulo: filasConsulta[0].titulo, autor: filasConsulta[0].autor });
+            return;
+        }
+    } catch (err) {
+        // Se deja caer al camino de agregar_libro_remoto de abajo: esa
+        // también revalida el token por su cuenta y da el mismo tipo de
+        // error (enlace vencido/revocado), así la persona no se queda sin
+        // ningún mensaje solo porque falló la consulta de solo lectura.
+    }
 
     try {
         const filas = await rpc('agregar_libro_remoto', { p_token: token(), p_isbn: codigo });
@@ -298,10 +399,23 @@ async function manejarCodigo(codigo) {
             return;
         }
 
-        const accion = fila.estado === 'creado' ? 'Se agregó' : 'Se repuso';
+        if (fila.estado === 'existe') {
+            // Carrera poco probable: alguien más lo agregó entre la consulta
+            // de arriba y este intento. Mismo resultado que si
+            // consultar_libro_remoto lo hubiera encontrado desde el inicio.
+            resultado.innerHTML = `
+              <div class="border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm text-center">
+                <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Este libro ya está en el catálogo</p>
+                <p class="text-emerald-700 mt-1">${escapeHtml(fila.titulo || fila.isbn)}${fila.autor ? ` — ${escapeHtml(fila.autor)}` : ''}</p>
+              </div>`;
+            toast('Este libro ya está en el catálogo.', 'success');
+            avisarEscaneo({ isbn: fila.isbn, titulo: fila.titulo, autor: fila.autor });
+            return;
+        }
+
         resultado.innerHTML = `
           <div class="border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm">
-            <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${accion} al catálogo</p>
+            <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Se agregó al catálogo</p>
             <p class="text-emerald-700 mt-1">${escapeHtml(fila.titulo || fila.isbn)}${fila.autor ? ` — ${escapeHtml(fila.autor)}` : ''}</p>
             <p class="text-xs text-emerald-700 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
           </div>`;
@@ -310,6 +424,7 @@ async function manejarCodigo(codigo) {
             libroId: fila.libro_id, isbn: fila.isbn, titulo: fila.titulo, autor: fila.autor,
             accion: fila.estado, cantidad: 1
         });
+        avisarEscaneo({ isbn: fila.isbn, titulo: fila.titulo, autor: fila.autor });
     } catch (err) {
         const mensaje = err.message || 'No se pudo completar la operación.';
         resultado.innerHTML = `<p class="text-rose-700 text-sm font-bold"><i aria-hidden="true" class="fas fa-circle-exclamation mr-1.5"></i>${escapeHtml(mensaje)}</p>`;
@@ -370,6 +485,7 @@ async function mostrarFormularioDatos(resultado, codigo) {
                     libroId: fila.libro_id, isbn: fila.isbn, titulo: fila.titulo || titulo, autor: fila.autor,
                     accion: fila.estado, cantidad
                 });
+                avisarEscaneo({ isbn: fila.isbn, titulo: fila.titulo || titulo, autor: fila.autor });
             }
         } catch (err) {
             toast(err.message || 'No se pudo agregar el libro.', 'error');

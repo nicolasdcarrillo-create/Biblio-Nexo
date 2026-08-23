@@ -243,6 +243,24 @@ def main():
             prueba("reaplicar una migración anterior avisa del error",
                    reaplicar_anterior_falla)
 
+            # psql (sin BEGIN/COMMIT explícito en el script) confirma cada
+            # sentencia por separado: la 005 alcanza a redefinir varias
+            # funciones —entre ellas renovar_prestamo(), SIN `security
+            # definer`, tal como estaba en ese archivo— ANTES de llegar a la
+            # sentencia que por fin la hace fallar. El error detiene el
+            # script, pero no deshace lo que ya se ejecutó: la base queda con
+            # esa versión vieja instalada. Es exactamente el escenario que
+            # `verificar_definiciones()` existe para detectar, y el remedio
+            # documentado en su propio mensaje es "Vuelve a ejecutar la 010" —
+            # se comprueba aquí que de verdad restaura todo.
+            def reaplicar_010_repara():
+                with open(MIGRACIONES[9], encoding='utf-8') as f:  # 010_consolidacion.sql
+                    sql = f.read()
+                assert '010_consolidacion' in MIGRACIONES[9]
+                correr(srv, sql)
+            prueba("reaplicar la 010 repara lo que dejó a medias la migración anterior",
+                   reaplicar_010_repara)
+
             # --- Datos de prueba ---
             print("\n  Cargando datos:")
             def cargar():
@@ -319,6 +337,21 @@ def main():
                 finally:
                     como(uid_librero)
             prueba("verificar_politicas() sin desajustes contra el manifiesto", verificar_politicas_sin_fallas)
+
+            def verificar_definiciones_sin_fallas():
+                # Mismo espíritu que verificar_politicas_sin_fallas() arriba,
+                # pero del lado de las funciones: ninguna debería salir
+                # distinta de 'Correcto' contra manifiesto_funciones().
+                como(uid_admin)
+                try:
+                    r = correr(srv, "select nombre, estado, diagnostico from public.verificar_definiciones() where estado <> 'Correcto';")
+                    filas = r.split('\n')[2:]
+                    filas = [f for f in filas if f.strip() and not f.strip().startswith('(')]
+                    assert not filas, f"verificar_definiciones() encontró desajustes: {filas}"
+                finally:
+                    como(uid_librero)
+            prueba("verificar_definiciones() sin desajustes contra el manifiesto", verificar_definiciones_sin_fallas)
+
             prueba("parametro_int() lee de la tabla",
                    lambda: correr(srv, "select public.parametro_int('max_prestamos_por_lector', 0);"))
 
@@ -390,6 +423,122 @@ def main():
                 finally:
                     como(uid_librero)
             prueba("no deja menos ejemplares que los prestados", copias_menores_que_prestadas)
+
+            # --- Reservas: fila de espera cuando no hay ejemplares (022) ---
+            # Estado de partida: libro 2 (La Araucana) con stock=0, copias=1,
+            # un préstamo activo de María (lector 1), atrasado desde la
+            # prueba anterior. Libro 1 (Subterra) con stock=3, sin préstamos
+            # activos (el suyo ya se devolvió más arriba).
+            print("\n  Reservas:")
+
+            def reserva_exitosa():
+                r = correr(srv, "select reserva_id, posicion_en_fila from public.reservar_libro(2, '11111111-1');")
+                assert '1' in r, f"la posición debía ser 1, se leyó: {r}"
+            prueba("reservar_libro() encola cuando no hay stock", reserva_exitosa)
+
+            # Se usa a Pedro, no a María: María ya está atrasada en el libro 2
+            # (prueba "bloquea al lector con libros atrasados", más arriba) y
+            # reservar_libro() —igual que prestar_libro()— revisa eso antes
+            # que el stock, así que con ella la prueba fallaría por el
+            # motivo equivocado.
+            prueba("reservar_libro() rechaza un libro con stock disponible",
+                   lambda: debe_fallar("select * from public.reservar_libro(1, '11111111-1');", "disponibles"))
+
+            prueba("reservar_libro() rechaza una reserva duplicada del mismo lector",
+                   lambda: debe_fallar("select * from public.reservar_libro(2, '11111111-1');", "ya tiene"))
+
+            def cancelar_activa():
+                rid = correr(srv, "select id from public.reservas where libro_id = 2 and lector_id = 2 and estado = 'activa';").split('\n')[2].strip()
+                correr(srv, f"select public.cancelar_reserva({rid});")
+                r = correr(srv, "select stock from public.libros where id = 2;")
+                assert '0' in r, f"cancelar una reserva 'activa' no debía tocar el stock, se leyó: {r}"
+            prueba("cancelar_reserva() en estado 'activa' no toca el stock", cancelar_activa)
+
+            prueba("reservar_libro() vuelve a aceptar tras la cancelación",
+                   lambda: correr(srv, "select * from public.reservar_libro(2, '11111111-1');"))
+
+            def devolucion_aparta():
+                pid = correr(srv, "select id from public.prestamos where libro_id = 2 and estado = 'activo';").split('\n')[2].strip()
+                correr(srv, f"select public.devolver_prestamo({pid});")
+                r_stock = correr(srv, "select stock from public.libros where id = 2;")
+                assert '0' in r_stock, f"con alguien esperando, el stock NO debía subir, se leyó: {r_stock}"
+                r_estado = correr(srv, "select estado, vence_apartado_en is not null from public.reservas where libro_id = 2 and lector_id = 2;")
+                assert 'apartada' in r_estado and 't' in r_estado, f"la reserva debía pasar a 'apartada' con plazo, se leyó: {r_estado}"
+            prueba("devolver_prestamo() aparta el ejemplar para quien espera, en vez de subir el stock", devolucion_aparta)
+
+            def ajustar_copias_respeta_apartados():
+                como(uid_admin)
+                try:
+                    debe_fallar("select * from public.ajustar_copias(2, 0);", "apartado")
+                finally:
+                    como(uid_librero)
+            prueba("ajustar_copias() no deja bajar de lo apartado por una reserva", ajustar_copias_respeta_apartados)
+
+            def corregir_inventario_respeta_apartados():
+                como(uid_admin)
+                try:
+                    correr(srv, "select * from public.corregir_inventario(2);")
+                    r = correr(srv, "select stock from public.libros where id = 2;")
+                    assert '0' in r, f"corregir_inventario() no debía liberar un ejemplar apartado, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("corregir_inventario() no libera un ejemplar apartado", corregir_inventario_respeta_apartados)
+
+            def revisar_inventario_sin_falso_positivo():
+                r = correr(srv, "select libro_id from public.revisar_inventario() where libro_id = 2;")
+                filas = [f for f in r.split('\n')[2:] if f.strip() and not f.strip().startswith('(')]
+                assert not filas, f"un ejemplar apartado no es una discrepancia de inventario: {filas}"
+            prueba("revisar_inventario() no marca un ejemplar apartado como discrepancia", revisar_inventario_sin_falso_positivo)
+
+            def eliminar_libro_bloqueado_por_reserva():
+                como(uid_admin)
+                try:
+                    debe_fallar("select public.eliminar_libro(2);", "reserva")
+                finally:
+                    como(uid_librero)
+            prueba("eliminar_libro() rechaza un libro con una reserva vigente", eliminar_libro_bloqueado_por_reserva)
+
+            def retiro_convierte_en_prestamo():
+                rid = correr(srv, "select id from public.reservas where libro_id = 2 and lector_id = 2 and estado = 'apartada';").split('\n')[2].strip()
+                correr(srv, f"select * from public.retirar_reserva({rid});")
+                r_stock = correr(srv, "select stock from public.libros where id = 2;")
+                assert '0' in r_stock, f"retirar_reserva() no debía tocar el stock, se leyó: {r_stock}"
+                r_prestamo = correr(srv, "select count(*) from public.prestamos where libro_id = 2 and lector_id = 2 and estado = 'activo';")
+                assert '1' in r_prestamo, f"debía quedar un préstamo activo para quien retiró, se leyó: {r_prestamo}"
+            prueba("retirar_reserva() convierte el apartado en préstamo sin tocar el stock", retiro_convierte_en_prestamo)
+
+            prueba("cancelar_reserva() rechaza una reserva ya cumplida",
+                   lambda: debe_fallar(
+                       "select public.cancelar_reserva((select id from public.reservas where libro_id = 2 and lector_id = 2 and estado = 'cumplida'));",
+                       "vigente"))
+
+            prueba("retirar_reserva() rechaza una reserva que no está apartada",
+                   lambda: debe_fallar(
+                       "select * from public.retirar_reserva((select id from public.reservas where libro_id = 2 and lector_id = 2 and estado = 'cumplida'));",
+                       "apartado"))
+
+            def expiracion_libera_sin_espera():
+                # Se crea a mano una reserva 'apartada' ya vencida sobre el
+                # libro 1 (Subterra), para probar expirar_reservas_vencidas()
+                # sin depender de otro flujo. Esa función corre sin sesión de
+                # usuario (la invoca el Edge Function con la service_role key,
+                # ver 010_consolidacion.sql), así que se llama con como(None).
+                correr(srv, """
+                  update public.libros set stock = stock - 1 where id = 1;
+                  insert into public.reservas (libro_id, lector_id, estado, apartada_en, vence_apartado_en)
+                  values (1, 2, 'apartada', now() - interval '3 days', now() - interval '1 day');
+                """)
+                como(None)
+                try:
+                    r = correr(srv, "select public.expirar_reservas_vencidas();")
+                finally:
+                    como(uid_librero)
+                assert '1' in r, f"debía reportar 1 reserva expirada, se leyó: {r}"
+                r_estado = correr(srv, "select estado from public.reservas where libro_id = 1 and lector_id = 2 order by id desc limit 1;")
+                assert 'expirada' in r_estado, f"la reserva debía quedar 'expirada', se leyó: {r_estado}"
+                r_stock = correr(srv, "select stock from public.libros where id = 1;")
+                assert '3' in r_stock, f"sin nadie más esperando, el stock debía volver a subir, se leyó: {r_stock}"
+            prueba("expirar_reservas_vencidas() libera el ejemplar cuando nadie más espera", expiracion_libera_sin_espera)
 
             # --- Personal: listar, asignar rol, eliminar ---
             print("\n  Personal:")
@@ -494,20 +643,123 @@ def main():
             prueba("agregar_libro_remoto() pide los datos si el ISBN es nuevo y no llegó título",
                    agregar_libro_remoto_sin_titulo_pide_info)
 
-            def agrega_libro_existente_por_enlace_suma_ejemplares():
+            def agregar_libro_remoto_ya_no_repone_en_silencio():
+                # Hasta el 22 de agosto de 2026 esta llamada sumaba 5 al
+                # stock ('incrementado'). Ahora debe limitarse a avisar que
+                # el libro ya existe, sin escribir nada — ver el punto 3 de
+                # «ESCANEO REMOTO SIN SESIÓN» en 010_consolidacion.sql.
                 token = crea_enlace_y_devuelve_token()
                 anon()
                 try:
                     r = correr(srv, f"""
                       select estado from public.agregar_libro_remoto('{token}', '9789561117', null, null, null, null, 5);
                     """)
-                    assert 'incrementado' in r.split('\n')[2], f"debió reponer el libro existente, se leyó: {r}"
+                    assert 'existe' in r.split('\n')[2], f"debió avisar que ya existe, se leyó: {r}"
                 finally:
                     como(uid_librero)
-                r = correr(srv, "select stock from public.libros where isbn = '9789561117';")
-                assert '8' in r.split('\n')[2], f"el stock debió sumar 5 (había 3), se leyó: {r}"
-            prueba("agregar_libro_remoto() repone ejemplares de un libro que ya existe",
-                   agrega_libro_existente_por_enlace_suma_ejemplares)
+                r = correr(srv, "select stock, copias_totales from public.libros where isbn = '9789561117';")
+                linea = r.split('\n')[2]
+                assert '3' in linea, f"el stock NO debió cambiar (seguía en 3), se leyó: {r}"
+            prueba("agregar_libro_remoto() ya no repone ejemplares de un libro que ya existe",
+                   agregar_libro_remoto_ya_no_repone_en_silencio)
+
+            def consultar_libro_remoto_libro_sin_nadie():
+                # Subterra (9789561117 / libro 1) no tiene préstamo ni reserva
+                # VIGENTE en este punto: su único préstamo ya se devolvió
+                # (línea ~371) y su única reserva ya quedó 'expirada' —no
+                # 'activa'/'apartada'— en expiracion_libera_sin_espera() más
+                # arriba, así que no debe aparecer en la consulta.
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select encontrado, titulo, tipo, stock from public.consultar_libro_remoto('{token}', '9789561117');")
+                    linea = r.split('\n')[2]
+                    assert linea.strip().startswith('t'), f"debió encontrar el libro, se leyó: {r}"
+                    assert 'Subterra' in r, f"debió traer el título, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("consultar_libro_remoto() dice tipo vacío cuando nadie tiene el libro",
+                   consultar_libro_remoto_libro_sin_nadie)
+
+            def consultar_libro_remoto_codigo_inexistente():
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select encontrado, isbn from public.consultar_libro_remoto('{token}', 'NO-EXISTE-EN-CATALOGO');")
+                    linea = r.split('\n')[2]
+                    assert linea.strip().startswith('f'), f"no debió encontrar nada, se leyó: {r}"
+                    assert 'NO-EXISTE-EN-CATALOGO' in r, f"debió devolver el código buscado, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("consultar_libro_remoto() dice encontrado=false si el código no está en el catálogo",
+                   consultar_libro_remoto_codigo_inexistente)
+
+            def consultar_libro_remoto_rechaza_token_invalido():
+                anon()
+                try:
+                    debe_fallar(
+                        "select * from public.consultar_libro_remoto('token-inventado', '9789561117');",
+                        "no es válido")
+                finally:
+                    como(uid_librero)
+            prueba("consultar_libro_remoto() rechaza un token inventado",
+                   consultar_libro_remoto_rechaza_token_invalido)
+
+            def consultar_libro_remoto_muestra_prestamo():
+                # Mismo patrón que deshacer_creado_no_borra_si_ya_hay_prestamo:
+                # libro propio + lector propio + préstamo insertado a mano.
+                como(uid_librero)
+                r = correr(srv, f"""
+                  select libro_id from public.agregar_libro_remoto(
+                    '{crea_enlace_y_devuelve_token()}', 'CONSULTA-PRESTADO', 'Libro Prestado Consulta', 'Autor', null, null, 1);
+                """)
+                libro_id = r.split('\n')[2].strip()
+                correr(srv, """
+                  insert into public.lectores (rut, nombre, email, telefono)
+                  values ('33333333-6', 'Lector Consulta Remota', 'consulta@y.cl', '+56933333333');
+                """)
+                correr(srv, f"""
+                  insert into public.prestamos (libro_id, lector_id, fecha_devolucion_esperada, estado)
+                  values ({libro_id}, (select id from public.lectores where rut = '33333333-6'), current_date + 7, 'activo');
+                """)
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select tipo, persona_nombre, persona_rut from public.consultar_libro_remoto('{token}', 'CONSULTA-PRESTADO');")
+                    assert 'prestamo' in r, f"debió mostrar tipo=prestamo, se leyó: {r}"
+                    assert 'Lector Consulta Remota' in r, f"debió traer el nombre del lector, se leyó: {r}"
+                    assert '33333333-6' in r, f"debió traer el RUT del lector, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("consultar_libro_remoto() muestra nombre y RUT de quien tiene el préstamo activo",
+                   consultar_libro_remoto_muestra_prestamo)
+
+            def consultar_libro_remoto_muestra_reserva():
+                como(uid_librero)
+                correr(srv, """
+                  insert into public.libros (isbn, titulo, autor, stock, copias_totales)
+                  values ('CONSULTA-RESERVADO', 'Libro Reservado Consulta', 'Autor', 0, 1);
+                  insert into public.lectores (rut, nombre, email, telefono)
+                  values ('44444444-7', 'Lector Reserva Remota', 'reserva@y.cl', '+56944444444');
+                """)
+                libro_id = correr(srv, "select id from public.libros where isbn = 'CONSULTA-RESERVADO';").split('\n')[2].strip()
+                correr(srv, f"select * from public.reservar_libro({libro_id}, '44444444-7');")
+                token = crea_enlace_y_devuelve_token()
+                anon()
+                try:
+                    r = correr(srv, f"select tipo, reserva_estado, persona_nombre, persona_rut from public.consultar_libro_remoto('{token}', 'CONSULTA-RESERVADO');")
+                    # La cabecera de la columna "reserva_estado" ya contiene la
+                    # palabra "reserva", así que ese chequeo se hace solo sobre
+                    # la fila de datos (línea 2), no sobre todo `r`.
+                    linea = r.split('\n')[2]
+                    assert 'reserva' in linea, f"debió mostrar tipo=reserva, se leyó: {r}"
+                    assert 'activa' in linea, f"debió traer el estado de la reserva, se leyó: {r}"
+                    assert 'Lector Reserva Remota' in r, f"debió traer el nombre del lector, se leyó: {r}"
+                    assert '44444444-7' in r, f"debió traer el RUT del lector, se leyó: {r}"
+                finally:
+                    como(uid_librero)
+            prueba("consultar_libro_remoto() muestra nombre y RUT de quien tiene la reserva vigente",
+                   consultar_libro_remoto_muestra_reserva)
 
             def agregar_libro_remoto_rechaza_token_invalido():
                 anon()
@@ -536,47 +788,51 @@ def main():
                 assert '0' in r.split('\n')[2], f"el libro debió eliminarse del catálogo, se leyó: {r}"
             prueba("deshacer_libro_remoto() elimina un libro recién creado ('creado')", deshacer_creado_elimina_el_libro)
 
-            def deshacer_incrementado_resta_lo_agregado():
-                # Libro base propio, para no interferir con 9789561117 (ya
-                # mutado por la prueba de reposición de más arriba).
-                correr(srv, """
+            def simular_incrementado_legado(isbn, stock_base, cantidad):
+                """Reconstruye a mano un movimiento 'incrementado' de los que
+                agregar_libro_remoto ya no genera desde el 22 de agosto de
+                2026 (ver el punto 3 de «ESCANEO REMOTO SIN SESIÓN»). Antes
+                estos tres deshacer_libro_remoto_*() lo producían llamando a
+                agregar_libro_remoto con un ISBN ya existente; ahora esa
+                llamada no escribe nada, así que el escenario histórico que
+                deshacer_libro_remoto sigue teniendo que saber revertir se
+                arma directamente en auditoria, tal como habría quedado
+                ANTES del cambio. Devuelve (token, libro_id)."""
+                como(uid_librero)
+                correr(srv, f"""
                   insert into public.libros (isbn, titulo, autor, stock, copias_totales)
-                  values ('DESHACER-INCR', 'Base', 'Autor', 2, 2);
+                  values ('{isbn}', 'Base', 'Autor', {stock_base}, {stock_base});
                 """)
                 token = crea_enlace_y_devuelve_token()
+                enlace_id = correr(srv, "select id from public.enlaces_escaneo_remoto order by id desc limit 1;").split('\n')[2].strip()
+                libro_id = correr(srv, f"select id from public.libros where isbn = '{isbn}';").split('\n')[2].strip()
+                nuevo_total = stock_base + cantidad
+                correr(srv, f"""
+                  update public.libros set stock = {nuevo_total}, copias_totales = {nuevo_total} where id = {libro_id};
+                  insert into public.auditoria (tabla, registro_id, accion, datos_despues)
+                  values ('libros', '{libro_id}', 'UPDATE',
+                    jsonb_build_object('operacion', 'escaneo_remoto', 'enlace_id', {enlace_id},
+                                        'ejemplares_agregados', {cantidad}, 'copias_totales', {nuevo_total}));
+                """)
+                return token, libro_id
+
+            def deshacer_incrementado_resta_lo_agregado():
+                token, libro_id = simular_incrementado_legado('DESHACER-INCR', 2, 3)
+                r = correr(srv, "select stock, copias_totales from public.libros where isbn = 'DESHACER-INCR';")
+                assert '5' in r.split('\n')[2], f"debió quedar en 5 (base 2 + 3), se leyó: {r}"
                 anon()
                 try:
-                    r = correr(srv, f"""
-                      select libro_id from public.agregar_libro_remoto(
-                        '{token}', 'DESHACER-INCR', null, null, null, null, 3);
-                    """)
-                    libro_id = r.split('\n')[2].strip()
-                    r = correr(srv, "select stock, copias_totales from public.libros where isbn = 'DESHACER-INCR';")
-                    assert '5' in r.split('\n')[2], f"debió sumar 3 al stock base de 2, se leyó: {r}"
                     r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id});")
                     assert 't' in r.split('\n')[2], f"debió deshacerse, se leyó: {r}"
                 finally:
                     como(uid_librero)
                 r = correr(srv, "select stock, copias_totales from public.libros where isbn = 'DESHACER-INCR';")
                 assert '2' in r.split('\n')[2], f"stock y copias_totales debieron volver a 2, se leyó: {r}"
-            prueba("deshacer_libro_remoto() resta exactamente lo agregado en un 'incrementado'",
+            prueba("deshacer_libro_remoto() resta exactamente lo agregado en un 'incrementado' (histórico)",
                    deshacer_incrementado_resta_lo_agregado)
 
             def deshacer_no_resta_mas_de_lo_disponible():
-                correr(srv, """
-                  insert into public.libros (isbn, titulo, autor, stock, copias_totales)
-                  values ('DESHACER-PARCIAL', 'Base', 'Autor', 0, 0);
-                """)
-                token = crea_enlace_y_devuelve_token()
-                anon()
-                try:
-                    r = correr(srv, f"""
-                      select libro_id from public.agregar_libro_remoto(
-                        '{token}', 'DESHACER-PARCIAL', null, null, null, null, 2);
-                    """)
-                    libro_id = r.split('\n')[2].strip()
-                finally:
-                    como(uid_librero)
+                token, libro_id = simular_incrementado_legado('DESHACER-PARCIAL', 0, 2)
                 # Simula que, entre agregar y deshacer, ya se prestaron los 2
                 # ejemplares recién sumados: no debe quedar nada por restar.
                 correr(srv, f"update public.libros set stock = 0 where id = {libro_id};")
@@ -685,18 +941,9 @@ def main():
                    deshacer_rechaza_deshacer_dos_veces)
 
             def deshacer_incrementado_rechaza_deshacer_dos_veces():
-                correr(srv, """
-                  insert into public.libros (isbn, titulo, autor, stock, copias_totales)
-                  values ('DESHACER-DOBLE-INCR', 'Base', 'Autor', 1, 1);
-                """)
-                token = crea_enlace_y_devuelve_token()
+                token, libro_id = simular_incrementado_legado('DESHACER-DOBLE-INCR', 1, 2)
                 anon()
                 try:
-                    r = correr(srv, f"""
-                      select libro_id from public.agregar_libro_remoto(
-                        '{token}', 'DESHACER-DOBLE-INCR', null, null, null, null, 2);
-                    """)
-                    libro_id = r.split('\n')[2].strip()
                     r = correr(srv, f"select deshecho from public.deshacer_libro_remoto('{token}', {libro_id});")
                     assert 't' in r.split('\n')[2], f"el primer deshacer debió funcionar, se leyó: {r}"
                     r = correr(srv, f"select deshecho, motivo from public.deshacer_libro_remoto('{token}', {libro_id});")
@@ -709,7 +956,7 @@ def main():
                 r = correr(srv, f"select stock, copias_totales from public.libros where isbn = 'DESHACER-DOBLE-INCR';")
                 linea = r.split('\n')[2]
                 assert '1' in linea, f"el segundo intento no debió tocar el inventario, se leyó: {r}"
-            prueba("deshacer_libro_remoto() no deja deshacer la misma acción dos veces ('incrementado')",
+            prueba("deshacer_libro_remoto() no deja deshacer la misma acción dos veces ('incrementado', histórico)",
                    deshacer_incrementado_rechaza_deshacer_dos_veces)
 
             def deshacer_libro_remoto_rechaza_token_invalido():

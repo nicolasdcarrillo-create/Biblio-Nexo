@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v10'; // división de ui-base.js (22 de agosto de 2026) — catalogo.js, lectores.js, prestamos.js y mostrador.js nuevos en js/vistas/
+const CACHE_VERSION = 'v12'; // escaneo/mesón (Fase 2, 22 de agosto de 2026) — mostrador.js sin cámara, escaneo-remoto.js con consultar_libro_remoto() y Realtime, canalEscaneo() nuevo en utilidades.js
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 
@@ -97,6 +97,7 @@ const PRECACHE_URLS = [
   '/js/modules/db/personal.js',
   '/js/modules/db/prestamos.js',
   '/js/modules/db/reportes.js',
+  '/js/modules/db/reservas.js',
   '/js/modules/db/respaldos.js',
   '/js/modules/errores.js',
   '/js/modules/estado-conexion.js',

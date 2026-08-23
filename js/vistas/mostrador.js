@@ -1,11 +1,17 @@
 // Vista Mostrador (mesón de circulación). Extraído de js/modules/ui-base.js
 // el 22 de agosto de 2026 (división por vista, ver pendientes-checklist.md y
-// claude/plan-division-ui-base-2026-08-22.md). Sin cambios de lógica: es el
-// mismo código, solo movido.
+// claude/plan-division-ui-base-2026-08-22.md) sin cambios de lógica en ese
+// momento — el mismo código, solo movido. Ese mismo día, más tarde, sí
+// cambió de lógica: la Fase 2 de claude/reservas-whatsapp-meson-2026-08-22.md
+// le quitó la cámara (ver renderScannerView), le agregó la fila de espera a
+// la ficha de circulación (_fichaCirculacion) y la conectó a Supabase
+// Realtime para enterarse en vivo de lo que se escanea desde el celular
+// (showQrRemotoModal).
 //
 // Se llama "mostrador.js" y no "escaner.js" o "scanner.js" para no chocar con
-// js/modules/scanner.js (el wrapper de la librería de escaneo de códigos, que
-// esta vista importa y usa).
+// js/modules/scanner.js (el wrapper de la librería de escaneo de códigos,
+// que ya NO usa esta vista — lo sigue usando escaneo-remoto.js, la página
+// del enlace sin sesión, donde SÍ vive la cámara).
 //
 // Sigue funcionando igual porque `Object.assign(UIManager.prototype, ...)`
 // (js/modules/ui.js) mezcla los métodos de todas las vistas en el mismo
@@ -14,33 +20,24 @@
 // js/vistas/prestamos.js).
 
 import { db } from '../modules/db.js';
-import { escapeHtml } from '../modules/utilidades.js';
-import Scanner from '../modules/scanner.js';
+import { escapeHtml, canalEscaneo } from '../modules/utilidades.js';
 import { buscarPorIsbnExterno } from '../modules/libros-externos.js';
 import { generarSvgQr } from '../modules/qr.js';
+import { supabase } from '../supabase-init.js';
 
 export default {
+  /**
+   * Sin cámara desde el 22 de agosto de 2026 (Fase 2 de
+   * claude/reservas-whatsapp-meson-2026-08-22.md): todo el escaneo con
+   * cámara se mudó al celular, por el botón "Escanear desde el celular"
+   * (showQrRemotoModal) — esta vista, aparte de ese botón, ahora solo ofrece
+   * escribir el código a mano. El módulo de la cámara (scanner.js) sigue
+   * existiendo y en uso: lo importa escaneo-remoto.js, la página que abre
+   * ese enlace.
+   */
   renderScannerView() {
     const container = this._container();
     if (!container) return;
-
-    // La cámara solo está disponible en HTTPS (o en localhost durante el
-    // desarrollo). Sin este aviso, publicar en HTTP hace que el botón no haga
-    // nada y no quede claro por qué.
-    const contextoSeguro = window.isSecureContext ||
-      ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-    const avisoHttps = contextoSeguro ? '' : `
-      <div class="mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3">
-        <p class="font-bold mb-1"><i aria-hidden="true" class="fas fa-triangle-exclamation mr-1.5"></i>La cámara no está disponible</p>
-        <p class="text-xs leading-relaxed">
-          Los navegadores solo permiten usar la cámara en sitios con HTTPS. Esta página se abrió con
-          <span class="font-mono">${escapeHtml(window.location.protocol)}//</span>.
-          Publica el sistema en un servidor con certificado (Vercel lo da sin costo)
-          o ábrelo desde <span class="font-mono">localhost</span> mientras desarrollas.
-          Mientras tanto puedes escribir el ISBN a mano.
-        </p>
-      </div>`;
 
     container.innerHTML = `
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-xl">
@@ -51,15 +48,12 @@ export default {
             <i aria-hidden="true" class="fas fa-mobile-screen-button mr-1"></i> Escanear desde el celular
           </button>
         </div>
-        ${avisoHttps}
-        <div class="flex gap-3 mb-4">
-          <button id="start-scan-btn" ${contextoSeguro ? '' : 'disabled'}
-            class="btn-madera text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed">Iniciar cámara</button>
-          <button id="stop-scan-btn" class="bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl font-medium px-4 py-2 text-sm">Detener cámara</button>
-        </div>
-        <div id="reader" class="w-full mb-4"></div>
+        <p class="text-xs text-stone-500 mb-4">
+          Use "Escanear desde el celular" para leer códigos de barras con la cámara.
+          Aquí también puede escribir el código a mano.
+        </p>
         <div class="flex gap-3">
-          <input id="manual-scan-input" aria-label="Escribir el código del libro manualmente" placeholder="O ingrese el ISBN manualmente" class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          <input id="manual-scan-input" aria-label="Escribir el código del libro manualmente" placeholder="Ingrese el ISBN manualmente" class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           <button id="manual-scan-btn" class="bg-patrimonio-lago hover:bg-[#14303c] text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm transition-colors">Buscar</button>
         </div>
         <div id="scan-result" class="mt-5"></div>
@@ -69,6 +63,10 @@ export default {
     const showResult = async (code) => {
       const resultEl = document.getElementById('scan-result');
       if (!resultEl) return;
+      // Se recuerda el último código mostrado para que un aviso en vivo del
+      // escaneo remoto (ver _manejarEscaneoRemoto) sepa si debe refrescar
+      // esta misma ficha o solo avisar con un toast — ver showQrRemotoModal.
+      this._ultimoCodigoEscaneado = code;
 
       resultEl.innerHTML = '<div class="flex items-center gap-2 text-sm text-stone-500"><i aria-hidden="true" class="fas fa-spinner fa-spin text-patrimonio-lago"></i> Consultando…</div>';
 
@@ -78,7 +76,8 @@ export default {
           await this._formularioAltaRapida(resultEl, code);
           return;
         }
-        resultEl.innerHTML = this._fichaCirculacion(resultado);
+        const reservas = await db.listarReservas(resultado.libro?.id).catch(() => null);
+        resultEl.innerHTML = this._fichaCirculacion(resultado, reservas);
         this._bindFichaCirculacion(resultEl, resultado, code);
       } catch (err) {
         resultEl.innerHTML = `<p class="text-rose-700 font-bold text-sm">${escapeHtml(err.message || 'Error al consultar la base de datos.')}</p>`;
@@ -87,27 +86,6 @@ export default {
     this._mostrarResultadoEscaneo = showResult;
 
     document.getElementById('qr-remoto-btn').addEventListener('click', () => this.showQrRemotoModal());
-
-    document.getElementById('start-scan-btn').addEventListener('click', async e => {
-      const boton = e.currentTarget;
-      const textoOriginal = boton.textContent;
-      // La librería de escaneo pesa 368 KB y ahora se descarga en este momento,
-      // no en el arranque. Conviene decirlo, porque con conexión lenta el botón
-      // se quedaría mudo unos segundos.
-      boton.disabled = true;
-      boton.textContent = 'Preparando cámara…';
-      try {
-        await Scanner.start(
-          code => { if (!this._isDuplicateScan(code)) showResult(code); },
-          mensaje => this.showToast(mensaje, 'error')
-        );
-      } finally {
-        boton.disabled = false;
-        boton.textContent = textoOriginal;
-      }
-    });
-
-    document.getElementById('stop-scan-btn').addEventListener('click', () => Scanner.stop());
 
     const buscarManual = () => {
       const code = document.getElementById('manual-scan-input').value.trim();
@@ -226,8 +204,9 @@ export default {
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
         <h3 class="font-serif text-lg font-bold text-stone-900">Escanear desde el celular</h3>
         <p class="text-xs text-stone-600">
-          Quien escanee este código NO necesita iniciar sesión. Solo puede agregar libros al
-          catálogo o sumar ejemplares — nada más — y el enlace deja de servir cuando vence o lo revoca.
+          Quien escanee este código NO necesita iniciar sesión. Si el libro es nuevo lo agrega al
+          catálogo; si ya existe, solo muestra quién lo tiene — nada más — y el enlace deja de
+          servir cuando vence o lo revoca. Cada escaneo remoto se avisa aquí, en vivo.
         </p>
         <label for="qr-remoto-horas" class="text-[11px] font-black uppercase tracking-wide text-stone-600 block">Vigente por</label>
         <select id="qr-remoto-horas" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm">
@@ -246,13 +225,53 @@ export default {
       </div>`;
     document.body.appendChild(overlay);
 
-    const cerrar = this._prepararModal(overlay);
-    overlay.querySelector('[data-action="cerrar"]').addEventListener('click', cerrar);
-    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
-
     // Enlace vigente en este momento, para poder revocarlo con el botón de
     // abajo sin tener que ir hasta Administración → Enlaces remotos.
     let enlaceActual = null;
+
+    // Canal de Realtime Broadcast de ESTE enlace (ver canalEscaneo() en
+    // utilidades.js): mientras esta ventana está abierta, el mesón se entera
+    // en vivo de cada código que se escanea desde el celular, sin que nadie
+    // toque nada — ni siquiera hace falta tener la vista Escanear abierta,
+    // aparece igual como aviso (showToast). Se abre un canal nuevo por cada
+    // enlace (el nombre depende del token) y se cierra el anterior primero:
+    // nunca debe quedar más de un canal escuchando por esta ventana.
+    let canalRealtime = null;
+    const desuscribirCanal = () => {
+      if (canalRealtime && supabase) {
+        try { supabase.removeChannel(canalRealtime); } catch (e) { /* best-effort */ }
+      }
+      canalRealtime = null;
+    };
+
+    // `alCerrar` (no envolver el `cerrar` devuelto) porque _prepararModal
+    // también cierra el modal con la tecla Escape, con su propio `cerrar`
+    // interno — envolver solo el valor de retorno se lo saltaría y el canal
+    // quedaría abierto de más.
+    const cerrar = this._prepararModal(overlay, { alCerrar: () => desuscribirCanal() });
+    overlay.querySelector('[data-action="cerrar"]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+    const suscribirCanal = async (token) => {
+      desuscribirCanal();
+      if (!supabase) return;
+      try {
+        const nombre = await canalEscaneo(token);
+        canalRealtime = supabase.channel(nombre)
+          .on('broadcast', { event: 'libro-escaneado' }, ({ payload }) => {
+            this.showToast(`Escaneo remoto: ${payload?.titulo || payload?.isbn || 'libro'}`, 'info');
+            // Si la vista Escanear está abierta mostrando este mismo código,
+            // se refresca sola — reutiliza el mismo camino que un escaneo
+            // manual, así que también recarga los préstamos y reservas.
+            if (payload?.isbn && payload.isbn === this._ultimoCodigoEscaneado && document.getElementById('scan-result')) {
+              this._mostrarResultadoEscaneo?.(payload.isbn);
+            }
+          })
+          .subscribe();
+      } catch (e) {
+        // best-effort: sin aviso en vivo, el escaneo remoto sigue
+        // funcionando igual — solo no se refleja solo en esta ventana.
+      }
+    };
 
     const generar = async () => {
       const cuerpo = document.getElementById('qr-remoto-cuerpo');
@@ -264,6 +283,7 @@ export default {
       // Si ya había un enlace vigente (por ejemplo, se cambió la duración),
       // se revoca antes de generar el siguiente: no debe quedar más de un
       // enlace válido abierto por esta ventana a la vez.
+      desuscribirCanal();
       if (enlaceActual) {
         try { await db.revocarEnlaceEscaneo(enlaceActual.id); } catch (e) { /* best-effort */ }
         enlaceActual = null;
@@ -277,6 +297,7 @@ export default {
         cuerpo.innerHTML = `<p class="text-xs text-rose-700 py-6">${escapeHtml(err.message || 'No se pudo generar el enlace.')}</p>`;
         return;
       }
+      suscribirCanal(enlaceActual.token);
 
       const url = `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}escaneo-remoto.html?token=${encodeURIComponent(enlaceActual.token)}`;
       cuerpo.innerHTML = `
@@ -305,6 +326,7 @@ export default {
         try {
           await db.revocarEnlaceEscaneo(enlaceActual.id);
           enlaceActual = null;
+          desuscribirCanal();
           this.showToast('Enlace revocado. Ya no sirve para agregar libros.', 'success');
           cuerpo.innerHTML = '<p class="text-xs text-stone-500 py-6">Este enlace fue revocado. Genere uno nuevo si lo necesita.</p>';
         } catch (err) {
@@ -324,9 +346,29 @@ export default {
    * quién lo tiene, con qué RUT, cuándo vence y en qué situación está esa
    * persona (al día, con atrasos, o bloqueada).
    */
-  _fichaCirculacion({ libro, prestamos }) {
+  _fichaCirculacion({ libro, prestamos }, reservas) {
     const disponibles = libro.stock ?? 0;
     const hayDisponibles = disponibles > 0;
+    // reservas llega de db.listarReservas(libro.id): null si la migración
+    // 022 no está aplicada (se omite la sección entera, sin romper la
+    // ficha), [] si nadie espera este libro.
+    const vigentes = (reservas || []).filter(r => r.estado === 'activa' || r.estado === 'apartada');
+
+    const filaReserva = r => `
+      <div class="border-t border-stone-200 pt-3 mt-3">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div class="min-w-0">
+            <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-0.5">
+              ${r.estado === 'apartada' ? 'Apartado para' : `En fila (posición ${r.posicion_en_fila ?? '?'})`}
+            </p>
+            <p class="font-bold text-stone-800">${escapeHtml(r.lector_nombre || 'Lector desconocido')}</p>
+            <p class="text-xs font-mono text-stone-500">${escapeHtml(r.lector_rut || '—')}</p>
+          </div>
+          ${r.estado === 'apartada'
+            ? `<span class="stamp stamp-info !rotate-0 shrink-0"><i aria-hidden="true" class="fas fa-box-archive"></i> Apartado</span>`
+            : `<span class="stamp !rotate-0 shrink-0"><i aria-hidden="true" class="fas fa-user-clock"></i> En fila</span>`}
+        </div>
+      </div>`;
 
     const filaPrestamo = p => {
       const estado = this._estadoPrestamo(p.fecha_devolucion_esperada);
@@ -399,6 +441,10 @@ export default {
             ? '<p class="text-xs text-stone-500"><i aria-hidden="true" class="fas fa-circle-info mr-1"></i>Sin préstamos activos. Todos los ejemplares están en la biblioteca.</p>'
             : `<p class="text-[10px] font-black uppercase tracking-widest text-stone-500">${prestamos.length} préstamo${prestamos.length === 1 ? '' : 's'} activo${prestamos.length === 1 ? '' : 's'}</p>
                ${prestamos.map(filaPrestamo).join('')}`}
+
+          ${vigentes.length > 0 ? `
+            <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 mt-4">${vigentes.length} reserva${vigentes.length === 1 ? '' : 's'} vigente${vigentes.length === 1 ? '' : 's'}</p>
+            ${vigentes.map(filaReserva).join('')}` : ''}
 
           <div class="border-t border-stone-200 pt-4 mt-4">
             <button data-prestar-libro="${libro.id}" ${hayDisponibles ? '' : 'disabled'}

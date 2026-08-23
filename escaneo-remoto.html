@@ -10,7 +10,17 @@
       el enlace de escaneo remoto (ver ui-base.js, showQrRemotoModal), que NO
       exige iniciar sesión. No carga js/main.js ni nada del panel del
       personal — solo lo necesario para leer el token de la URL, comprobarlo,
-      y agregar o reponer libros con él.
+      y agregar, reponer o consultar libros con él.
+
+      Sí carga vendor/js/supabase.js (a diferencia de antes del 22 de agosto
+      de 2026): esta página habla con la mayoría de la base por fetch() plano
+      contra la API REST (ver el comentario de escaneo-remoto.js), pero avisar
+      en vivo al mesón que se escaneó un libro (Realtime Broadcast) necesita
+      el cliente de supabase-js — un canal de WebSocket no se puede abrir con
+      fetch(). El cliente que arma escaneo-remoto.js es aparte del de
+      supabase-init.js (el de la app CON sesión): nunca inicia sesión, así
+      que no levanta el candado entre pestañas de gotrue-js que ese otro
+      archivo documenta y esquiva.
 
       Misma Política de Seguridad de Contenido que index.html — ver ese
       archivo para la explicación completa. connect-src hacia Supabase y
@@ -59,6 +69,7 @@
         </div>
     </main>
 
+    <script id="script-supabase" src="vendor/js/supabase.js"></script>
     <script type="module" src="js/escaneo-remoto.js"></script>
 </body>
 </html>

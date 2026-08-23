@@ -140,7 +140,9 @@ export default {
         <td class="px-4 py-3 text-stone-500">${escapeHtml(b.isbn)}</td>
         <td class="px-4 py-3 text-center">${b.stock}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
-          <button class="loan-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Prestar</button>
+          ${b.stock > 0
+            ? `<button class="loan-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Prestar</button>`
+            : `<button class="reserve-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Reservar</button>`}
           ${this.currentUserRole === 'admin' ? `
             <button class="edit-book-btn text-stone-500 hover:text-patrimonio-madera font-bold" data-id="${b.id}">Editar</button>
             <button class="delete-book-btn text-rose-700 font-bold" data-id="${b.id}">Eliminar</button>` : ''}
@@ -149,8 +151,9 @@ export default {
     `).join('') || `<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">Sin libros que coincidan con la búsqueda.</td></tr>`;
   },
 
-  // Vuelve a enganchar los botones de Prestar/Eliminar del catálogo. Se llama tanto
-  // al renderizar la vista completa como al refrescar el <tbody> tras una búsqueda.
+  // Vuelve a enganchar los botones de Prestar/Reservar/Eliminar del catálogo. Se
+  // llama tanto al renderizar la vista completa como al refrescar el <tbody> tras
+  // una búsqueda.
   _bindCatalogRowEvents(container) {
     container.querySelectorAll('.delete-book-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -168,6 +171,10 @@ export default {
 
     container.querySelectorAll('.loan-book-btn').forEach(btn => {
       btn.addEventListener('click', () => this.promptCreateLoan(btn.dataset.id));
+    });
+
+    container.querySelectorAll('.reserve-book-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.promptCreateReserva(btn.dataset.id));
     });
 
     container.querySelectorAll('.edit-book-btn').forEach(btn => {
@@ -281,6 +288,18 @@ export default {
    */
   async promptCreateLoan(bookId) {
     await this.flujoPrestamo(bookId, () => {
+      if (this.currentView === 'catalog') this.renderCatalog();
+    });
+  },
+
+  /**
+   * Reservar desde el Catálogo (022_reservas.sql). Solo aparece cuando no
+   * hay ejemplares disponibles (b.stock === 0, ver _renderBookRows) — con
+   * stock disponible corresponde prestar, no reservar; reservar_libro()
+   * también lo rechazaría del lado del servidor.
+   */
+  async promptCreateReserva(bookId) {
+    await this.flujoReserva(bookId, () => {
       if (this.currentView === 'catalog') this.renderCatalog();
     });
   }

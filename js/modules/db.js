@@ -12,10 +12,14 @@ export { hoyEnChile };
 // remoto, respaldos, cumplimiento legal, reportes) vive en js/modules/db/ —
 // dividido por dominio el 22 de agosto de 2026 (ver pendientes-checklist.md).
 // Este archivo se queda con lo que no se podía separar sin romper nada: la
-// cola de sincronización sin conexión (SyncQueue) y las cinco llamadas que
+// cola de sincronización sin conexión (SyncQueue) y las siete llamadas que
 // la usan directamente (registrarPrestamo, devolverPrestamo, renovarPrestamo,
-// consultarLibro, estadoLector) — moverlas habría dejado la lógica de
-// negocio en un archivo y su respaldo sin conexión en otro. Igual que antes,
+// reservarLibro, retirarReserva, consultarLibro, estadoLector) — moverlas
+// habría dejado la lógica de negocio en un archivo y su respaldo sin
+// conexión en otro. reservarLibro/retirarReserva son tan urgentes en el
+// mesón como prestar/devolver (022_reservas.sql), así que siguen el mismo
+// patrón; cancelarReserva/listarReservas, menos urgentes, viven en
+// js/modules/db/reservas.js. Igual que antes,
 // `pruebas/probar-interfaz.mjs` sigue vigilando esta parte leyendo
 // directamente el texto de ESTE archivo (no basta con que el código exista
 // en algún lado): si alguna vez hace falta mover algo más de aquí, hay que
@@ -34,6 +38,7 @@ import { enlacesEscaneo } from './db/enlaces-escaneo.js';
 import { respaldos } from './db/respaldos.js';
 import { cumplimiento } from './db/cumplimiento.js';
 import { reportes } from './db/reportes.js';
+import { reservas } from './db/reservas.js';
 
 /**
  * ¿Este error es "no llegamos a hablar con el servidor" (sin red, se cortó
@@ -61,11 +66,12 @@ function esFalloDeRed(error) {
 /**
  * Cola de sincronización (Fase 1.3 — funcionamiento sin conexión).
  *
- * Qué resuelve: `prestar_libro`, `devolver_prestamo` y `renovar_prestamo`
- * son funciones RPC del servidor — sin conexión no hay forma de llamarlas.
- * Antes de esta clase, un fallo de red en cualquiera de las tres terminaba
- * igual que cualquier otro error: un mensaje y nada más, aunque la única
- * causa real fuera que en ese momento no había internet.
+ * Qué resuelve: `prestar_libro`, `devolver_prestamo`, `renovar_prestamo`,
+ * `reservar_libro` y `retirar_reserva` (022_reservas.sql) son funciones RPC
+ * del servidor — sin conexión no hay forma de llamarlas. Antes de esta
+ * clase, un fallo de red en cualquiera de ellas terminaba igual que
+ * cualquier otro error: un mensaje y nada más, aunque la única causa real
+ * fuera que en ese momento no había internet.
  *
  * Qué hace en vez de eso: cuando una de esas tres llamadas falla
  * específicamente por RED (ver esFalloDeRed arriba, nunca por un rechazo
@@ -105,7 +111,9 @@ const INTENTOS_ANTES_DE_AVISAR = 5;        // a esta altura, además de seguir r
 const OPERACIONES_COLA = {
     prestar_libro: params => supabase.rpc('prestar_libro', params),
     devolver_prestamo: params => supabase.rpc('devolver_prestamo', params),
-    renovar_prestamo: params => supabase.rpc('renovar_prestamo', params)
+    renovar_prestamo: params => supabase.rpc('renovar_prestamo', params),
+    reservar_libro: params => supabase.rpc('reservar_libro', params),
+    retirar_reserva: params => supabase.rpc('retirar_reserva', params)
 };
 
 /**
@@ -429,6 +437,74 @@ export const db = {
     },
 
     /**
+     * Pone a un lector en la fila de espera de un libro sin ejemplares
+     * disponibles (022_reservas.sql, reservar_libro()). Tan urgente en el
+     * mesón como registrar un préstamo — sigue el mismo patrón de SyncQueue
+     * que registrarPrestamo, ver el comentario de ahí sobre el alcance del
+     * try/catch.
+     */
+    async reservarLibro(libroId, lectorRut) {
+        let resultado;
+        try {
+            resultado = await conTiempoLimite(supabase.rpc('reservar_libro', {
+                p_libro_id: libroId,
+                p_lector_rut: lectorRut
+            }), ESPERA);
+        } catch (e) {
+            if (esFalloDeRed(e)) {
+                return colaSync.encolar('reservar_libro',
+                    { p_libro_id: libroId, p_lector_rut: lectorRut },
+                    `Reserva del libro #${libroId} para el RUT ${lectorRut}`);
+            }
+            throw e;
+        }
+        const { data, error } = resultado;
+        if (error) {
+            if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 022 en Supabase para poder reservar.');
+            if (esFalloDeRed(error)) {
+                return colaSync.encolar('reservar_libro',
+                    { p_libro_id: libroId, p_lector_rut: lectorRut },
+                    `Reserva del libro #${libroId} para el RUT ${lectorRut}`);
+            }
+            throw new Error(error.message || 'No se pudo registrar la reserva.');
+        }
+        return Array.isArray(data) ? data[0] : data;
+    },
+
+    /**
+     * El lector viene a buscar el ejemplar que le quedó apartado: convierte
+     * la reserva en un préstamo real (022_reservas.sql, retirar_reserva()).
+     * Mismo patrón que devolverPrestamo — ver ese comentario sobre el
+     * alcance del try/catch.
+     */
+    async retirarReserva(reservaId) {
+        let resultado;
+        try {
+            resultado = await conTiempoLimite(supabase.rpc('retirar_reserva', {
+                p_reserva_id: reservaId
+            }), ESPERA);
+        } catch (e) {
+            if (esFalloDeRed(e)) {
+                return colaSync.encolar('retirar_reserva',
+                    { p_reserva_id: reservaId },
+                    `Retiro de la reserva #${reservaId}`);
+            }
+            throw e;
+        }
+        const { data, error } = resultado;
+        if (error) {
+            if (esFuncionInexistente(error)) throw new Error('Falta ejecutar la migración 022 en Supabase para poder retirar una reserva.');
+            if (esFalloDeRed(error)) {
+                return colaSync.encolar('retirar_reserva',
+                    { p_reserva_id: reservaId },
+                    `Retiro de la reserva #${reservaId}`);
+            }
+            throw new Error(error.message || 'No se pudo registrar el retiro.');
+        }
+        return Array.isArray(data) ? data[0] : data;
+    },
+
+    /**
      * Todo lo que hace falta saber al escanear un código: el libro, si está
      * prestado, a quién, con qué RUT y en qué situación está esa persona.
      *
@@ -522,5 +598,6 @@ export const db = {
     ...enlacesEscaneo,
     ...respaldos,
     ...cumplimiento,
-    ...reportes
+    ...reportes,
+    ...reservas
 };

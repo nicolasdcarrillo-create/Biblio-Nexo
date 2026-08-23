@@ -24,6 +24,7 @@ export default {
     container.innerHTML = html`
       <div class="flex flex-wrap gap-2 mb-4">
         ${boton('inventario', 'Inventario', 'fa-boxes-stacked')}
+        ${boton('reservas', 'Reservas', 'fa-clock')}
         ${boton('bloqueados', 'Bloqueados', 'fa-user-lock')}
         ${boton('personal', 'Personal', 'fa-user-shield')}
         ${boton('enlaces', 'Enlaces remotos', 'fa-qrcode')}
@@ -45,6 +46,7 @@ export default {
     const panel = document.getElementById('admin-panel');
     const pintores = {
       inventario: () => this._adminInventario(panel),
+      reservas: () => this._adminReservas(panel),
       bloqueados: () => this._adminBloqueados(panel),
       personal: () => this._adminPersonal(panel),
       enlaces: () => this._adminEnlacesEscaneo(panel),
@@ -124,6 +126,116 @@ export default {
           this.renderAdmin();
         } catch (err) {
           this.showToast(err.message || 'No se pudo corregir.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+  },
+
+  /**
+   * Fila de espera de reservas (022_reservas.sql): quién está esperando cada
+   * título, y —para quien ya tiene un ejemplar apartado— hasta cuándo tiene
+   * plazo para retirarlo. Solo trae las vigentes ('activa'/'apartada'); una
+   * reserva cumplida, cancelada o expirada ya no necesita que el personal
+   * haga nada con ella.
+   */
+  async _adminReservas(panel) {
+    const filas = await db.listarReservas();
+    if (filas === null) {
+      panel.innerHTML = this._avisoMigracion('022', '022_reservas.sql');
+      return;
+    }
+
+    if (filas.length === 0) {
+      panel.innerHTML = html`
+        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 text-center">
+          <i aria-hidden="true" class="fas fa-circle-check text-3xl text-patrimonio-bosque mb-3"></i>
+          <p class="font-serif font-semibold text-lg text-stone-900">No hay reservas pendientes</p>
+          <p class="text-sm text-stone-500 mt-1">Nadie está esperando un libro en este momento.</p>
+        </div>`;
+      return;
+    }
+
+    panel.innerHTML = html`
+      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+        <div class="catalog-card-header">
+          <h3 class="font-serif font-semibold text-lg text-stone-900">${filas.length} reserva${filas.length === 1 ? '' : 's'} vigente${filas.length === 1 ? '' : 's'}</h3>
+          <p class="text-xs text-stone-500 mt-0.5">
+            "Apartado" significa que el ejemplar ya está separado, físicamente en la biblioteca, esperando que lo
+            retiren antes del plazo. "En fila" todavía no tiene un ejemplar propio: espera a que se devuelva uno.
+          </p>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+            <tr>
+              <th class="text-left px-4 py-3">Libro</th>
+              <th class="text-left px-4 py-3">Lector</th>
+              <th class="text-center px-4 py-3">Situación</th>
+              <th class="text-right px-4 py-3">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filas.map(f => html`
+              <tr class="border-t border-stone-200">
+                <td class="px-4 py-3">
+                  <div class="font-bold text-stone-800">${f.libro_titulo || 'Sin título'}</div>
+                  <div class="text-[11px] font-mono text-stone-500">${f.libro_isbn || 'sin ISBN'}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-stone-800">${f.lector_nombre}</div>
+                  <div class="text-[11px] font-mono text-stone-500">${f.lector_rut}</div>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  ${f.estado === 'apartada' ? html`
+                    <span class="stamp stamp-success !rotate-0">Apartado</span>
+                    <div class="text-[11px] text-stone-500 mt-1">Retirar antes del ${this._fechaHoraLegible(f.vence_apartado_en)}</div>`
+                  : html`
+                    <span class="stamp stamp-info !rotate-0">En fila</span>
+                    <div class="text-[11px] text-stone-500 mt-1">Posición ${f.posicion_en_fila}</div>`}
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
+                  ${f.estado === 'apartada' ? html`
+                    <button class="retirar-reserva-btn btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold" data-id="${f.reserva_id}">Retirar</button>` : ''}
+                  <button class="cancelar-reserva-btn text-rose-700 font-bold" data-id="${f.reserva_id}">Cancelar</button>
+                </td>
+              </tr>`)}
+          </tbody>
+        </table>
+      </div>`;
+
+    panel.querySelectorAll('.retirar-reserva-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await this.showConfirm(
+          '¿Confirmar que la persona retiró el ejemplar apartado? Esto registra un préstamo a su nombre.',
+          { title: 'Retirar reserva', confirmText: 'Confirmar retiro', danger: false }
+        );
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          await db.retirarReserva(btn.dataset.id);
+          this.showToast('Retiro registrado: el préstamo ya quedó a nombre del lector.', 'success');
+          this.renderAdmin();
+        } catch (err) {
+          this.showToast(err.message || 'No se pudo registrar el retiro.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    panel.querySelectorAll('.cancelar-reserva-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await this.showConfirm(
+          '¿Cancelar esta reserva? Si ya tenía un ejemplar apartado, pasa a quien sigue en la fila o vuelve a estar disponible para cualquiera.',
+          { title: 'Cancelar reserva', confirmText: 'Cancelar reserva' }
+        );
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          await db.cancelarReserva(btn.dataset.id);
+          this.showToast('Reserva cancelada.', 'success');
+          this.renderAdmin();
+        } catch (err) {
+          this.showToast(err.message || 'No se pudo cancelar la reserva.', 'error');
           btn.disabled = false;
         }
       });

@@ -7,6 +7,9 @@
 // como el flujo de circulación compartido (flujoPrestamo y todo lo que cuelga de
 // él), porque Mostrador y Catálogo llaman a `flujoPrestamo` para iniciar un
 // préstamo — mantenerlos juntos evita partir ese flujo en dos archivos.
+// `flujoReserva` (022_reservas.sql) se agregó al lado de `flujoPrestamo` por
+// el mismo motivo: es casi el mismo flujo (RUT → situación del lector →
+// confirmar) y comparte `_resumenLector`/`showNuevoLectorModal` con él.
 //
 // `showNotifyModal` (usado por el botón "Avisar" de cada fila) se quedó en
 // ui-base.js — no estaba dentro del bloque marcado como "CATÁLOGO"/circulación
@@ -444,6 +447,128 @@ export default {
         this.showToast(err.message || 'No se pudo registrar el lector.', 'error');
         btn.disabled = false;
       }
+    });
+  },
+
+  /**
+   * Flujo de reserva desde el Catálogo (022_reservas.sql): mismo patrón que
+   * flujoPrestamo — se pide el RUT y se muestra la situación del lector
+   * ANTES de confirmar — porque reservar_libro() exige lo mismo que
+   * prestar_libro() (no estar bloqueado, ni atrasado, ni en el máximo de
+   * préstamos): alguien a quien no se le prestaría tampoco debería poder
+   * ponerse en la fila de espera.
+   */
+  async flujoReserva(libroId, alTerminar) {
+    const rut = await this.showPrompt('Escribe el RUT del lector:', {
+      title: 'Reservar libro', placeholder: '12345678-5', confirmText: 'Consultar'
+    });
+    if (!rut) return;
+    if (!this.isValidRut(rut)) {
+      this.showToast('El RUT no es válido. Revisa el dígito verificador.', 'error');
+      return;
+    }
+
+    let estado;
+    try {
+      estado = await db.estadoLector(this.formatRut(rut));
+    } catch (err) {
+      this.showToast(err.message || 'No se pudo consultar el lector.', 'error');
+      return;
+    }
+
+    this.showConfirmarReservaModal(libroId, this.formatRut(rut), estado, alTerminar);
+  },
+
+  /**
+   * Muestra la situación del lector y, según el caso, ofrece reservar,
+   * registrarlo como lector nuevo, o explica por qué no se puede reservar.
+   * Casi idéntico a showConfirmarPrestamoModal — la diferencia es la acción
+   * final (reservar_libro en vez de prestar_libro) y el mensaje de éxito,
+   * que incluye la posición en la fila de espera.
+   */
+  showConfirmarReservaModal(libroId, rut, estado, alTerminar) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+
+    let cuerpo, acciones;
+
+    if (!estado.existe) {
+      cuerpo = `
+        <div class="bg-patrimonio-lago/5 border border-patrimonio-lago/20 rounded-xl p-4 text-center">
+          <i aria-hidden="true" class="fas fa-user-plus text-2xl text-patrimonio-lago mb-2"></i>
+          <p class="font-bold text-stone-800">Lector nuevo</p>
+          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${escapeHtml(rut)}</span> no está registrado.</p>
+          <p class="text-xs text-stone-500 mt-2">Regístralo para poder reservarle un libro.</p>
+        </div>`;
+      acciones = `
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+        <button data-action="registrar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar lector</button>`;
+    } else if (!estado.puede_prestar) {
+      cuerpo = `
+        <div class="bg-rose-50 border border-rose-200 rounded-xl p-4">
+          <p class="font-bold text-rose-800 mb-1"><i aria-hidden="true" class="fas fa-ban mr-1.5"></i>No se puede reservar</p>
+          <p class="text-sm text-rose-700">${escapeHtml(estado.motivo_rechazo || 'El lector está impedido de pedir libros.')}</p>
+        </div>
+        ${this._resumenLector(estado)}`;
+      acciones = `
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
+        <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
+    } else {
+      cuerpo = `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+          <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${escapeHtml(estado.nombre)}</p>
+          <p class="text-sm text-emerald-700 mt-0.5">Se puede poner en la fila de espera de este libro.</p>
+        </div>
+        ${this._resumenLector(estado)}`;
+      acciones = `
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+        <button data-action="reservar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Confirmar reserva</button>`;
+    }
+
+    overlay.innerHTML = `
+      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 class="font-serif text-lg font-bold text-stone-900">Situación del lector</h3>
+        ${cuerpo}
+        <div class="flex justify-end gap-3 pt-1 flex-wrap">${acciones}</div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const cerrar = this._prepararModal(overlay);
+    overlay.querySelector('[data-action="cancel"]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('[data-action="reservar"]')?.addEventListener('click', async e => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const r = await db.reservarLibro(libroId, rut);
+        cerrar();
+        // Fase 1.3: sin conexión, db.js encoló la reserva en vez de lanzar.
+        if (r?.encolado) {
+          this.showToast(r.mensaje, 'info');
+        } else {
+          const posicion = r?.posicion_en_fila;
+          this.showToast(posicion ? `Reserva registrada: posición ${posicion} en la fila de espera.` : 'Reserva registrada.', 'success');
+        }
+        alTerminar?.();
+      } catch (err) {
+        this.showToast(err.message || 'No se pudo registrar la reserva.', 'error');
+        btn.disabled = false;
+      }
+    });
+
+    overlay.querySelector('[data-action="registrar"]')?.addEventListener('click', () => {
+      cerrar();
+      this.showNuevoLectorModal(rut, async () => {
+        const nuevoEstado = await db.estadoLector(rut);
+        this.showConfirmarReservaModal(libroId, rut, nuevoEstado, alTerminar);
+      });
+    });
+
+    overlay.querySelector('[data-action="ver-prestamos"]')?.addEventListener('click', () => {
+      cerrar();
+      this.loanFilter = 'vencidos';
+      this.switchView('loans');
     });
   },
 

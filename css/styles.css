@@ -557,3 +557,42 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
     .linea-escaneo { animation: none; top: 50%; opacity: 0.8; }
 }
+
+/* ==========================================
+   Página de privacidad.html — documento legal público
+   Todo bajo .pagina-legal a propósito: css/styles.css lo carga TODA la app
+   (index.html incluido), así que sin este prefijo un simple "h1 { }" o
+   "a:hover { }" pensado solo para este documento redefiniría esos mismos
+   elementos en el resto del sistema.
+   ========================================== */
+.pagina-legal {
+    margin: 0;
+    background: var(--patrimonio-base);
+    color: #292524;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+.pagina-legal .contenedor { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+.pagina-legal .volver { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--patrimonio-lago); text-decoration: none; margin-bottom: 28px; }
+.pagina-legal .volver:hover { color: var(--patrimonio-madera); }
+.pagina-legal header.encabezado { border-bottom: 1px solid #d6d3d1; padding-bottom: 20px; margin-bottom: 28px; }
+.pagina-legal .marca { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pagina-legal .marca i { color: var(--patrimonio-madera); }
+.pagina-legal .marca span { font-family: 'Newsreader', Georgia, serif; font-weight: 600; font-size: 22px; color: #1c1917; }
+.pagina-legal .marca .madera { color: var(--patrimonio-madera); }
+.pagina-legal .institucional { font-size: 11px; color: #78716c; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0; }
+.pagina-legal h1 { font-family: 'Newsreader', Georgia, serif; font-weight: 600; font-size: 28px; color: #1c1917; margin: 20px 0 6px; }
+.pagina-legal .version { font-size: 12px; color: #78716c; }
+.pagina-legal .aviso-borrador { background: #FBEFE0; border: 1px solid #E8C79A; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #5c3a12; margin: 24px 0 32px; line-height: 1.6; }
+.pagina-legal .aviso-borrador strong { color: #4E2A0F; }
+.pagina-legal h2 { font-family: 'Newsreader', Georgia, serif; font-weight: 600; font-size: 19px; color: #1c1917; margin: 36px 0 10px; }
+.pagina-legal p, .pagina-legal li { font-size: 14.5px; line-height: 1.75; color: #3f3a34; }
+.pagina-legal ul { padding-left: 20px; margin: 10px 0; }
+.pagina-legal li { margin-bottom: 6px; }
+.pagina-legal table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+.pagina-legal th, .pagina-legal td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e7e2d6; vertical-align: top; }
+.pagina-legal th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #78716c; font-weight: 700; }
+.pagina-legal .pordefinir { color: #b45309; font-weight: 700; background: #fef3e2; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+.pagina-legal .caja { background: #fff; border: 1px solid #e7e2d6; border-radius: 12px; padding: 18px 20px; margin: 14px 0; }
+.pagina-legal footer.pie { margin-top: 48px; padding-top: 20px; border-top: 1px solid #d6d3d1; font-size: 12px; color: #78716c; }
+.pagina-legal a { color: var(--patrimonio-lago); }
+.pagina-legal a:hover { color: var(--patrimonio-madera); }

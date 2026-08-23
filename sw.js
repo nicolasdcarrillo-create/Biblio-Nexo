@@ -43,7 +43,7 @@
  * de una versión anterior con el mismo prefijo `biblionexo-`.
  */
 
-const CACHE_VERSION = 'v12'; // escaneo/mesón (Fase 2, 22 de agosto de 2026) — mostrador.js sin cámara, escaneo-remoto.js con consultar_libro_remoto() y Realtime, canalEscaneo() nuevo en utilidades.js
+const CACHE_VERSION = 'v13'; // 23 de agosto de 2026 — privacidad.html y 404.html nuevos, enlace a privacidad.html en el login y en el consentimiento de ui-base.js, Open Graph en index.html
 const CACHE_SHELL = `biblionexo-shell-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `biblionexo-runtime-${CACHE_VERSION}`;
 
@@ -58,6 +58,8 @@ const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/escaneo-remoto.html',
+  '/privacidad.html',
+  '/404.html',
   '/manifest.json',
   '/icono-192x192.png',
   '/icono-512x512.png',

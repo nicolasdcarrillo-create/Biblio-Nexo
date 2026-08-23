@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página no encontrada — BiblioNexo</title>
+
+    <!--
+      Página 404 propia (antes se mostraba la genérica de Vercel).
+
+      Vercel sirve automáticamente un archivo "404.html" en la raíz del
+      proyecto para cualquier ruta que no coincida con un archivo real, sin
+      configuración adicional en vercel.json — comportamiento documentado en
+      https://vercel.com/kb/guide/custom-404-page. Las cabeceras de seguridad
+      de vercel.json (CSP, X-Frame-Options, etc.) ya cubren "/(.*)", así que
+      también se aplican acá solas; la meta CSP de abajo es el mismo respaldo
+      "defense in depth" que ya usa index.html, por la misma razón explicada
+      ahí (algunas directivas, como frame-ancestors, solo funcionan como
+      cabecera y el navegador ignora la versión por meta).
+
+      No depende de ningún módulo de la aplicación (js/arranque.js, auth,
+      etc.): es una página estática independiente a propósito, porque el
+      motivo más común para caer acá es justamente un enlace o una escritura
+      a mano que ya no corresponde a nada dentro de la app.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline';
+      font-src 'self';
+      img-src 'self' data:;
+      connect-src 'self';
+      base-uri 'self';
+      form-action 'self';
+      object-src 'none'">
+
+    <meta name="robots" content="noindex">
+    <meta name="description" content="La página que buscas no existe o se movió. Volvé al inicio de BiblioNexo.">
+
+    <link rel="icon" href="icono-192x192.png" type="image/png" sizes="192x192">
+    <link rel="icon" href="icono-512x512.png" type="image/png" sizes="512x512">
+    <link rel="apple-touch-icon" href="icono-192x192.png">
+
+    <link rel="stylesheet" href="vendor/css/tailwind.css">
+    <link rel="stylesheet" href="vendor/css/fonts.css">
+    <link rel="stylesheet" href="vendor/css/fontawesome.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-patrimonio-lago font-sans text-stone-800">
+
+    <main class="h-screen w-full flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl shadow-2xl p-8 md:p-9 text-center">
+
+            <div class="flex items-center justify-center gap-2 mb-1">
+                <i aria-hidden="true" class="fas fa-book text-patrimonio-madera"></i>
+                <span class="font-serif font-semibold text-xl leading-tight text-stone-900">Biblio<span class="text-patrimonio-madera">Nexo</span></span>
+            </div>
+            <p class="text-[11px] text-stone-500 font-bold uppercase tracking-wide mb-6">Biblioteca Municipal de Futrono</p>
+
+            <p aria-hidden="true" style="font-family: 'Newsreader', Georgia, serif; font-weight: 600; font-size: 56px; line-height: 1; color: #7A431D; margin: 0 0 8px;">404</p>
+
+            <h1 class="font-serif font-semibold text-lg text-stone-900 mb-2">No encontramos esta página</h1>
+            <p class="text-sm text-stone-600" style="margin-bottom: 28px;">El enlace puede estar mal escrito o la página se movió — como un libro que quedó traspapelado en el estante equivocado.</p>
+
+            <a href="/" class="btn-madera inline-flex items-center justify-center gap-2 w-full text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm" style="text-decoration: none;">
+                Volver al inicio
+                <i aria-hidden="true" class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+    </main>
+
+</body>
+</html>

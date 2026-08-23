@@ -610,7 +610,7 @@ class UIManager {
     return `
       <div class="border border-stone-300 rounded-xl p-3 bg-stone-50/60 space-y-2">
         <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">Tratamiento de datos personales</p>
-        <p class="text-[11px] text-stone-600 leading-relaxed">${escapeHtml(c.texto)}</p>
+        <p class="text-[11px] text-stone-600 leading-relaxed">${escapeHtml(c.texto)} <a href="/privacidad.html" target="_blank" rel="noopener" class="text-patrimonio-lago hover:underline">Ver la política completa.</a></p>
         <label class="flex items-start gap-2 cursor-pointer pt-1">
           <input type="checkbox" id="${prefijo}-user-consent" class="mt-0.5 accent-[#7A431D]" />
           <span class="text-[11px] text-stone-700">El lector fue informado y autoriza el uso de sus datos para este fin.</span>
@@ -1293,6 +1293,8 @@ class UIManager {
           <button id="google-login-btn" type="button" class="btn-secundario w-full flex items-center justify-center gap-2.5 border border-stone-300 bg-white/70 hover:bg-white text-stone-700 font-medium rounded-xl py-2.5 text-sm">
             <i aria-hidden="true" class="fa-brands fa-google text-[15px]"></i> Continuar con Google
           </button>
+
+          <p style="text-align:center; margin-top:16px;"><a href="/privacidad.html" class="text-[11px] font-bold text-stone-500 hover:underline">Política de privacidad y términos</a></p>
         </div>
       </div>
       <div id="toast-container" role="status" aria-live="polite" aria-atomic="false" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>

@@ -3,7 +3,7 @@
 // agosto de 2026 (división por dominio, ver pendientes-checklist.md). Sin
 // cambios de lógica: es el mismo código, solo movido.
 
-import { supabase, conTiempoLimite, ESPERA, hoyEnChile } from './compartido.js';
+import { supabase, conTiempoLimite, ESPERA, hoyEnChile, traerTodasLasFilas } from './compartido.js';
 
 /**
  * Devuelve el desfase horario de Chile para una fecha dada, en formato ±HH:MM.
@@ -25,14 +25,26 @@ export const reportes = {
         try {
             const hoy = hoyEnChile();
 
-            const [libros, lectores, activos, devueltos, vencidos, stockRows] = await conTiempoLimite(Promise.all([
+            // Los cinco conteos usan { count: 'exact', head: true }: PostgREST hace
+            // un COUNT(*) del lado del servidor y no devuelve filas, así que no les
+            // aplica el tope de 1000 — el único que sí traía filas de verdad era el
+            // de stock, de ahí el bug (ver traerTodasLasFilas en compartido.js).
+            const [libros, lectores, activos, devueltos, vencidos] = await conTiempoLimite(Promise.all([
                 supabase.from('libros').select('*', { count: 'exact', head: true }),
                 supabase.from('lectores').select('*', { count: 'exact', head: true }),
                 supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
                 supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'devuelto'),
-                supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'activo').lt('fecha_devolucion_esperada', hoy),
-                supabase.from('libros').select('stock')
+                supabase.from('prestamos').select('*', { count: 'exact', head: true }).eq('estado', 'activo').lt('fecha_devolucion_esperada', hoy)
             ]), ESPERA);
+
+            // Aparte, sin envolverla también en el conTiempoLimite de arriba:
+            // traerTodasLasFilas pagina sola y ya aplica su propio límite de tiempo
+            // por bloque (ESPERA_RESPALDO) — un catálogo que de verdad necesite
+            // varias páginas puede tardar, legítimamente, más que ESPERA.
+            const stockRows = await traerTodasLasFilas((desde, hasta) =>
+                supabase.from('libros').select('stock').range(desde, hasta)
+            );
+            if (stockRows.error) throw stockRows.error;
 
             // "En estante" = suma del stock disponible de todos los libros (copias que no están prestadas ahora mismo)
             const enEstante = (stockRows.data || []).reduce((sum, b) => sum + (b.stock || 0), 0);
@@ -60,22 +72,32 @@ export const reportes = {
      * pueda explicarle al usuario qué le falta.
      */
     async obtenerReporte(desde, hasta) {
-        const [prestamosRes, devolucionesRes, lectoresRes] = await conTiempoLimite(Promise.all([
-            supabase.from('prestamos')
+        // Cada una pagina sola en bloques de 1000 (traerTodasLasFilas, en
+        // compartido.js): sin esto, un período con más de 1000 préstamos,
+        // devoluciones o lectores nuevos —un "Anual" con suficiente movimiento,
+        // por ejemplo— devolvía el ranking y los totales truncados en silencio.
+        // No se envuelven en un conTiempoLimite extra por fuera: cada bloque ya
+        // trae su propio límite de tiempo (ESPERA_RESPALDO), y un período grande
+        // que de verdad necesite varias páginas puede tardar más que ESPERA.
+        const [prestamosRes, devolucionesRes, lectoresRes] = await Promise.all([
+            traerTodasLasFilas((rDesde, rHasta) => supabase.from('prestamos')
                 .select('id, fecha_prestamo, fecha_devolucion_esperada, fecha_devolucion_real, estado, libros(id, titulo, autor), libro_titulo_archivado, libro_autor_archivado, lectores(id, nombre, rut)')
                 .gte('fecha_prestamo', desde)
-                .lte('fecha_prestamo', hasta),
-            supabase.from('prestamos')
+                .lte('fecha_prestamo', hasta)
+                .range(rDesde, rHasta)),
+            traerTodasLasFilas((rDesde, rHasta) => supabase.from('prestamos')
                 .select('id, fecha_devolucion_real, fecha_devolucion_esperada, libros(id, titulo)')
                 .gte('fecha_devolucion_real', desde)
-                .lte('fecha_devolucion_real', hasta),
-            supabase.from('lectores')
+                .lte('fecha_devolucion_real', hasta)
+                .range(rDesde, rHasta)),
+            traerTodasLasFilas((rDesde, rHasta) => supabase.from('lectores')
                 .select('id, nombre, rut, created_at')
                 // Con el desfase explícito, Postgres no tiene que suponer la zona:
                 // el rango cubre exactamente los días de Chile solicitados.
                 .gte('created_at', `${desde}T00:00:00${desfaseChile(desde)}`)
                 .lte('created_at', `${hasta}T23:59:59${desfaseChile(hasta)}`)
-        ]), ESPERA);
+                .range(rDesde, rHasta))
+        ]);
 
         // 42703 = columna inexistente en Postgres
         const errores = [prestamosRes.error, devolucionesRes.error, lectoresRes.error].filter(Boolean);
@@ -106,7 +128,9 @@ export const reportes = {
                  d.fecha_devolucion_real > d.fecha_devolucion_esperada
         ).length;
 
-        // Rankings: se cuentan en memoria porque el volumen de un período es acotado
+        // Rankings: se cuentan en memoria sobre el arreglo ya completo (todas las
+        // páginas juntas, no solo la primera) — razonable para el volumen de un
+        // período, aunque ya no truncado como antes de paginar arriba.
         const contar = (items, claveFn, etiquetaFn) => {
             const mapa = new Map();
             items.forEach(i => {

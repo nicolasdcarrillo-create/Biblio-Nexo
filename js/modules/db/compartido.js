@@ -56,3 +56,38 @@ export function esFuncionInexistente(error) {
     return error?.code === '42883' || error?.code === 'PGRST202' ||
            /function .* does not exist|could not find/i.test(error?.message || '');
 }
+
+/**
+ * Trae TODAS las filas de una consulta, sin importar cuántas sean, pidiéndolas
+ * en bloques de 1000 (el tope por consulta que aplica PostgREST cuando no se
+ * especifica un rango). Sin esto, cualquier consulta que traiga más de 1000
+ * filas devuelve, en silencio, solo las primeras 1000 — sin ningún error que
+ * lo delate. Encontrado el 22 de agosto de 2026 en obtenerEstadisticas() y
+ * obtenerReporte() (db/reportes.js): con el catálogo/historial actual no se
+ * nota, pero pasado ese umbral el Dashboard y los Reportes empiezan a mostrar
+ * números menores a los reales sin ningún aviso.
+ *
+ * `construirConsulta(desde, hasta)` recibe el rango del bloque actual y debe
+ * devolver la consulta de Supabase con `.range(desde, hasta)` ya aplicado —
+ * así cada dominio decide qué columnas pedir y qué otros filtros usar, y este
+ * helper solo se encarga de repetir hasta que un bloque vuelva incompleto
+ * (señal de que ya no queda nada más que pedir). Mismo patrón que ya usaba
+ * exportarTodo() en db/respaldos.js, ahora compartido para no repetirlo cada
+ * vez que aparece este mismo problema en otro dominio.
+ */
+export async function traerTodasLasFilas(construirConsulta, opciones = {}) {
+    const bloque = opciones.bloque || 1000;
+    const espera = opciones.espera || ESPERA_RESPALDO;
+    const filas = [];
+    let desde = 0;
+    for (;;) {
+        const { data, error } = await conTiempoLimite(
+            construirConsulta(desde, desde + bloque - 1), espera
+        );
+        if (error) return { data: null, error };
+        filas.push(...(data || []));
+        if (!data || data.length < bloque) break;
+        desde += bloque;
+    }
+    return { data: filas, error: null };
+}

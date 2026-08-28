@@ -394,7 +394,7 @@ comprobar('sw.js precarga persistencia.js (si no, se rompería el import bajo In
 const dbJs = fs.readFileSync('js/modules/db.js', 'utf8');
 comprobar('db.js importa persistencia.js', /import\s+persistencia\s+from\s+['"]\.\/persistencia\.js['"]/.test(dbJs));
 comprobar('estadoLector() guarda el resultado en el almacén local (para poder mostrarlo si se corta la conexión justo después)',
-  /estadoLector\(rut\)[\s\S]*?persistencia\.guardarLectorConsultado\(resultado\)/.test(dbJs));
+  /estadoLector\(rut\)[\s\S]*?persistencia\.guardarLectorConsultado\(\{\s*\.\.\.resultado/.test(dbJs));
 
 comprobar('main.js importa persistencia.js', /import\s+persistencia\s+from\s+['"]\.\/modules\/persistencia\.js['"]/.test(mainJs));
 comprobar('main.js arranca la sincronización en segundo plano después de iniciar sesión (no antes: sin sesión, RLS no deja leer nada)',

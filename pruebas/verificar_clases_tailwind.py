@@ -65,10 +65,11 @@ IGNORAR = {
     # `container.querySelectorAll('.xxx')` para engancharle un listener. El
     # estilo visible siempre lo dan las demás clases del mismo `class="..."`;
     # estas no necesitan regla propia en ningún CSS.
-    'admin-tab-btn', 'delete-book-btn', 'delete-personal-btn', 'delete-user-btn',
+    'admin-tab-btn', 'cancelar-reserva-btn', 'delete-book-btn', 'delete-personal-btn', 'delete-user-btn',
     'edit-book-btn', 'edit-user-btn', 'fix-inv-btn', 'loan-book-btn',
     'loan-filter-btn', 'notify-loan-btn', 'param-input', 'quick-action-btn',
-    'renew-loan-btn', 'report-period-btn', 'restore-book-btn', 'retry-chart-btn',
+    'renew-loan-btn', 'report-period-btn', 'reserve-book-btn', 'restore-book-btn',
+    'retirar-reserva-btn', 'retry-chart-btn',
     'return-loan-btn', 'revocar-enlace-btn', 'role-btn', 'unblock-btn',
     # js/modules/portadas.js: marca las imágenes de portada para encontrarlas
     # y reemplazarlas cuando llega la portada real (querySelector + classList.contains).

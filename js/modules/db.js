@@ -140,18 +140,44 @@ async function consultarLibroSinConexion(codigo) {
  * en la interfaz el flujo de "lector nuevo" y terminaría intentando crear un
  * duplicado al reconectar. Se lanza un error claro en su lugar.
  *
- * `puede_prestar` se calcula de forma conservadora, solo a partir del
- * bloqueo manual (el único dato guardado localmente que no se desactualiza
- * con el paso del tiempo) — sin conexión no se puede revalidar el límite de
- * préstamos activos ni los atrasados contra el servidor. El RPC real sigue
- * siendo la única autoridad; esto es solo para no dejar el mesón
- * inutilizable mientras no haya red.
+ * `puede_prestar` se calcula a partir del bloqueo manual (el dato local que
+ * nunca se desactualiza) MÁS los atrasados, recalculados con el reloj del
+ * propio equipo contra `prestamosActivosDetalle` — la fecha de vencimiento
+ * de cada préstamo activo que se guardó en la última sincronización (ver
+ * sincronizarLectoresActivos()/guardarLectorConsultado() en persistencia.js).
+ * A diferencia de un conteo cacheado, esto sí se puede recalcular sin
+ * conexión: comparar una fecha ya conocida contra "hoy" no necesita ir al
+ * servidor.
+ *
+ * Dos límites que siguen sin resolverse, a propósito, y quedan documentados
+ * para no repetir el error de "arreglarlo a medias":
+ *   1. El LÍMITE de préstamos activos (`max_prestamos_por_lector`) no se
+ *      revalida acá — ese parámetro no se replica localmente. Solo se
+ *      bloquea por atraso o por bloqueo manual, nunca por haber alcanzado el
+ *      máximo.
+ *   2. Un préstamo devuelto en otra sesión/equipo después de la última
+ *      sincronización puede seguir apareciendo como atrasado acá (falso
+ *      positivo — más seguro que el error contrario); y un préstamo nuevo
+ *      creado después de esa sincronización no se conoce en absoluto. El RPC
+ *      real, con conexión, sigue siendo la única autoridad.
  */
 async function estadoLectorSinConexion(rut) {
     const lector = await persistencia.buscarLectorLocalPorRut(rut);
     if (!lector) {
         throw new Error('Sin conexión, y este lector no está en la copia local del mesón (hay que consultarlo antes, con conexión, para poder atenderlo sin ella).');
     }
+    const hoy = hoyEnChile();
+    const detalle = lector.prestamosActivosDetalle || [];
+    const atrasados = detalle.filter(p => p.fechaDevolucionEsperada && p.fechaDevolucionEsperada < hoy);
+
+    let puedePrestar = !lector.bloqueadoManual;
+    let motivo = lector.bloqueadoManual ? coalesceMotivoBloqueo(lector.motivoBloqueo) : null;
+    if (puedePrestar && atrasados.length > 0) {
+        puedePrestar = false;
+        const cual = atrasados[0].tituloLibro ? ` (incluye "${atrasados[0].tituloLibro}")` : '';
+        motivo = `Tiene ${atrasados.length} libro(s) con la devolución atrasada${cual}, según la última sincronización.`;
+    }
+
     return {
         existe: true,
         offline: true,
@@ -162,12 +188,11 @@ async function estadoLectorSinConexion(rut) {
         telefono: lector.telefono,
         bloqueado_manual: !!lector.bloqueadoManual,
         motivo_bloqueo: lector.motivoBloqueo ?? null,
-        prestamos_activos: null,
-        prestamos_atrasados: null,
-        puede_prestar: !lector.bloqueadoManual,
-        motivo_rechazo: lector.bloqueadoManual
-            ? coalesceMotivoBloqueo(lector.motivoBloqueo)
-            : null
+        prestamos_activos: detalle.length,
+        prestamos_atrasados: atrasados.length,
+        atrasados_detalle: atrasados,
+        puede_prestar: puedePrestar,
+        motivo_rechazo: motivo
     };
 }
 
@@ -576,12 +601,39 @@ export const db = {
             throw new Error(error.message || 'No se pudo consultar el lector.');
         }
         const resultado = Array.isArray(data) ? data[0] : data;
+
+        // Junto con el resultado del RPC —que solo trae el CONTEO de
+        // atrasados, no las fechas— se guarda también el vencimiento de cada
+        // préstamo activo de este lector. Es lo que le permite a
+        // estadoLectorSinConexion() recalcular "¿tiene algo atrasado?" con el
+        // reloj del propio equipo si más tarde se corta la conexión. Nunca
+        // debe interrumpir la consulta real si esta segunda llamada falla:
+        // si falla, persistencia.js conserva el detalle que ya hubiera.
+        let detalle;
+        if (resultado?.existe && resultado.lector_id != null) {
+            try {
+                const { data: activos } = await conTiempoLimite(
+                    supabase.from('prestamos')
+                        .select('fecha_devolucion_esperada, libros(titulo)')
+                        .eq('lector_id', resultado.lector_id)
+                        .eq('estado', 'activo'),
+                    ESPERA
+                );
+                detalle = (activos || []).map(p => ({
+                    fechaDevolucionEsperada: p.fecha_devolucion_esperada ?? null,
+                    tituloLibro: p.libros?.titulo ?? null
+                }));
+            } catch {
+                detalle = undefined;
+            }
+        }
+
         // Fase 1.2 (funcionamiento sin conexión): se guarda en el almacén
         // local del mesón para poder mostrarlo si se corta la conexión justo
         // después de consultarlo. Nunca debe interrumpir la consulta real: si
         // el almacén local falla, persistencia.js ya se hace cargo de
         // atraparlo en silencio.
-        persistencia.guardarLectorConsultado(resultado);
+        persistencia.guardarLectorConsultado({ ...resultado, prestamos_activos_detalle: detalle });
         return resultado;
     },
 

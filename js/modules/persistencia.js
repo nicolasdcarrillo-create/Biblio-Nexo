@@ -251,21 +251,35 @@ class PersistentStorage {
      *
      * Espera la forma que devuelve la función `estado_lector` (existe,
      * lector_id, nombre, rut, email, telefono, bloqueado_manual,
-     * motivo_bloqueo, ...) para no obligar a transformar nada en la llamada.
+     * motivo_bloqueo, ...) más `prestamos_activos_detalle` — un arreglo con
+     * la fecha de vencimiento de cada préstamo activo, que db.js agrega con
+     * una segunda consulta después del RPC (ver estadoLector() en db.js).
+     * Si esa segunda consulta falló (por ejemplo, la red se cortó justo
+     * después del RPC principal) y no llega, se conserva el detalle que ya
+     * hubiera de una sincronización anterior en vez de borrarlo con un
+     * arreglo vacío — eso haría ver a un lector atrasado como si no lo
+     * estuviera la próxima vez que se consulte sin conexión.
      */
     async guardarLectorConsultado(estadoLector) {
         if (!estadoLector || estadoLector.existe === false || estadoLector.lector_id == null) return;
         try {
-            await ponerVarios('lectores', [{
-                id: estadoLector.lector_id,
-                nombre: estadoLector.nombre ?? null,
-                rut: estadoLector.rut ?? null,
-                email: estadoLector.email ?? null,
-                telefono: estadoLector.telefono ?? null,
-                bloqueadoManual: !!estadoLector.bloqueado_manual,
-                motivoBloqueo: estadoLector.motivo_bloqueo ?? null,
-                consultadoEn: Date.now()
-            }]);
+            const bd = await abrir();
+            await conAlmacen(bd, 'lectores', 'readwrite', async almacen => {
+                const previo = await pedido(almacen.get(estadoLector.lector_id));
+                almacen.put({
+                    id: estadoLector.lector_id,
+                    nombre: estadoLector.nombre ?? null,
+                    rut: estadoLector.rut ?? null,
+                    email: estadoLector.email ?? null,
+                    telefono: estadoLector.telefono ?? null,
+                    bloqueadoManual: !!estadoLector.bloqueado_manual,
+                    motivoBloqueo: estadoLector.motivo_bloqueo ?? null,
+                    prestamosActivosDetalle: estadoLector.prestamos_activos_detalle
+                        ?? previo?.prestamosActivosDetalle
+                        ?? [],
+                    consultadoEn: Date.now()
+                });
+            });
         } catch {
             // Nunca debe interrumpir el flujo de préstamo por esto.
         }
@@ -277,20 +291,34 @@ class PersistentStorage {
      * no un dato nuevo expuesto. Al refrescar `consultadoEn`, un lector con
      * préstamo activo nunca se purga por antigüedad mientras lo siga
      * teniendo: la purga y esta sincronización trabajan juntas a propósito.
+     *
+     * También guarda la fecha de vencimiento de cada préstamo activo
+     * (`prestamosActivosDetalle`) — tampoco es un dato nuevo (misma vista
+     * Préstamos), pero es lo que le permite a `estadoLectorSinConexion()` en
+     * db.js recalcular "¿tiene algo atrasado?" con el reloj del propio
+     * equipo si más tarde se corta la conexión, en vez de limitarse solo al
+     * bloqueo manual.
      */
     async sincronizarLectoresActivos() {
         try {
             const { data, error } = await supabase
                 .from('prestamos')
-                .select('lectores(id, nombre, rut, email, telefono, bloqueado_manual, motivo_bloqueo)')
+                .select('fecha_devolucion_esperada, libros(titulo), lectores(id, nombre, rut, email, telefono, bloqueado_manual, motivo_bloqueo)')
                 .eq('estado', 'activo')
                 .limit(2000);
             if (error) throw error;
 
             const vistos = new Map();
+            const prestamosPorLector = new Map();
             for (const fila of data || []) {
                 const l = fila.lectores;
-                if (l && l.id != null) vistos.set(l.id, l);
+                if (!l || l.id == null) continue;
+                vistos.set(l.id, l);
+                if (!prestamosPorLector.has(l.id)) prestamosPorLector.set(l.id, []);
+                prestamosPorLector.get(l.id).push({
+                    fechaDevolucionEsperada: fila.fecha_devolucion_esperada ?? null,
+                    tituloLibro: fila.libros?.titulo ?? null
+                });
             }
             const ahora = Date.now();
             const filas = [...vistos.values()].map(l => ({
@@ -301,6 +329,7 @@ class PersistentStorage {
                 telefono: l.telefono ?? null,
                 bloqueadoManual: !!l.bloqueado_manual,
                 motivoBloqueo: l.motivo_bloqueo ?? null,
+                prestamosActivosDetalle: prestamosPorLector.get(l.id) || [],
                 consultadoEn: ahora
             }));
             await ponerVarios('lectores', filas);

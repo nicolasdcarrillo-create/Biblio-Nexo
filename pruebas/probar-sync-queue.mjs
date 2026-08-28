@@ -349,6 +349,48 @@ comprobar('un lector bloqueado manualmente sigue bloqueado sin conexión (el ún
     estadoBloqueado?.puede_prestar === false && /Libro perdido/.test(estadoBloqueado?.motivo_rechazo || ''),
     JSON.stringify(estadoBloqueado));
 
+// Ampliación: atrasados recalculados sin conexión con el reloj del equipo,
+// a partir de la fecha de vencimiento guardada (no un conteo cacheado).
+await persistencia.guardarLectorConsultado({
+    existe: true, lector_id: 52, nombre: 'Lector Atrasado', rut: '77777777-7',
+    email: null, telefono: null, bloqueado_manual: false, motivo_bloqueo: null,
+    prestamos_activos_detalle: [
+        { fechaDevolucionEsperada: '2020-01-01', tituloLibro: 'Libro Viejo' }
+    ]
+});
+programarRpc('estado_lector', [{ tipo: 'red' }]);
+const estadoAtrasado = await db.estadoLector('77777777-7');
+comprobar('un préstamo vencido según la fecha guardada bloquea el préstamo sin conexión, aunque no haya bloqueo manual',
+    estadoAtrasado?.puede_prestar === false && /atrasada/.test(estadoAtrasado?.motivo_rechazo || '') &&
+    /Libro Viejo/.test(estadoAtrasado?.motivo_rechazo || ''),
+    JSON.stringify(estadoAtrasado));
+
+// Y el caso contrario: un préstamo activo que TODAVÍA no vence no bloquea.
+await persistencia.guardarLectorConsultado({
+    existe: true, lector_id: 53, nombre: 'Lector Al Día', rut: '88888888-8',
+    email: null, telefono: null, bloqueado_manual: false, motivo_bloqueo: null,
+    prestamos_activos_detalle: [
+        { fechaDevolucionEsperada: '2099-01-01', tituloLibro: 'Libro Nuevo' }
+    ]
+});
+programarRpc('estado_lector', [{ tipo: 'red' }]);
+const estadoAlDia = await db.estadoLector('88888888-8');
+comprobar('un préstamo activo que aún no vence no bloquea sin conexión',
+    estadoAlDia?.puede_prestar === true, JSON.stringify(estadoAlDia));
+
+// Consultar de nuevo sin el detalle (segunda consulta falló) no debe borrar
+// el atraso ya conocido de una sincronización anterior.
+await persistencia.guardarLectorConsultado({
+    existe: true, lector_id: 52, nombre: 'Lector Atrasado', rut: '77777777-7',
+    email: null, telefono: null, bloqueado_manual: false, motivo_bloqueo: null
+    // sin prestamos_activos_detalle: simula que la segunda consulta falló
+});
+programarRpc('estado_lector', [{ tipo: 'red' }]);
+const estadoConservado = await db.estadoLector('77777777-7');
+comprobar('si una consulta posterior no trae el detalle de atrasados, se conserva el que ya había (no se borra con un arreglo vacío)',
+    estadoConservado?.puede_prestar === false && /atrasada/.test(estadoConservado?.motivo_rechazo || ''),
+    JSON.stringify(estadoConservado));
+
 // ---------------------------------------------------------------------------
 // 9. consultarLibro(): respaldo sin conexión con el catálogo local
 // ---------------------------------------------------------------------------

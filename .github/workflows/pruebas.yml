@@ -89,6 +89,9 @@ jobs:
       - name: Probar el indicador de conexión (Fase 1.4)
         run: node pruebas/probar-estado-conexion.mjs
 
+      - name: Probar el contraste de color (WCAG 2.1 AA)
+        run: node pruebas/probar-contraste.mjs
+
   # ==========================================================================
   # 3. Migraciones contra un PostgreSQL embebido
   # ==========================================================================

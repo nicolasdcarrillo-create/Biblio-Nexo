@@ -1503,7 +1503,7 @@ class UIManager {
         </div>`;
       host.querySelector('.retry-chart-btn')?.addEventListener('click', () => {
         chartJsPromise = null;
-        host.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+        host.innerHTML = `<canvas id="${escapeHtml(canvasId)}"></canvas>`;
         this._renderDonut(canvasId, legendId, segmentos);
       });
       return;
@@ -1555,17 +1555,17 @@ class UIManager {
     // Total al centro del anillo
     const centro = document.getElementById(`${canvasId}-centro`);
     if (centro) centro.innerHTML = `
-      <span class="block font-serif font-bold text-3xl text-stone-900 leading-none">${total}</span>
+      <span class="block font-serif font-bold text-3xl text-stone-900 leading-none">${escapeHtml(String(total))}</span>
       <span class="block text-[10px] uppercase tracking-widest text-stone-500 mt-1">Total</span>`;
 
     // Leyenda con cantidad y porcentaje
     const legend = document.getElementById(legendId);
     if (legend) legend.innerHTML = segmentos.map(s => `
       <div class="flex items-center gap-2.5 py-1.5">
-        <span class="w-2.5 h-2.5 rounded-sm shrink-0" style="background:${s.color}"></span>
+        <span class="w-2.5 h-2.5 rounded-sm shrink-0" style="background:${escapeHtml(s.color)}"></span>
         <span class="text-xs text-stone-600 flex-1 truncate">${escapeHtml(s.etiqueta)}</span>
-        <span class="text-xs font-bold text-stone-900 tabular-nums">${s.valor}</span>
-        <span class="text-[11px] text-stone-500 tabular-nums w-12 text-right">${pct(s.valor)}%</span>
+        <span class="text-xs font-bold text-stone-900 tabular-nums">${escapeHtml(String(s.valor))}</span>
+        <span class="text-[11px] text-stone-500 tabular-nums w-12 text-right">${escapeHtml(String(pct(s.valor)))}%</span>
       </div>
     `).join('');
   }

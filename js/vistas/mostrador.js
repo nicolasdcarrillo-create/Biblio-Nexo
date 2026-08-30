@@ -360,7 +360,7 @@ export default {
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="min-w-0">
             <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-0.5">
-              ${r.estado === 'apartada' ? 'Apartado para' : `En fila (posición ${r.posicion_en_fila ?? '?'})`}
+              ${r.estado === 'apartada' ? 'Apartado para' : `En fila (posición ${escapeHtml(String(r.posicion_en_fila ?? '?'))})`}
             </p>
             <p class="font-bold text-stone-800">${escapeHtml(r.lector_nombre || 'Lector desconocido')}</p>
             <p class="text-xs font-mono text-stone-500">${escapeHtml(r.lector_rut || '—')}</p>
@@ -376,10 +376,11 @@ export default {
       const lector = p.lector || {};
       // El lector queda impedido de pedir más si está bloqueado a mano o tiene atrasos
       const impedido = lector.bloqueado_manual || (lector.atrasados ?? 0) > 0;
+      const atrasados = Number(lector.atrasados ?? 0);
       const insignia = lector.bloqueado_manual
         ? '<span class="stamp stamp-danger !rotate-0"><i aria-hidden="true" class="fas fa-ban"></i> Bloqueado</span>'
-        : (lector.atrasados ?? 0) > 0
-          ? `<span class="stamp stamp-danger !rotate-0"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> Debe ${lector.atrasados} libro${lector.atrasados === 1 ? '' : 's'}</span>`
+        : atrasados > 0
+          ? `<span class="stamp stamp-danger !rotate-0"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> Debe ${atrasados} libro${atrasados === 1 ? '' : 's'}</span>`
           : '<span class="stamp stamp-success !rotate-0"><i aria-hidden="true" class="fas fa-check"></i> Al día</span>';
 
       return `
@@ -400,15 +401,15 @@ export default {
             </div>
           </div>
           <div class="flex flex-wrap gap-2 mt-3">
-            <button data-devolver="${p.id}" class="btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+            <button data-devolver="${escapeHtml(String(p.id))}" class="btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold">
               <i aria-hidden="true" class="fas fa-rotate-left mr-1"></i> Registrar devolución
             </button>
             ${estado.clave !== 'alDia' ? `
-              <button data-avisar="${p.id}" class="btn-secundario bg-patrimonio-madera text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+              <button data-avisar="${escapeHtml(String(p.id))}" class="btn-secundario bg-patrimonio-madera text-white px-3 py-1.5 rounded-lg text-xs font-bold">
                 <i aria-hidden="true" class="fas fa-bell mr-1"></i> Avisar
               </button>` : ''}
             ${estado.clave !== 'vencido' && (p.renovaciones ?? 0) < this.param('max_renovaciones') ? `
-              <button data-renovar="${p.id}" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold">
+              <button data-renovar="${escapeHtml(String(p.id))}" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold">
                 <i aria-hidden="true" class="fas fa-clock-rotate-left mr-1"></i> Renovar
               </button>` : ''}
             ${impedido ? `
@@ -430,7 +431,7 @@ export default {
             <div class="flex flex-wrap gap-1.5 mt-2">
               <span class="stamp ${hayDisponibles ? 'stamp-success' : 'stamp-danger'} !rotate-0">
                 <i aria-hidden="true" class="fas ${hayDisponibles ? 'fa-check' : 'fa-xmark'}"></i>
-                ${disponibles} de ${libro.copias_totales ?? disponibles} disponible${disponibles === 1 ? '' : 's'}
+                ${Number(disponibles)} de ${Number(libro.copias_totales ?? disponibles)} disponible${disponibles === 1 ? '' : 's'}
               </span>
               ${libro.ubicacion ? `<span class="stamp stamp-info !rotate-0"><i aria-hidden="true" class="fas fa-location-dot"></i> ${escapeHtml(libro.ubicacion)}</span>` : ''}
             </div>
@@ -448,7 +449,7 @@ export default {
             ${vigentes.map(filaReserva).join('')}` : ''}
 
           <div class="border-t border-stone-200 pt-4 mt-4">
-            <button data-prestar-libro="${libro.id}" ${hayDisponibles ? '' : 'disabled'}
+            <button data-prestar-libro="${escapeHtml(String(libro.id))}" ${hayDisponibles ? '' : 'disabled'}
               class="btn-madera w-full text-white font-medium rounded-xl shadow py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
               <i aria-hidden="true" class="fas fa-right-left mr-1.5"></i> ${hayDisponibles ? 'Prestar este libro' : 'Sin ejemplares disponibles'}
             </button>

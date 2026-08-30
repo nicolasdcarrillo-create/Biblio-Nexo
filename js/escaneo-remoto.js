@@ -342,7 +342,7 @@ function fichaConsultaRemota(filas) {
         </div>` : `
         <div class="border-t border-stone-200 pt-2 mt-2 text-left">
           <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">
-            ${c.reserva_estado === 'apartada' ? 'Apartado para' : `Reservado para (posición ${c.reserva_posicion_en_fila ?? '?'} en la fila)`}
+            ${c.reserva_estado === 'apartada' ? 'Apartado para' : `Reservado para (posición ${escapeHtml(String(c.reserva_posicion_en_fila ?? '?'))} en la fila)`}
           </p>
           <p class="text-sm font-bold text-stone-800">${escapeHtml(c.persona_nombre || 'Lector desconocido')}</p>
           <p class="text-xs font-mono text-stone-500">${escapeHtml(c.persona_rut || '—')}</p>
@@ -352,7 +352,7 @@ function fichaConsultaRemota(filas) {
       <div class="border border-stone-300 rounded-xl p-4 text-center">
         <p class="font-bold text-stone-800">${escapeHtml(libro.titulo)}</p>
         ${libro.autor ? `<p class="text-sm text-stone-500">${escapeHtml(libro.autor)}</p>` : ''}
-        <p class="text-xs text-stone-500 mt-1">${libro.stock} de ${libro.copias_totales} ejemplar(es) disponibles</p>
+        <p class="text-xs text-stone-500 mt-1">${escapeHtml(String(libro.stock))} de ${escapeHtml(String(libro.copias_totales))} ejemplar(es) disponibles</p>
         <p class="text-[11px] text-stone-500 mt-2">Este libro ya está en el catálogo — no se sumó ningún ejemplar.</p>
         ${circulacion.length === 0
             ? '<p class="text-xs text-emerald-700 mt-2"><i aria-hidden="true" class="fas fa-circle-check mr-1"></i>Nadie lo tiene ahora mismo.</p>'
@@ -417,7 +417,7 @@ async function manejarCodigo(codigo) {
           <div class="border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm">
             <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Se agregó al catálogo</p>
             <p class="text-emerald-700 mt-1">${escapeHtml(fila.titulo || fila.isbn)}${fila.autor ? ` — ${escapeHtml(fila.autor)}` : ''}</p>
-            <p class="text-xs text-emerald-700 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
+            <p class="text-xs text-emerald-700 mt-1">Ahora hay ${escapeHtml(String(fila.stock))} de ${escapeHtml(String(fila.copias_totales))} ejemplar(es) disponibles.</p>
           </div>`;
         toast('Listo. Puede seguir escaneando.', 'success');
         agregarAlaLista({

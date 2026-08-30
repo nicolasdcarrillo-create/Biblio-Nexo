@@ -366,8 +366,8 @@ export default {
   _resumenLector(estado) {
     const dato = (etiqueta, valor, color = 'text-stone-900') => `
       <div class="text-center">
-        <p class="font-serif font-bold text-2xl ${color}">${valor}</p>
-        <p class="text-[10px] uppercase tracking-widest text-stone-500 mt-0.5">${etiqueta}</p>
+        <p class="font-serif font-bold text-2xl ${color}">${escapeHtml(String(valor))}</p>
+        <p class="text-[10px] uppercase tracking-widest text-stone-500 mt-0.5">${escapeHtml(etiqueta)}</p>
       </div>`;
     return `
       <div class="grid grid-cols-3 gap-2 border border-stone-200 rounded-xl py-3">

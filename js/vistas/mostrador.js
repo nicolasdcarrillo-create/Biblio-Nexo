@@ -24,6 +24,7 @@ import { escapeHtml, canalEscaneo } from '../modules/utilidades.js';
 import { buscarPorIsbnExterno } from '../modules/libros-externos.js';
 import { generarSvgQr } from '../modules/qr.js';
 import { supabase } from '../supabase-init.js';
+import DOMPurify from 'dompurify';
 
 export default {
   /**
@@ -315,7 +316,7 @@ export default {
       try {
         const svg = await generarSvgQr(url);
         const contenedor = document.getElementById('qr-remoto-imagen');
-        if (contenedor) contenedor.innerHTML = svg;
+        if (contenedor) contenedor.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
       } catch (e) {
         const contenedor = document.getElementById('qr-remoto-imagen');
         if (contenedor) contenedor.innerHTML = '<p class="text-xs text-rose-700">No se pudo generar el código QR. Puede copiar la dirección de más abajo.</p>';
@@ -360,7 +361,7 @@ export default {
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="min-w-0">
             <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-0.5">
-              ${r.estado === 'apartada' ? 'Apartado para' : `En fila (posición ${r.posicion_en_fila ?? '?'})`}
+              ${r.estado === 'apartada' ? 'Apartado para' : `En fila (posición ${escapeHtml(String(r.posicion_en_fila ?? '?'))})`}
             </p>
             <p class="font-bold text-stone-800">${escapeHtml(r.lector_nombre || 'Lector desconocido')}</p>
             <p class="text-xs font-mono text-stone-500">${escapeHtml(r.lector_rut || '—')}</p>

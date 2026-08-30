@@ -417,7 +417,7 @@ async function manejarCodigo(codigo) {
           <div class="border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm">
             <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Se agregó al catálogo</p>
             <p class="text-emerald-700 mt-1">${escapeHtml(fila.titulo || fila.isbn)}${fila.autor ? ` — ${escapeHtml(fila.autor)}` : ''}</p>
-            <p class="text-xs text-emerald-700 mt-1">Ahora hay ${fila.stock} de ${fila.copias_totales} ejemplar(es) disponibles.</p>
+            <p class="text-xs text-emerald-700 mt-1">Ahora hay ${escapeHtml(String(fila.stock))} de ${escapeHtml(String(fila.copias_totales))} ejemplar(es) disponibles.</p>
           </div>`;
         toast('Listo. Puede seguir escaneando.', 'success');
         agregarAlaLista({
@@ -474,11 +474,18 @@ async function mostrarFormularioDatos(resultado, codigo) {
                 p_token: token(), p_isbn: codigo, p_titulo: titulo, p_autor: autor || null, p_stock: cantidad
             });
             const fila = filas?.[0];
-            resultado.innerHTML = `
-              <div class="border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm">
-                <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Se agregó al catálogo</p>
-                <p class="text-emerald-700 mt-1">${escapeHtml(fila?.titulo || titulo)}</p>
-              </div>`;
+            resultado.innerHTML = '';
+            const container = document.createElement('div');
+            container.className = 'border border-emerald-200 bg-emerald-50 rounded-xl p-4 text-sm';
+            const heading = document.createElement('p');
+            heading.className = 'font-bold text-emerald-800';
+            heading.innerHTML = '<i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Se agregó al catálogo';
+            const text = document.createElement('p');
+            text.className = 'text-emerald-700 mt-1';
+            text.textContent = fila?.titulo || titulo;
+            container.appendChild(heading);
+            container.appendChild(text);
+            resultado.appendChild(container);
             toast('Listo. Puede seguir escaneando.', 'success');
             if (fila) {
                 agregarAlaLista({

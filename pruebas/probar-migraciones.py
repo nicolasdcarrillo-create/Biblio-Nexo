@@ -806,14 +806,19 @@ def main():
                 token = crea_enlace_y_devuelve_token()
                 enlace_id = correr(srv, "select id from public.enlaces_escaneo_remoto order by id desc limit 1;").split('\n')[2].strip()
                 libro_id = correr(srv, f"select id from public.libros where isbn = '{isbn}';").split('\n')[2].strip()
+                import re
+                if not re.match(r'^[a-zA-Z0-9_]+$', str(libro_id)):
+                    raise ValueError("Invalid input")
+                if not re.match(r'^[a-zA-Z0-9_]+$', str(enlace_id)):
+                    raise ValueError("Invalid input")
                 nuevo_total = stock_base + cantidad
                 correr(srv, f"""
-                  update public.libros set stock = {nuevo_total}, copias_totales = {nuevo_total} where id = {libro_id};
+                  update public.libros set stock = %s, copias_totales = %s where id = %s;
                   insert into public.auditoria (tabla, registro_id, accion, datos_despues)
-                  values ('libros', '{libro_id}', 'UPDATE',
-                    jsonb_build_object('operacion', 'escaneo_remoto', 'enlace_id', {enlace_id},
-                                        'ejemplares_agregados', {cantidad}, 'copias_totales', {nuevo_total}));
-                """)
+                  values ('libros', %s, 'UPDATE',
+                    jsonb_build_object('operacion', 'escaneo_remoto', 'enlace_id', %s,
+                                        'ejemplares_agregados', %s, 'copias_totales', %s));
+                """, (nuevo_total, nuevo_total, libro_id, libro_id, enlace_id, cantidad, nuevo_total))
                 return token, libro_id
 
             def deshacer_incrementado_resta_lo_agregado():

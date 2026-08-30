@@ -77,7 +77,7 @@ export default {
       e.preventDefault();
       if (!this.validateBookForm(false)) return;
       try {
-        await db.agregarLibro({
+        const r = await db.agregarLibro({
           isbn: document.getElementById('new-book-isbn').value.trim(),
           titulo: document.getElementById('new-book-title').value.trim(),
           autor: document.getElementById('new-book-author').value.trim(),
@@ -85,7 +85,11 @@ export default {
           ubicacion: document.getElementById('new-book-location').value.trim(),
           stock: Number(document.getElementById('new-book-qty').value || 1)
         });
-        this.showToast('Libro agregado.', 'success');
+        // Fase 1.3 (ampliación): sin conexión, db.js encola el alta en vez
+        // de lanzar — el libro ya aparece en el catálogo local (guardado
+        // optimista), pero conviene que la persona sepa que todavía no
+        // llegó al servidor.
+        this.showToast(r?.encolado ? r.mensaje : 'Libro agregado.', r?.encolado ? 'info' : 'success');
         this.renderCatalog();
       } catch (err) {
         this.showToast(err.message || 'No se pudo agregar el libro.', 'error');

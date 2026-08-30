@@ -2,6 +2,14 @@
 // Extraído de js/modules/db.js el 22 de agosto de 2026 (división por
 // dominio, ver pendientes-checklist.md). Sin cambios de lógica: es el mismo
 // código, solo movido.
+//
+// agregarLector() vive en js/modules/db.js, no aquí — usa la cola de
+// sincronización sin conexión (SyncQueue), igual que reservarLibro()/
+// retirarReserva() en db/reservas.js (ver el comentario ahí). A propósito
+// NO hay ninguna clave "agregarLector" en este objeto: como el `db` final
+// se arma con `{ ...definiciones de db.js, ...lectores }` (spread al
+// final), cualquier clave repetida acá pisaría silenciosamente la versión
+// con soporte offline de db.js.
 
 import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente } from './compartido.js';
 
@@ -30,24 +38,6 @@ export const lectores = {
             telefono: cambios.telefono
         }).eq('id', id), ESPERA);
         if (error) throw new Error(error.code === '23505' ? 'Ese RUT ya pertenece a otro lector.' : 'No se pudo guardar el lector.');
-    },
-
-    async agregarLector(lector) {
-        // Se listan los campos explícitamente para no enviar propiedades
-        // inesperadas a la base de datos.
-        const { error } = await conTiempoLimite(supabase.from('lectores').insert([{
-            rut: lector.rut,
-            nombre: lector.nombre,
-            email: lector.email,
-            telefono: lector.telefono,
-            // Trazabilidad del consentimiento, exigida por la Ley 21.719
-            consentimiento_fecha: lector.consentimiento_fecha || null,
-            consentimiento_version: lector.consentimiento_version || null,
-            es_menor: lector.es_menor || false,
-            apoderado_nombre: lector.apoderado_nombre || null,
-            apoderado_rut: lector.apoderado_rut || null
-        }]), ESPERA);
-        if (error) throw new Error(error.code === '23505' ? 'El RUT ya está registrado.' : 'Error al guardar lector.');
     },
 
     async eliminarLector(id) {

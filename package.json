@@ -1,0 +1,20 @@
+{
+  "name": "biblionexo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de gestión de biblioteca para la Biblioteca Pública Municipal de Futrono. Sin paso de compilación: vanilla JS con ES Modules. Estas dependencias son SOLO para correr las pruebas (pruebas/*.mjs) — la aplicación en sí no usa nada de npm, ver vendor/ para sus librerías.",
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "test": "npm run test:consolidacion && npm run test:interfaz && npm run test:offline",
+    "test:consolidacion": "python3 pruebas/verificar_consolidacion.py && python3 pruebas/verificar_llamadas_rpc.py",
+    "test:interfaz": "node pruebas/probar-interfaz.mjs && node pruebas/probar-vistas.mjs && node pruebas/probar-escaneo-remoto.mjs",
+    "test:offline": "node pruebas/probar-persistencia.mjs && node pruebas/probar-sync-queue.mjs && node pruebas/probar-estado-conexion.mjs",
+    "test:contraste": "node pruebas/probar-contraste.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.0.1"
+  }
+}

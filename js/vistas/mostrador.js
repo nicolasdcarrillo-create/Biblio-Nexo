@@ -144,7 +144,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        await db.agregarLibro({
+        const r = await db.agregarLibro({
           isbn: document.getElementById('scan-new-book-isbn').value.trim(),
           titulo: document.getElementById('scan-new-book-title').value.trim(),
           autor: document.getElementById('scan-new-book-author').value.trim(),
@@ -152,7 +152,8 @@ export default {
           ubicacion: document.getElementById('scan-new-book-location').value.trim(),
           stock: Number(document.getElementById('scan-new-book-qty').value || 1)
         });
-        this.showToast('Libro agregado al catálogo.', 'success');
+        // Fase 1.3 (ampliación): ver el mismo comentario en catalogo.js.
+        this.showToast(r?.encolado ? r.mensaje : 'Libro agregado al catálogo.', r?.encolado ? 'info' : 'success');
         resultEl.innerHTML = '';
       } catch (err) {
         this.showToast(err.message || 'No se pudo agregar el libro.', 'error');

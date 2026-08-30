@@ -2,6 +2,10 @@
 // Extraído de js/modules/db.js el 22 de agosto de 2026 (división por
 // dominio, ver pendientes-checklist.md). Sin cambios de lógica: es el mismo
 // código, solo movido.
+//
+// agregarLibro() vive en js/modules/db.js, no aquí — usa la cola de
+// sincronización sin conexión (SyncQueue), igual que reservarLibro()/
+// retirarReserva() en db/reservas.js (ver el comentario ahí).
 
 import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente } from './compartido.js';
 
@@ -69,20 +73,6 @@ export const libros = {
             // que recalcula las copias disponibles según los préstamos activos.
         }).eq('id', id), ESPERA);
         if (error) throw new Error(error.code === '23505' ? 'Ese ISBN ya pertenece a otro libro.' : 'No se pudo guardar el libro.');
-    },
-
-    async agregarLibro(libro) {
-        const { error } = await conTiempoLimite(supabase.from('libros').insert([{
-            isbn: libro.isbn,
-            titulo: libro.titulo,
-            autor: libro.autor,
-            genero: libro.genero || null,
-            ubicacion: libro.ubicacion || null,
-            portada_url: libro.portada_url || null,
-            copias_totales: libro.stock,
-            stock: libro.stock
-        }]), ESPERA);
-        if (error) throw new Error(error.code === '23505' ? 'El ISBN ya está registrado.' : 'Error al guardar el libro.');
     },
 
     /**

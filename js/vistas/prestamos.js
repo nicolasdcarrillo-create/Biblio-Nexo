@@ -433,7 +433,7 @@ export default {
       try {
         const consent = this._datosConsentimiento('new');
         if (!consent) { btn.disabled = false; return; }
-        await db.agregarLector({
+        const r = await db.agregarLector({
           rut: this.formatRut(document.getElementById('new-user-id').value),
           nombre: document.getElementById('new-user-name').value.trim(),
           email: document.getElementById('new-user-email').value.trim().toLowerCase(),
@@ -441,7 +441,14 @@ export default {
           ...consent
         });
         cerrar();
-        this.showToast('Lector registrado.', 'success');
+        // Fase 1.3 (ampliación): si esto quedó encolado (sin conexión), el
+        // préstamo que sigue en alGuardar() también va a encolarse —
+        // funciona porque la cola procesa en el mismo orden en que se
+        // encoló (ver SyncQueue.reintentarPendientes en db.js) y
+        // registrarPrestamo() identifica al lector por RUT, no por el id
+        // que le asignaría el servidor. No hace falta esperar a que el
+        // alta se sincronice de verdad para continuar.
+        this.showToast(r?.encolado ? r.mensaje : 'Lector registrado.', r?.encolado ? 'info' : 'success');
         await alGuardar?.();
       } catch (err) {
         this.showToast(err.message || 'No se pudo registrar el lector.', 'error');

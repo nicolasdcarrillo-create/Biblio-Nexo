@@ -65,11 +65,15 @@ jobs:
         with:
           node-version: '24'
 
-      # Las dos juntas, en un solo comando: sin package.json que las fije,
-      # instalarlas por separado hace que npm recalcule node_modules entero y
-      # se lleve por delante la que no se acaba de pedir (ver pruebas/LEEME.md).
-      - name: Instalar jsdom y fake-indexeddb
-        run: npm install jsdom fake-indexeddb --no-save
+      # Antes de tener package.json, esto era `npm install jsdom
+      # fake-indexeddb --no-save` (las dos juntas, en un solo comando: sin
+      # un manifiesto que las fije, instalarlas por separado hacía que npm
+      # recalculara node_modules entero y se llevara por delante la que no
+      # se acababa de pedir). Con package.json + package-lock.json ya
+      # versionados, `npm ci` instala exactamente lo mismo que se probó en
+      # local — no "lo último disponible ese día".
+      - name: Instalar dependencias de las pruebas
+        run: npm ci
 
       - name: Probar la interfaz
         run: node pruebas/probar-interfaz.mjs

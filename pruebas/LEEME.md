@@ -6,11 +6,21 @@ sin tocar tu proyecto real de Supabase.
 
 ## Cómo ejecutarlo
 
-Desde la carpeta que contiene `biblionexo/`:
+Desde la raíz del repositorio (una sola vez, instala jsdom y
+fake-indexeddb — quedaron fijados en `package.json` a partir del 29 de
+agosto de 2026, antes había que instalarlos a mano):
 
 ```bash
-npm install jsdom
-node biblionexo/pruebas/probar-vistas.mjs
+npm install
+node pruebas/probar-vistas.mjs
+```
+
+O con los atajos ya armados en `package.json` (agrupan varias pruebas
+relacionadas):
+
+```bash
+npm run test:interfaz   # probar-interfaz, probar-vistas, probar-escaneo-remoto
+npm run test:offline    # probar-persistencia, probar-sync-queue, probar-estado-conexion
 ```
 
 Termina con código 0 si todo pasa, y 1 si algo falla.

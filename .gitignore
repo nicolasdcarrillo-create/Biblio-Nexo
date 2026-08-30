@@ -7,7 +7,9 @@ desktop.ini
 __pycache__/
 *.pyc
 node_modules/
-package-lock.json
+# package-lock.json SÍ se versiona (a partir de que existe package.json):
+# es lo que hace que `npm ci` en CI instale exactamente lo mismo que se
+# probó en local, no "lo último disponible ese día".
 
 # PostgreSQL local que levanta pgserver al probar
 /tmp-pruebas/
@@ -26,3 +28,4 @@ supabase/.branches/
 .env.*
 *.service_role
 secretos.*
+OpenWA/ 

@@ -405,6 +405,104 @@ class PersistentStorage {
     }
 
     /**
+     * Guarda de inmediato, en la copia local, un libro agregado al catálogo
+     * SIN CONEXIÓN — antes de que el servidor le asigne su `id` real. Sin
+     * esto, el libro "desaparecería" de la vista Catálogo hasta la próxima
+     * sincronización, aunque la persona ya lo haya escrito.
+     *
+     * Se guarda con un `id` sintético (negativo: nunca choca con un `id`
+     * real, que en Postgres siempre es positivo) para que
+     * `sincronizarLibros()` — que hace `put()` por `id`, nunca `clear()` —
+     * no lo pise ni lo confunda con nada del servidor. `quitarLibroLocalOptimista()`
+     * lo retira cuando la cola de sincronización confirma que el alta real
+     * ya se aplicó (ver OPERACIONES_COLA en db.js).
+     */
+    async guardarLibroLocalOptimista(libro) {
+        try {
+            await ponerVarios('libros', [{
+                id: -Date.now(),
+                isbn: libro.isbn,
+                titulo: libro.titulo,
+                autor: libro.autor,
+                genero: libro.genero || null,
+                ubicacion: libro.ubicacion || null,
+                portada_url: libro.portada_url || null,
+                copias_totales: libro.stock,
+                stock: libro.stock,
+                actualizado_en: new Date().toISOString(),
+                pendienteSync: true
+            }]);
+        } catch {
+            // Nunca debe impedir que la operación quede encolada igual.
+        }
+    }
+
+    /** Retira la entrada optimista de un libro una vez que el alta real ya se sincronizó. */
+    async quitarLibroLocalOptimista(isbn) {
+        try {
+            const bd = await abrir();
+            await conAlmacen(bd, 'libros', 'readwrite', async almacen => {
+                const fila = await pedido(almacen.index('isbn').get(String(isbn)));
+                if (fila?.pendienteSync && fila.id < 0) almacen.delete(fila.id);
+            });
+        } catch {
+            // Si falla, la próxima sincronización completa del catálogo
+            // (sincronizarLibros) igual va a traer la fila real; en el peor
+            // caso queda una entrada optimista huérfana hasta entonces.
+        }
+    }
+
+    /**
+     * Igual que guardarLibroLocalOptimista(), para un lector recién
+     * registrado sin conexión — necesario para poder, en la misma sesión
+     * offline, prestarle un libro de inmediato (estadoLectorSinConexion()
+     * lo busca por RUT igual que a cualquier otro lector ya conocido).
+     *
+     * Aviso importante, distinto del caso de libros: el catálogo se replica
+     * ENTERO localmente, así que un ISBN duplicado se puede detectar con
+     * certeza antes de encolar. La copia de lectores es PARCIAL a propósito
+     * (CUMPLIMIENTO-LEGAL.md §9 bis) — un RUT que ya existe en el servidor
+     * pero que nunca se consultó en este equipo puede no detectarse hasta
+     * reconectar, momento en el que el alta se rechaza como duplicado
+     * (23505) y queda registrada en Administración → Diagnóstico, no
+     * perdida en silencio. No hay forma de evitarlo del todo sin replicar
+     * el padrón completo de lectores, que es justo lo que la Fase 1.2
+     * decidió no hacer por minimización de datos.
+     */
+    async guardarLectorLocalOptimista(lector) {
+        try {
+            await ponerVarios('lectores', [{
+                id: -Date.now(),
+                nombre: lector.nombre ?? null,
+                rut: lector.rut ?? null,
+                email: lector.email ?? null,
+                telefono: lector.telefono ?? null,
+                bloqueadoManual: false,
+                motivoBloqueo: null,
+                prestamosActivosDetalle: [],
+                consultadoEn: Date.now(),
+                pendienteSync: true
+            }]);
+        } catch {
+            // Nunca debe impedir que la operación quede encolada igual.
+        }
+    }
+
+    /** Retira la entrada optimista de un lector una vez que el alta real ya se sincronizó. */
+    async quitarLectorLocalOptimista(rut) {
+        try {
+            const bd = await abrir();
+            await conAlmacen(bd, 'lectores', 'readwrite', async almacen => {
+                const fila = await pedido(almacen.index('rut').get(rut));
+                if (fila?.pendienteSync && fila.id < 0) almacen.delete(fila.id);
+            });
+        } catch {
+            // Igual que en libros: en el peor caso queda una entrada
+            // optimista huérfana hasta la próxima sincronización completa.
+        }
+    }
+
+    /**
      * Busca un libro guardado localmente por ISBN o por id (lo que haya
      * escaneado o escrito la persona). Es el último recurso de
      * `db.consultarLibro()` cuando la red falla — el catálogo se replica

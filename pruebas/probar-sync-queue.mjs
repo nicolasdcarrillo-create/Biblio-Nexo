@@ -70,11 +70,12 @@ globalThis.window.innerHeight = 0;
 //                   `llamadasRpc` para poder comprobar que la cola reproduce
 //                   EXACTAMENTE los mismos parámetros al reintentar.
 // ---------------------------------------------------------------------------
-const tablas = { libros: [], elementos_eliminados: [], prestamos: [] };
+const tablas = { libros: [], lectores: [], elementos_eliminados: [], prestamos: [] };
 
 class ConsultaFalsa {
-    constructor(filas) {
+    constructor(filas, tabla) {
         this._filas = filas;
+        this._tabla = tabla;
         this._filtros = [];
         this._orden = null;
     }
@@ -83,6 +84,26 @@ class ConsultaFalsa {
     gt(col, val) { this._filtros.push(f => f[col] > val); return this; }
     order(col, { ascending = true } = {}) { this._orden = { col, ascending }; return this; }
     limit() { return this; }
+    /**
+     * Igual patrón que .rpc()/programarRpc(), pero para un `insert` directo
+     * a una tabla — agregarLibro()/agregarLector() no pasan por un RPC, así
+     * que necesitan su propio control de "red caída" vs. "rechazo real"
+     * (ver programarInsert() más abajo). Por omisión, si nadie programó
+     * nada, el insert simplemente funciona y la fila queda en `tablas`.
+     */
+    insert(filas) {
+        const paso = proximoPasoInsert(this._tabla);
+        if (paso.tipo === 'red') {
+            return Promise.reject(paso.error || new TypeError('Failed to fetch'));
+        }
+        if (paso.tipo === 'rechazo') {
+            return Promise.resolve({
+                error: { code: paso.code || 'P0001', message: paso.mensaje || 'Rechazado por el servidor.' }
+            });
+        }
+        this._filas.push(...filas);
+        return Promise.resolve({ error: null });
+    }
     then(resolver, rechazar) {
         try {
             let filas = this._filas.filter(f => this._filtros.every(fn => fn(f)));
@@ -102,10 +123,16 @@ class ConsultaFalsa {
 
 const llamadasRpc = [];
 const comportamientos = {}; // nombre de la función RPC -> lista de pasos pendientes
+const comportamientosInsert = {}; // nombre de tabla -> lista de pasos pendientes
 
 /** Programa qué debe responder la próxima (o próximas) llamada(s) a este RPC. */
 function programarRpc(nombre, pasos) {
     comportamientos[nombre] = [...pasos];
+}
+
+/** Igual que programarRpc(), para un `insert` directo a una tabla (agregarLibro/agregarLector). */
+function programarInsert(tabla, pasos) {
+    comportamientosInsert[tabla] = [...pasos];
 }
 
 function proximoPaso(nombre) {
@@ -116,9 +143,15 @@ function proximoPaso(nombre) {
     return pasos.length > 1 ? pasos.shift() : pasos[0];
 }
 
+function proximoPasoInsert(tabla) {
+    const pasos = comportamientosInsert[tabla];
+    if (!pasos || pasos.length === 0) return { tipo: 'exito' };
+    return pasos.length > 1 ? pasos.shift() : pasos[0];
+}
+
 const clienteFalso = {
     from(nombre) {
-        return new ConsultaFalsa(tablas[nombre] || []);
+        return new ConsultaFalsa(tablas[nombre] || [], nombre);
     },
     rpc(nombre, params) {
         llamadasRpc.push({ nombre, params });
@@ -324,9 +357,8 @@ const estadoOffline = await db.estadoLector('55555555-5');
 comprobar('con la red caída y el lector ya en la copia local, estadoLector() responde igual (offline:true)',
     estadoOffline?.existe === true && estadoOffline?.offline === true && estadoOffline?.lector_id === 50,
     JSON.stringify(estadoOffline));
-comprobar('puede_prestar se calcula de forma conservadora, solo por el bloqueo manual ' +
-    '(no hay forma de revisar préstamos atrasados sin conexión)',
-    estadoOffline?.puede_prestar === true);
+comprobar('sin préstamos activos guardados localmente, no hay nada que pueda estar atrasado: puede_prestar da true',
+    estadoOffline?.puede_prestar === true && estadoOffline?.prestamos_atrasados === 0);
 
 programarRpc('estado_lector', [{ tipo: 'red' }]);
 lanzo = null;
@@ -431,6 +463,79 @@ comprobar('sin nada pendiente, reporta 0', estadoCola.pendientes === 0, JSON.str
 await persistencia.encolarOperacion('prestar_libro', { p_libro_id: 1, p_lector_rut: '11111111-1' }, 'Diagnóstico');
 estadoCola = await colaSync.estado();
 comprobar('con una operación en cola, reporta 1', estadoCola.pendientes === 1, JSON.stringify(estadoCola));
+
+await vaciarCola();
+
+// ---------------------------------------------------------------------------
+// 11. agregarLibro()/agregarLector(): alta sin conexión (Fase 1.3, ampliación)
+// ---------------------------------------------------------------------------
+console.log('\n11. agregarLibro()/agregarLector() sin conexión');
+
+// Caso feliz: sin red, el libro se guarda de inmediato en la copia local
+// (con id sintético negativo) y la operación queda encolada.
+programarInsert('libros', [{ tipo: 'red' }]);
+const rLibro = await db.agregarLibro({
+    isbn: '111222333', titulo: 'Libro Nuevo Offline', autor: 'Autor X',
+    genero: 'Novela', ubicacion: 'Estante 3', stock: 1
+});
+comprobar('agregarLibro() sin conexión queda encolado, no lanza',
+    rLibro?.encolado === true, JSON.stringify(rLibro));
+const libroLocal = await persistencia.buscarLibroLocalPorCodigo('111222333');
+comprobar('el libro agregado sin conexión aparece de inmediato en la copia local (guardado optimista)',
+    libroLocal?.titulo === 'Libro Nuevo Offline' && libroLocal?.id < 0,
+    JSON.stringify(libroLocal));
+
+// Duplicado detectable con certeza: el catálogo local YA tiene ese ISBN
+// (sembrado en la sección 9), así que se rechaza sin encolar nada.
+lanzo = null;
+try {
+    await db.agregarLibro({ isbn: '999888', titulo: 'Repetido', autor: 'Y', stock: 1 });
+} catch (e) {
+    lanzo = e;
+}
+comprobar('un ISBN que ya está en el catálogo local se rechaza sin conexión, sin encolar (duplicado detectable con certeza)',
+    lanzo instanceof Error && /ya está registrado/.test(lanzo.message), String(lanzo));
+
+// Al reconectar, la cola confirma el alta real y retira la entrada
+// optimista — no debe quedar duplicada junto a la fila "de verdad".
+programarInsert('libros', [{ tipo: 'exito' }]);
+await colaSync.reintentarPendientes();
+const libroTrasSync = await persistencia.buscarLibroLocalPorCodigo('111222333');
+comprobar('tras sincronizar, la entrada optimista del libro se retira (ya no tiene id negativo)',
+    libroTrasSync == null || libroTrasSync.id > 0, JSON.stringify(libroTrasSync));
+
+await vaciarCola();
+
+// Lector: mismo patrón, pero a propósito SIN la verificación previa de
+// duplicado (ver el docstring de agregarLector en db.js) — un RUT que el
+// servidor ya tiene pero que este equipo nunca consultó no se puede
+// descartar con la misma certeza que un ISBN, porque la copia de lectores
+// es parcial.
+programarInsert('lectores', [{ tipo: 'red' }]);
+const rLector = await db.agregarLector({
+    rut: '12345678-9', nombre: 'Lector Nuevo Offline', email: 'x@x.cl', telefono: '+56911111111'
+});
+comprobar('agregarLector() sin conexión queda encolado, no lanza',
+    rLector?.encolado === true, JSON.stringify(rLector));
+const lectorLocal = await persistencia.buscarLectorLocalPorRut('12345678-9');
+comprobar('el lector agregado sin conexión aparece de inmediato en la copia local (para poder prestarle en la misma sesión)',
+    lectorLocal?.nombre === 'Lector Nuevo Offline' && lectorLocal?.id < 0,
+    JSON.stringify(lectorLocal));
+
+// Ese mismo lector recién agregado ya se le puede prestar sin conexión (es
+// justo lo que motivó guardarlo de inmediato, no solo encolarlo a ciegas).
+const estadoLectorNuevo = await db.estadoLector('12345678-9');
+comprobar('un lector agregado sin conexión ya se puede consultar/prestar en la misma sesión offline',
+    estadoLectorNuevo?.puede_prestar === true, JSON.stringify(estadoLectorNuevo));
+
+// Al reconectar, si el servidor de verdad rechaza por RUT duplicado
+// (23505), es un rechazo real — no un fallo de red — y debe fallar
+// permanentemente con aviso, nunca reintentar para siempre.
+programarInsert('lectores', [{ tipo: 'rechazo', code: '23505', mensaje: 'ya existe' }]);
+avisos.length = 0;
+await colaSync.reintentarPendientes();
+comprobar('un RUT duplicado detectado recién al reconectar se marca como fallo permanente, con aviso visible',
+    avisos.some(a => /ya existe|23505|Rechazado/.test(a.mensaje)), JSON.stringify(avisos));
 
 await vaciarCola();
 

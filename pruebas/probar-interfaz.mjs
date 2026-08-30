@@ -451,9 +451,11 @@ comprobar('db.js se suscribe él mismo al evento "online" para reintentar la col
   '(no depende de que main.js se acuerde de hacerlo)',
   /addEventListener\(\s*['"]online['"][\s\S]{0,60}colaSync\.reintentarPendientes\(\)/.test(dbJs));
 
-comprobar('la interfaz distingue el resultado "encolado" del éxito normal en los seis lugares que ' +
-  'escriben (renovar, devolver x2, prestar x2, reservar — la persona del mesón ve un aviso distinto, no un falso "listo")',
-  (uiCompletoJs.match(/r\?\.encolado/g) || []).length === 6);
+comprobar('la interfaz distingue el resultado "encolado" del éxito normal en los catorce lugares que ' +
+  'escriben (renovar, devolver x2, prestar x2, reservar, y las cuatro altas de libro/lector — la ' +
+  'persona del mesón ve un aviso distinto, no un falso "listo"; algunas líneas usan r?.encolado dos ' +
+  'veces, una para el mensaje y otra para el tipo de toast)',
+  (uiCompletoJs.match(/r\?\.encolado/g) || []).length === 14);
 
 // ---------------------------------------------------------------------------
 // 13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna

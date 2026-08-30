@@ -102,7 +102,7 @@ export default {
       try {
         const consent = this._datosConsentimiento('new');
         if (!consent) return;
-        await db.agregarLector({
+        const r = await db.agregarLector({
           // Se normalizan RUT y teléfono para que queden con un formato único
           // en la base de datos, sin importar cómo los escriba cada persona.
           rut: this.formatRut(document.getElementById('new-user-id').value),
@@ -111,7 +111,12 @@ export default {
           telefono: this.formatPhone(document.getElementById('new-user-phone').value),
           ...consent
         });
-        this.showToast('Lector agregado.', 'success');
+        // Fase 1.3 (ampliación): sin conexión, db.js encola el alta en vez
+        // de lanzar. A diferencia de un libro, un RUT duplicado puede no
+        // detectarse hasta reconectar (ver el docstring de agregarLector en
+        // db.js) — vale la pena que el mensaje lo deje claro, no solo que
+        // "quedó pendiente" a secas.
+        this.showToast(r?.encolado ? r.mensaje : 'Lector agregado.', r?.encolado ? 'info' : 'success');
         this.renderUsers();
       } catch (err) {
         this.showToast(err.message || 'No se pudo agregar el lector.', 'error');

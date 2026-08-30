@@ -12,12 +12,13 @@ export { hoyEnChile };
 // remoto, respaldos, cumplimiento legal, reportes) vive en js/modules/db/ —
 // dividido por dominio el 22 de agosto de 2026 (ver pendientes-checklist.md).
 // Este archivo se queda con lo que no se podía separar sin romper nada: la
-// cola de sincronización sin conexión (SyncQueue) y las siete llamadas que
+// cola de sincronización sin conexión (SyncQueue) y las nueve llamadas que
 // la usan directamente (registrarPrestamo, devolverPrestamo, renovarPrestamo,
-// reservarLibro, retirarReserva, consultarLibro, estadoLector) — moverlas
-// habría dejado la lógica de negocio en un archivo y su respaldo sin
-// conexión en otro. reservarLibro/retirarReserva son tan urgentes en el
-// mesón como prestar/devolver (022_reservas.sql), así que siguen el mismo
+// reservarLibro, retirarReserva, consultarLibro, estadoLector, agregarLibro,
+// agregarLector) — moverlas habría dejado la lógica de negocio en un archivo
+// y su respaldo sin conexión en otro. reservarLibro/retirarReserva son tan
+// urgentes en el mesón como prestar/devolver (022_reservas.sql), así que
+// siguen el mismo
 // patrón; cancelarReserva/listarReservas, menos urgentes, viven en
 // js/modules/db/reservas.js. Igual que antes,
 // `pruebas/probar-interfaz.mjs` sigue vigilando esta parte leyendo
@@ -113,7 +114,25 @@ const OPERACIONES_COLA = {
     devolver_prestamo: params => supabase.rpc('devolver_prestamo', params),
     renovar_prestamo: params => supabase.rpc('renovar_prestamo', params),
     reservar_libro: params => supabase.rpc('reservar_libro', params),
-    retirar_reserva: params => supabase.rpc('retirar_reserva', params)
+    retirar_reserva: params => supabase.rpc('retirar_reserva', params),
+    // A diferencia de las cinco de arriba (RPCs atómicas), estas dos son un
+    // insert directo — no hay función de negocio que proteja la unicidad
+    // más que la restricción de la propia tabla (23505). Por eso, al
+    // confirmarse, además de la fila real hay que retirar la entrada
+    // optimista que se había guardado localmente al encolar (ver
+    // guardarLibroLocalOptimista()/guardarLectorLocalOptimista() en
+    // persistencia.js) — si no, quedaría duplicada junto a la fila real que
+    // trae la próxima sincronización completa del catálogo/lectores.
+    agregar_libro: async params => {
+        const { error } = await supabase.from('libros').insert([params]);
+        if (!error) await persistencia.quitarLibroLocalOptimista(params.isbn);
+        return { error };
+    },
+    agregar_lector: async params => {
+        const { error } = await supabase.from('lectores').insert([params]);
+        if (!error) await persistencia.quitarLectorLocalOptimista(params.rut);
+        return { error };
+    }
 };
 
 /**
@@ -198,6 +217,32 @@ async function estadoLectorSinConexion(rut) {
 
 function coalesceMotivoBloqueo(motivo) {
     return motivo ? `Bloqueado por la biblioteca: ${motivo}` : 'Bloqueado por la biblioteca.';
+}
+
+/**
+ * Encola sin conexión el alta de un libro nuevo (ver agregarLibro en el
+ * objeto db, más abajo). Duplicado detectable con certeza (el catálogo se
+ * replica entero, Fase 1.2): se rechaza de inmediato, igual que lo haría el
+ * servidor, en vez de encolar algo que se sabe que va a fallar al
+ * reconectar.
+ */
+async function encolarAgregarLibro(datos) {
+    const existente = await persistencia.buscarLibroLocalPorCodigo(datos.isbn);
+    if (existente) throw new Error('El ISBN ya está registrado.');
+    await persistencia.guardarLibroLocalOptimista(datos);
+    return colaSync.encolar('agregar_libro', datos, `Alta del libro "${datos.titulo}" (ISBN ${datos.isbn})`);
+}
+
+/**
+ * Encola sin conexión el alta de un lector nuevo (ver agregarLector en el
+ * objeto db, más abajo). A diferencia de encolarAgregarLibro, A PROPÓSITO
+ * no verifica duplicado local primero — ver el docstring de
+ * guardarLectorLocalOptimista() en persistencia.js sobre por qué un RUT no
+ * se puede descartar con la misma certeza que un ISBN sin conexión.
+ */
+async function encolarAgregarLector(datos) {
+    await persistencia.guardarLectorLocalOptimista(datos);
+    return colaSync.encolar('agregar_lector', datos, `Alta del lector ${datos.nombre} (RUT ${datos.rut})`);
 }
 
 class SyncQueue {
@@ -635,6 +680,80 @@ export const db = {
         // atraparlo en silencio.
         persistencia.guardarLectorConsultado({ ...resultado, prestamos_activos_detalle: detalle });
         return resultado;
+    },
+
+    /**
+     * Agrega un libro nuevo al catálogo. Ver el comentario de
+     * registrarPrestamo sobre el alcance del try/catch.
+     *
+     * A diferencia de las siete llamadas de arriba, no es un RPC: es un
+     * `insert` directo, así que la única fuente de verdad de "¿ya existe
+     * este ISBN?" es la restricción `unique` de la tabla. Sin conexión, el
+     * catálogo replicado (Fase 1.2) permite adelantarse a ese rechazo con
+     * confianza total, porque es una copia COMPLETA — a diferencia de la
+     * copia de lectores, que es parcial a propósito (ver agregarLector).
+     */
+    async agregarLibro(libro) {
+        const datos = {
+            isbn: libro.isbn,
+            titulo: libro.titulo,
+            autor: libro.autor,
+            genero: libro.genero || null,
+            ubicacion: libro.ubicacion || null,
+            portada_url: libro.portada_url || null,
+            copias_totales: libro.stock,
+            stock: libro.stock
+        };
+        let resultado;
+        try {
+            resultado = await conTiempoLimite(supabase.from('libros').insert([datos]), ESPERA);
+        } catch (e) {
+            if (esFalloDeRed(e)) return encolarAgregarLibro(datos);
+            throw e;
+        }
+        const { error } = resultado;
+        if (error) {
+            if (esFalloDeRed(error)) return encolarAgregarLibro(datos);
+            throw new Error(error.code === '23505' ? 'El ISBN ya está registrado.' : 'Error al guardar el libro.');
+        }
+    },
+
+    /**
+     * Agrega un lector nuevo. Ver el comentario de agregarLibro sobre por
+     * qué esto no es un RPC, y el de guardarLectorLocalOptimista() en
+     * persistencia.js sobre por qué, a diferencia de un libro, un RUT
+     * duplicado NO se puede descartar con la misma certeza sin conexión: la
+     * copia local de lectores es parcial, por diseño (minimización de
+     * datos, CUMPLIMIENTO-LEGAL.md §9 bis). Si de verdad hay un duplicado
+     * que esta copia parcial no alcanzó a ver, se descubre al reconectar y
+     * queda registrado como fallo permanente en el registro de errores
+     * (Administración → Diagnóstico) — no se pierde en silencio, pero
+     * tampoco se evita de antemano como si fuera un libro.
+     */
+    async agregarLector(lector) {
+        const datos = {
+            rut: lector.rut,
+            nombre: lector.nombre,
+            email: lector.email,
+            telefono: lector.telefono,
+            consentimiento_fecha: lector.consentimiento_fecha || null,
+            consentimiento_version: lector.consentimiento_version || null,
+            es_menor: lector.es_menor || false,
+            apoderado_nombre: lector.apoderado_nombre || null,
+            apoderado_rut: lector.apoderado_rut || null
+        };
+        let resultado;
+        try {
+            resultado = await conTiempoLimite(supabase.from('lectores').insert([datos]), ESPERA);
+        } catch (e) {
+            if (esFalloDeRed(e)) return encolarAgregarLector(datos);
+            throw e;
+        }
+        const { error } = resultado;
+        if (error) {
+            if (esFalloDeRed(error)) return encolarAgregarLector(datos);
+            throw new Error(error.code === '23505' ? 'El RUT ya está registrado.' : 'Error al guardar lector.');
+        }
     },
 
     // El resto de los métodos vive por dominio en js/modules/db/ — ver el

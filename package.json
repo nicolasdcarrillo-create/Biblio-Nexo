@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Sistema de gestión de biblioteca para la Biblioteca Pública Municipal de Futrono. Sin paso de compilación: vanilla JS con ES Modules. Estas dependencias son SOLO para correr las pruebas (pruebas/*.mjs) — la aplicación en sí no usa nada de npm, ver vendor/ para sus librerías.",
   "engines": {
-    "node": ">=22.22.2"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "vite",

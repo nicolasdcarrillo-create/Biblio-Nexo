@@ -1,0 +1,73 @@
+-- ============================================================================
+-- BiblioNexo — 012: Permisos sobre el esquema y la tabla auth.users
+-- ============================================================================
+-- Ejecutar DESPUÉS de la 011. Es idempotente: GRANT no falla si el permiso ya
+-- existe, así que se puede correr dos veces sin problema.
+--
+-- El problema que resuelve: mi_perfil(), asegurar_perfil(), asignar_rol() y
+-- listar_personal() (definidas en la 010) leen auth.users. En la base de
+-- pruebas (pruebas/00_base_supabase.sql) ese acceso ya está concedido, porque
+-- ese archivo reproduce lo que Supabase entrega de fábrica más lo que se hizo
+-- a mano desde su interfaz. En producción esos dos `grant` se aplicaron a mano,
+-- directo sobre la base real, y nunca quedaron en una migración.
+--
+-- La noche del 31 de julio el sistema se colgó al arrancar: mi_perfil() es de
+-- las primeras funciones que se llaman al iniciar sesión, y falló con
+-- «permission denied for table auth.users». Se corrigió a mano sobre la base
+-- real con los mismos dos `grant` de más abajo. Sin esta migración, cualquier
+-- reconstrucción desde cero —proyecto nuevo, proyecto de repuesto tras una
+-- pausa de Supabase, rama de pruebas— vuelve a fallar exactamente igual.
+--
+-- A diferencia de pruebas/00_base_supabase.sql, aquí NO se concede a `anon`.
+-- auth.users no tiene RLS propia (la administra Supabase, no este proyecto), y
+-- `anon` es el rol sin sesión que usa PostgREST para peticiones públicas:
+-- darle select directo sobre auth.users expondría el correo y la hora de
+-- último acceso de todo el personal a cualquiera, sin pasar por ninguna
+-- función. Ninguna función de este sistema que toca auth.users está concedida
+-- a `anon` (todas son `grant ... to authenticated`), así que anon no lo
+-- necesita. Es el mismo tipo de exposición que el incidente de estado_lector
+-- documentado en CUMPLIMIENTO-LEGAL.md.
+--
+-- Tampoco se concede la tabla completa a `authenticated`, sino solo tres
+-- columnas: `id`, `email` y `last_sign_in_at`. Son las únicas que leen las
+-- cinco funciones de la 010 que tocan auth.users — se revisaron una por una:
+--
+--   asignar_rol           → u.email, u.id (en el where)
+--   asegurar_perfil       → email, id (en el where)
+--   mi_perfil              → u.id (en el join), u.last_sign_in_at
+--   listar_personal        → u.id, u.email, u.last_sign_in_at
+--   anonimizar_lector      → email, id (en el where)
+--
+-- `auth.users` también guarda `encrypted_password`, `recovery_token`,
+-- `confirmation_token` y el resto de los tokens de autenticación. Con
+-- `grant select on auth.users` a secas, cualquier sesión de librero —la llave
+-- que usa el sistema en el día a día, no una credencial de administrador—
+-- podría leerlos directo con una consulta SQL, sin pasar por ninguna función
+-- ni su guarda interna. Ninguna función de este sistema necesita esas
+-- columnas, así que el permiso se limita a las tres que sí hacen falta.
+-- ============================================================================
+
+grant usage on schema auth to authenticated;
+grant select (id, email, last_sign_in_at) on auth.users to authenticated;
+
+
+-- ============================================================================
+-- QUÉ REVISAR DESPUÉS DE EJECUTAR ESTO
+-- ============================================================================
+--   -- Con una sesión de librero real (no con el rol postgres, que ya tiene
+--   -- acceso y no revela nada):
+--   select * from public.mi_perfil();
+--       → devuelve la fila, sin «permission denied for table auth.users»
+--
+--   -- anon sigue sin poder leer auth.users directo:
+--   set role anon;
+--   select * from auth.users;
+--       → «permission denied for table auth.users»
+--   reset role;
+--
+--   -- Con sesión de librero, las columnas sensibles siguen fuera de alcance:
+--   set role authenticated;
+--   select encrypted_password from auth.users;
+--       → «permission denied for table auth.users»
+--   reset role;
+-- ============================================================================

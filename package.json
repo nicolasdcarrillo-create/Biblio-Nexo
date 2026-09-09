@@ -1,0 +1,33 @@
+{
+  "name": "biblionexo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sistema de gestión de biblioteca para la Biblioteca Pública Municipal de Futrono. Sin paso de compilación: vanilla JS con ES Modules. Estas dependencias son SOLO para correr las pruebas (pruebas/*.mjs) — la aplicación en sí no usa nada de npm, ver vendor/ para sus librerías.",
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:legacy": "npm run test:legacy:consolidacion && npm run test:legacy:interfaz && npm run test:legacy:offline",
+    "test:legacy:consolidacion": "python3 pruebas/verificar_consolidacion.py && python3 pruebas/verificar_llamadas_rpc.py",
+    "test:legacy:interfaz": "node pruebas/probar-interfaz.mjs && node pruebas/probar-vistas.mjs && node pruebas/probar-escaneo-remoto.mjs",
+    "test:legacy:offline": "node pruebas/probar-persistencia.mjs && node pruebas/probar-sync-queue.mjs && node pruebas/probar-estado-conexion.mjs",
+    "test:legacy:contraste": "node pruebas/probar-contraste.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "autoprefixer": "^10.5.5",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "^30.0.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.2",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.0"
+  }
+}

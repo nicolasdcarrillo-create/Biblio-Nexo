@@ -1,0 +1,53 @@
+-- ============================================================================
+-- BiblioNexo — 019: Elimina las políticas RLS de acceso total en
+-- `libros`, `lectores` y `prestamos`
+-- ============================================================================
+-- Ejecutar DESPUÉS de la 018. Es idempotente: `drop policy if exists`, se
+-- puede correr dos veces sin problema.
+--
+-- Hallazgo de seguridad, 22 de agosto de 2026, encontrado mientras se
+-- construía `verificar_politicas()` (ver `010_consolidacion.sql`) y se
+-- comparaba `pg_policies` en producción contra el manifiesto esperado.
+--
+-- Producción tenía tres políticas que ningún archivo de migración local
+-- creaba — la misma clase de deriva que ya se había visto una vez, en la
+-- migración 016 (`"Lectura de roles propia"` en `usuarios`), pero esta vez
+-- mucho más grave:
+--
+--   "Acceso autenticado libros"     — ALL, rol authenticated,
+--   "Acceso autenticado lectores"   — ALL, rol authenticated,
+--   "Acceso autenticado prestamos"  — ALL, rol authenticated,
+--
+-- las tres con `using (true)` y `with check (true)`. Eso significa: para
+-- Postgres, CUALQUIER usuario autenticado — cualquier `librero`, no
+-- necesariamente un admin — tenía permiso para leer, insertar, modificar y
+-- BORRAR cualquier fila de `libros`, `lectores` y `prestamos`, sin ninguna
+-- restricción.
+--
+-- Postgres combina las políticas RLS permisivas de una misma tabla con OR:
+-- basta con que UNA lo permita para que la operación pase, sin importar
+-- cuántas otras políticas más estrechas existan. Por eso estas tres
+-- políticas no convivían de forma inofensiva con las políticas
+-- admin-only ya existentes (`libros borrado admin`, `lectores edicion
+-- admin`, `prestamos borrado admin`, etc.) — las anulaban en la práctica.
+-- Cualquier persona con sesión iniciada (el rol `librero` normal del
+-- mesón, no solo un admin) podía borrar libros, lectores o préstamos
+-- directamente contra la base de datos, aunque la interfaz nunca ofreciera
+-- ese botón — bastaba con hacer la llamada REST/RPC directa.
+--
+-- No hay evidencia de que se haya explotado: no son operaciones que
+-- aparezcan fuera de lo esperado en `auditoria`. Todo indica que, igual
+-- que la política redundante de la 016, esto se creó desde el editor de
+-- Supabase en algún momento sin quedar registrado en ningún archivo local
+-- ni documentado en ninguna sesión anterior.
+--
+-- Se eliminan las tres. Las políticas admin-only y las de lectura/edición
+-- por rol que ya existen (creadas en 008/010) siguen intactas y son las
+-- que de verdad gobiernan el acceso desde ahora. Confirmado leyendo
+-- `pg_policies` en producción antes de escribir este archivo, no por
+-- inferencia.
+-- ============================================================================
+
+drop policy if exists "Acceso autenticado libros" on public.libros;
+drop policy if exists "Acceso autenticado lectores" on public.lectores;
+drop policy if exists "Acceso autenticado prestamos" on public.prestamos;

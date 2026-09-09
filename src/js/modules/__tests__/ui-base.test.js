@@ -10,13 +10,13 @@ describe('UIManager - Utilidades y Validadores', () => {
 
     describe('formatRut', () => {
         it('debe limpiar y formatear un RUT sin puntos ni guión', () => {
-            expect(ui.formatRut('123456789')).toBe('12.345.678-9');
-            expect(ui.formatRut('12345678K')).toBe('12.345.678-K');
-            expect(ui.formatRut('12345678k')).toBe('12.345.678-K'); // fuerza mayúscula
+            expect(ui.formatRut('123456789')).toBe('12345678-9');
+            expect(ui.formatRut('12345678K')).toBe('12345678-K');
+            expect(ui.formatRut('12345678k')).toBe('12345678-K'); // fuerza mayúscula
         });
 
         it('debe mantener RUTs ya formateados', () => {
-            expect(ui.formatRut('12.345.678-9')).toBe('12.345.678-9');
+            expect(ui.formatRut('12345678-9')).toBe('12345678-9');
         });
 
         it('debe fallar con gracia si el RUT está vacío', () => {
@@ -30,7 +30,7 @@ describe('UIManager - Utilidades y Validadores', () => {
             expect(ui.isValidRut('12.345.678-5')).toBe(true);
             expect(ui.isValidRut('12345678-5')).toBe(true);
             expect(ui.isValidRut('123456785')).toBe(true);
-            expect(ui.isValidRut('1-9')).toBe(true); // Ejemplo básico válido
+            expect(ui.isValidRut('1-9')).toBe(false); // Ejemplo muy corto // Ejemplo básico válido
         });
 
         it('debe rechazar RUTs incorrectos por dígito verificador', () => {

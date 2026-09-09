@@ -15,7 +15,7 @@ export const respaldos = {
      * que tenía el mismo problema sin el arreglo.
      */
     async exportarTodo() {
-        const tablas = ['libros', 'lectores', 'prestamos'];
+        const tablas = ['libros', 'lectores', 'prestamos', 'reservas', 'parametros', 'usuarios'];
         const respaldo = { generado: new Date().toISOString(), version: 1, tablas: {} };
 
         for (const tabla of tablas) {

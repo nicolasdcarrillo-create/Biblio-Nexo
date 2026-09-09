@@ -23,6 +23,7 @@ import { LibroRepository } from '../repositorios/LibroRepository.js';
 import { ReservaRepository } from '../repositorios/ReservaRepository.js';
 import { EscaneoRepository } from '../repositorios/EscaneoRepository.js';
 import { PrestamoRepository } from '../repositorios/PrestamoRepository.js';
+import { LectorRepository } from '../repositorios/LectorRepository.js';
 import { escapeHtml, canalEscaneo } from '../modules/utilidades.js';
 import { buscarPorIsbnExterno } from '../modules/libros-externos.js';
 import { generarSvgQr } from '../modules/qr.js';
@@ -385,8 +386,18 @@ export default {
             ? `<span class="stamp stamp-info !rotate-0 shrink-0"><i aria-hidden="true" class="fas fa-box-archive"></i> Apartado</span>`
             : `<span class="stamp !rotate-0 shrink-0"><i aria-hidden="true" class="fas fa-user-clock"></i> En fila</span>`}
         </div>
+      
+        ${r.estado === 'apartada' ? `
+          <div class="flex flex-wrap gap-2 mt-3">
+            <button data-entregar-reserva="${escapeHtml(String(r.id))}" class="btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+              <i aria-hidden="true" class="fas fa-hand-holding-hand mr-1"></i> Entregar libro
+            </button>
+            <button data-avisar-reserva="${escapeHtml(String(r.id))}" data-rut="${escapeHtml(r.lector_rut)}" data-vence="${escapeHtml(r.vence_apartado_en)}" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold">
+              <i aria-hidden="true" class="fab fa-whatsapp mr-1 text-green-600"></i> Avisar lector
+            </button>
+          </div>
+        ` : ''}
       </div>`;
-
     const filaPrestamo = p => {
       const estado = this._estadoPrestamo(p.fecha_devolucion_esperada);
       const lector = p.lector || {};
@@ -465,10 +476,14 @@ export default {
             ${vigentes.map(filaReserva).join('')}` : ''}
 
           <div class="border-t border-stone-200 pt-4 mt-4">
-            <button data-prestar-libro="${escapeHtml(String(libro.id))}" ${hayDisponibles ? '' : 'disabled'}
-              class="btn-madera w-full text-white font-medium rounded-xl shadow py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
-              <i aria-hidden="true" class="fas fa-right-left mr-1.5"></i> ${hayDisponibles ? 'Prestar este libro' : 'Sin ejemplares disponibles'}
-            </button>
+            ${hayDisponibles
+              ? `<button data-prestar-libro="${escapeHtml(String(libro.id))}" class="btn-madera w-full text-white font-medium rounded-xl shadow py-2.5 text-sm">
+                  <i aria-hidden="true" class="fas fa-right-left mr-1.5"></i> Prestar este libro
+                 </button>`
+              : `<button data-reservar-libro="${escapeHtml(String(libro.id))}" class="btn-secundario bg-patrimonio-madera text-white font-medium rounded-xl shadow py-2.5 text-sm w-full">
+                  <i aria-hidden="true" class="fas fa-clock mr-1.5"></i> Reservar este libro
+                 </button>`
+            }
           </div>
         </div>
       </div>`;
@@ -476,6 +491,46 @@ export default {
 
   _bindFichaCirculacion(resultEl, resultado, codigo) {
     const recargar = () => this._mostrarResultadoEscaneo?.(codigo);
+
+    resultEl.querySelectorAll('[data-entregar-reserva]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await ReservaRepository.retirarReserva(btn.dataset.entregarReserva);
+          this.showToast('Reserva entregada. Se ha registrado el pr�stamo.', 'success');
+          recargar();
+        } catch (err) {
+          this.showToast(err.message || 'Error al entregar la reserva.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    resultEl.querySelectorAll('[data-avisar-reserva]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const { lector } = await LectorRepository.estadoLector(btn.dataset.rut);
+          if (typeof this.showNotifyReservaModal === 'function') {
+            this.showNotifyReservaModal(
+              { vence_apartado_en: btn.dataset.vence },
+              resultado.libro,
+              lector
+            );
+          } else {
+            this.showToast('El m�dulo de notificaciones no est� disponible.', 'error');
+          }
+        } catch (err) {
+          this.showToast(err.message || 'Error al obtener datos del lector.', 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    resultEl.querySelectorAll('[data-reservar-libro]').forEach(btn => {
+      btn.addEventListener('click', () => this.flujoReserva(btn.dataset.reservarLibro, recargar));
+    });
 
     resultEl.querySelectorAll('[data-devolver]').forEach(btn => {
       btn.addEventListener('click', async () => {

@@ -28,6 +28,7 @@ const TABLAS_A_RESPALDAR = [
   "libros",
   "lectores",
   "prestamos",
+  "reservas",
   "parametros",
   "auditoria",
   "errores",

@@ -75,26 +75,8 @@ jobs:
       - name: Instalar dependencias de las pruebas
         run: npm ci
 
-      - name: Probar la interfaz
-        run: node pruebas/probar-interfaz.mjs
-
-      - name: Probar las vistas (catálogo, lectores, préstamos, reportes, administración)
-        run: node pruebas/probar-vistas.mjs
-
-      - name: Probar el escaneo remoto sin sesión (ítem 11)
-        run: node pruebas/probar-escaneo-remoto.mjs
-
-      - name: Probar la persistencia local (Fase 1.2)
-        run: node pruebas/probar-persistencia.mjs
-
-      - name: Probar la cola de sincronización (Fase 1.3)
-        run: node pruebas/probar-sync-queue.mjs
-
-      - name: Probar el indicador de conexión (Fase 1.4)
-        run: node pruebas/probar-estado-conexion.mjs
-
-      - name: Probar el contraste de color (WCAG 2.1 AA)
-        run: node pruebas/probar-contraste.mjs
+      - name: Probar la interfaz (Vitest)
+        run: npm run test
 
   # ==========================================================================
   # 3. Migraciones contra un PostgreSQL embebido

@@ -1,10 +1,22 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   build: {
     target: 'esnext',
     outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        escaneo: resolve(__dirname, 'escaneo-remoto.html'),
+        privacidad: resolve(__dirname, 'privacidad.html'),
+        error404: resolve(__dirname, '404.html')
+      }
+    }
   },
   plugins: [
     VitePWA({

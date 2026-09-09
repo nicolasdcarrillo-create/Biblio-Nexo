@@ -58,21 +58,7 @@ function esEnlaceDeInvitacion() {
  * Registro del service worker (Fase 1.1 — funcionamiento sin conexión).
  *
  * Se registra recién después del evento `load`, no antes: así no compite por
- * ancho de banda con los recursos críticos del primer arranque (Supabase,
- * este mismo módulo). Si falla —navegador viejo sin soporte, o cualquier
- * otro motivo— la aplicación sigue funcionando exactamente igual que antes
- * de este cambio: el registro nunca bloquea el arranque ni el inicio de
- * sesión, solo se deja constancia en el registro de errores propio.
- */
-function registrarServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => {
-            registroErrores.registrarOperacion('arranque', err);
-        });
-    });
-}
-registrarServiceWorker();
+// El Service Worker ahora lo inyecta automáticamente vite-plugin-pwa
 
 // Cada cuánto se repite la sincronización en segundo plano mientras la
 // pestaña sigue abierta. Cinco minutos: ni tan seguido como para competir con
@@ -211,3 +197,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 });
+

@@ -1,7 +1,15 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
+@theme {
+  --color-patrimonio-base: #F7F4EB;
+  --color-patrimonio-card: #FFFFFF;
+  --color-patrimonio-madera: #7A431D;
+  --color-patrimonio-bosque: #2C4A3E;
+  --color-patrimonio-lago: #1B3B48;
+
+  --font-serif: "Newsreader", serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+}
 /**
  * Estilos Personalizados - BiblioNexo
  * Identidad Patrimonial de Futrono: archivo histórico, madera de Raulí,

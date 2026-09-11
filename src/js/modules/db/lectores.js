@@ -12,9 +12,14 @@
 // con soporte offline de db.js.
 
 import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente } from './compartido.js';
+import persistencia from '../persistencia.js';
 
 export const lectores = {
     async obtenerLectores(busqueda = '', pagina = 0, porPagina = 25) {
+        if (!navigator.onLine) {
+            return await persistencia.buscarLectoresLocales(busqueda, pagina, porPagina);
+        }
+
         const desplazamiento = pagina * porPagina;
         let q = supabase
             .from('lectores')
@@ -25,9 +30,16 @@ export const lectores = {
         const limpia = limpiarBusqueda(busqueda);
         if (limpia) q = q.or(`nombre.ilike.%${limpia}%,rut.ilike.%${limpia}%,email.ilike.%${limpia}%`);
 
-        const { data, error, count } = await conTiempoLimite(q, ESPERA);
-        if (error) throw error;
-        return { lectores: data || [], total: count || 0 };
+        try {
+            const { data, error, count } = await conTiempoLimite(q, ESPERA);
+            if (error) throw error;
+            return { lectores: data || [], total: count || 0 };
+        } catch (err) {
+            if (err.message === 'Timeout' || String(err).includes('fetch') || !navigator.onLine) {
+                return await persistencia.buscarLectoresLocales(busqueda, pagina, porPagina);
+            }
+            throw err;
+        }
     },
 
     async actualizarLector(id, cambios) {
@@ -40,9 +52,26 @@ export const lectores = {
         if (error) throw new Error(error.code === '23505' ? 'Ese RUT ya pertenece a otro lector.' : 'No se pudo guardar el lector.');
     },
 
-    async eliminarLector(id) {
+    async eliminarLector(id, motivo = 'Derecho de supresión (ARCO)') {
         const { error } = await conTiempoLimite(supabase.from('lectores').delete().eq('id', id), ESPERA);
-        if (error) throw new Error('No se puede eliminar. El lector tiene historial en el sistema.');
+        if (error) {
+            // Si viola la llave foránea (23503), es porque tiene historial (préstamos o reservas).
+            // En vez de rechazar, lo anonimizamos para no romper el historial.
+            if (error.code === '23503') {
+                const { error: errAnon } = await conTiempoLimite(supabase.from('lectores').update({
+                    nombre: 'Lector Eliminado',
+                    rut: 'Anonimizado-' + id + '-' + Date.now(),
+                    email: null,
+                    telefono: null,
+                    motivo_bloqueo: motivo, // Usamos este campo para dejar constancia
+                    bloqueado_manual: true
+                }).eq('id', id), ESPERA);
+                
+                if (errAnon) throw new Error('No se pudo borrar ni anonimizar al lector: ' + errAnon.message);
+                return; // Anonimizado exitosamente
+            }
+            throw new Error('No se puede eliminar. El lector tiene historial en el sistema.');
+        }
     },
 
     async bloquearLector(lectorId, bloquear, motivo = null) {

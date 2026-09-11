@@ -8,6 +8,7 @@
 // retirarReserva() en db/reservas.js (ver el comentario ahí).
 
 import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente } from './compartido.js';
+import persistencia from '../persistencia.js';
 
 export const libros = {
     /**

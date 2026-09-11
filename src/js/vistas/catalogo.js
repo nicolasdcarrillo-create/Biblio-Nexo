@@ -14,7 +14,7 @@
 // no le importa en qué archivo se declaró `foo`.
 
 import { LibroRepository } from '../repositorios/LibroRepository.js';
-import { escapeHtml } from '../modules/utilidades.js';
+import { html, crudo } from '../modules/utilidades.js';
 
 export default {
   async renderCatalog() {
@@ -32,7 +32,7 @@ export default {
       return this.renderCatalog();
     }
 
-    container.innerHTML = `
+    container.innerHTML = html`
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mb-6">
         <div class="catalog-card-header">
           <h3 class="font-serif font-semibold text-lg text-stone-900">Agregar libro</h3>
@@ -52,7 +52,7 @@ export default {
           <h3 class="font-serif font-semibold text-lg text-stone-900">Catálogo de libros</h3>
           <div class="relative sm:w-64">
             <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-xs"></i>
-            <input id="catalog-search-input" aria-label="Buscar en el catálogo por título, autor o ISBN" type="text" placeholder="Buscar por título, autor o ISBN..." value="${escapeHtml(this.catalogSearch || '')}"
+            <input id="catalog-search-input" aria-label="Buscar en el catálogo por título, autor o ISBN" type="text" placeholder="Buscar por título, autor o ISBN..." value="${this.catalogSearch || ''}"
               class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 rounded-md bg-white focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
@@ -67,7 +67,7 @@ export default {
           </thead>
           <tbody id="catalog-tbody">${this._renderBookRows(libros)}</tbody>
         </table>
-        <div id="catalog-pagination">${this._paginacionHtml(this.bookPage, total, porPagina, 'catalog-page-btn')}</div>
+        <div id="catalog-pagination">${crudo(this._paginacionHtml(this.bookPage, total, porPagina, 'catalog-page-btn'))}</div>
       </div>
     `;
 
@@ -111,7 +111,8 @@ export default {
         const tbody = document.getElementById('catalog-tbody');
         if (this.currentView !== 'catalog' || !tbody) return;
         this._booksCache = resultados;
-        tbody.innerHTML = this._renderBookRows(resultados);
+        // Se usa crudo() porque this._renderBookRows devuelve un objeto HtmlSeguro
+        tbody.innerHTML = crudo(this._renderBookRows(resultados)).toString();
         const paginacion = document.getElementById('catalog-pagination');
         if (paginacion) {
           paginacion.innerHTML = this._paginacionHtml(0, totalNuevo, porPagina, 'catalog-page-btn');
@@ -125,34 +126,34 @@ export default {
   // HTML de las filas del catálogo. Separado de renderCatalog para poder
   // refrescar solo el <tbody> cuando se busca, sin recrear todo el formulario.
   _renderBookRows(books) {
-    return books.map(b => `
+    return books.length ? books.map(b => html`
       <tr class="border-t border-stone-200">
         <td class="px-4 py-3">
           <div class="flex items-start gap-3">
-            ${this._portadaHtml(b)}
+            ${crudo(this._portadaHtml(b))}
             <div class="min-w-0">
-              <div class="font-bold text-stone-800">${escapeHtml(b.titulo)}</div>
-              <div class="text-xs text-stone-500">${escapeHtml(b.autor)}</div>
-              ${(b.genero || b.ubicacion) ? `
+              <div class="font-bold text-stone-800">${b.titulo}</div>
+              <div class="text-xs text-stone-500">${b.autor}</div>
+              ${(b.genero || b.ubicacion) ? html`
                 <div class="flex flex-wrap gap-1 mt-1">
-                  ${b.genero ? `<span class="stamp stamp-info !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-tag"></i> ${escapeHtml(b.genero)}</span>` : ''}
-                  ${b.ubicacion ? `<span class="stamp stamp-success !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-location-dot"></i> ${escapeHtml(b.ubicacion)}</span>` : ''}
+                  ${b.genero ? html`<span class="stamp stamp-info !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-tag"></i> ${b.genero}</span>` : ''}
+                  ${b.ubicacion ? html`<span class="stamp stamp-success !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-location-dot"></i> ${b.ubicacion}</span>` : ''}
                 </div>` : ''}
             </div>
           </div>
         </td>
-        <td class="px-4 py-3 text-stone-500">${escapeHtml(b.isbn)}</td>
+        <td class="px-4 py-3 text-stone-500">${b.isbn}</td>
         <td class="px-4 py-3 text-center">${b.stock}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
           ${b.stock > 0
-            ? `<button class="loan-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Prestar</button>`
-            : `<button class="reserve-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Reservar</button>`}
-          ${this.currentUserRole === 'admin' ? `
+            ? html`<button class="loan-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Prestar</button>`
+            : html`<button class="reserve-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Reservar</button>`}
+          ${this.currentUserRole === 'admin' ? html`
             <button class="edit-book-btn text-stone-500 hover:text-patrimonio-madera font-bold" data-id="${b.id}">Editar</button>
             <button class="delete-book-btn text-rose-700 font-bold" data-id="${b.id}">Eliminar</button>` : ''}
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">Sin libros que coincidan con la búsqueda.</td></tr>`;
+    `) : html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">Sin libros que coincidan con la búsqueda.</td></tr>`;
   },
 
   // Vuelve a enganchar los botones de Prestar/Reservar/Eliminar del catálogo. Se
@@ -197,14 +198,14 @@ export default {
   showEditBookModal(libro) {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
-    const campo = (id, etiqueta, valor, extra = '') => `
+    const campo = (id, etiqueta, valor, extra = '') => html`
       <div>
         <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">${etiqueta}</label>
-        <input id="${id}" value="${escapeHtml(valor ?? '')}" ${extra}
+        <input id="${id}" value="${valor ?? ''}" ${crudo(extra)}
           class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
       </div>`;
 
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
         <h3 class="font-serif text-lg font-bold text-stone-900">Editar libro</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -218,7 +219,7 @@ export default {
         <p class="text-[11px] text-stone-500 -mt-1">
           Escribe cuántos ejemplares tiene la biblioteca en total. El sistema calcula solo cuántos están
           disponibles según los préstamos activos${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0) > 0
-            ? ` (ahora hay ${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0)} prestado(s))` : ''}.
+            ? html` (ahora hay ${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0)} prestado(s))` : ''}.
         </p>
         <div>
           ${campo('edit-book-plazo', 'Plazo de préstamo propio (días, opcional)', libro.dias_prestamo_override, 'type="number" min="0" placeholder="Usa el plazo general"')}
@@ -234,7 +235,7 @@ export default {
           <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
           <button data-action="save" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Guardar cambios</button>
         </div>
-      </div>`;
+      </div>`.toString();
     document.body.appendChild(overlay);
 
     const cerrar = this._prepararModal(overlay);

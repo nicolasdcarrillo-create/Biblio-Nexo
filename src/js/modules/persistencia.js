@@ -219,6 +219,40 @@ async function eliminadosDesde(tabla, marca) {
 }
 
 class PersistentStorage {
+    async buscarLibrosLocales(busqueda = '', pagina = 0, porPagina = 25) {
+        const bd = await abrir();
+        const todos = await conAlmacen(bd, 'libros', 'readonly', almacen => pedido(almacen.getAll()));
+        const limpia = (busqueda || '').trim().toLowerCase();
+        const filtrados = limpia ? todos.filter(b => 
+            (b.titulo && b.titulo.toLowerCase().includes(limpia)) ||
+            (b.autor && b.autor.toLowerCase().includes(limpia)) ||
+            (b.isbn && b.isbn.includes(limpia))
+        ) : todos;
+        filtrados.sort((a, b) => (a.titulo || '').localeCompare(b.titulo || ''));
+        const inicio = pagina * porPagina;
+        return {
+            libros: filtrados.slice(inicio, inicio + porPagina),
+            total: filtrados.length
+        };
+    }
+
+    async buscarLectoresLocales(busqueda = '', pagina = 0, porPagina = 25) {
+        const bd = await abrir();
+        const todos = await conAlmacen(bd, 'lectores', 'readonly', almacen => pedido(almacen.getAll()));
+        const limpia = (busqueda || '').trim().toLowerCase();
+        const filtrados = limpia ? todos.filter(l => 
+            (l.nombre && l.nombre.toLowerCase().includes(limpia)) ||
+            (l.rut && l.rut.toLowerCase().includes(limpia)) ||
+            (l.email && l.email.toLowerCase().includes(limpia))
+        ) : todos;
+        filtrados.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+        const inicio = pagina * porPagina;
+        return {
+            lectores: filtrados.slice(inicio, inicio + porPagina),
+            total: filtrados.length
+        };
+    }
+
     /**
      * Sincroniza el catálogo completo. Delta por `actualizado_en`: la primera
      * vez trae todo; después, solo lo que cambió. También aplica las lápidas

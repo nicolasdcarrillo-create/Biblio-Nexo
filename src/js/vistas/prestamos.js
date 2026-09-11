@@ -21,7 +21,7 @@
 import { PrestamoRepository } from '../repositorios/PrestamoRepository.js';
 import { LectorRepository } from '../repositorios/LectorRepository.js';
 import { ReservaRepository } from '../repositorios/ReservaRepository.js';
-import { escapeHtml } from '../modules/utilidades.js';
+import { html, crudo } from '../modules/utilidades.js';
 
 export default {
   async renderLoans() {
@@ -48,7 +48,7 @@ export default {
     this._loansCache = visibles;
     const pendientes = conteos.vencidos + conteos.porVencer;
 
-    const chip = (clave, texto, cantidad, color) => `
+    const chip = (clave, texto, cantidad, color) => html`
       <button data-filter="${clave}" class="loan-filter-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
         filtro === clave
           ? 'bg-patrimonio-lago text-white border-patrimonio-lago'
@@ -57,7 +57,7 @@ export default {
         ${texto} <span class="${filtro === clave ? 'text-white/70' : color}">${cantidad}</span>
       </button>`;
 
-    container.innerHTML = `
+    container.innerHTML = html`
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div class="flex flex-wrap gap-2">
           ${chip('todos', 'Todos', conteos.todos, 'text-stone-500')}
@@ -85,31 +85,31 @@ export default {
             </tr>
           </thead>
           <tbody>
-            ${visibles.map(l => {
+            ${visibles.length ? visibles.map(l => {
               const estado = this._estadoPrestamo(l.fecha_devolucion_esperada);
               const sinContacto = !l.lectores?.email && this.formatPhone(l.lectores?.telefono).length < 11;
               const colorFecha = estado.clave === 'vencido' ? 'text-rose-700 font-bold'
                 : estado.clave === 'porVencer' ? 'text-amber-700 font-bold' : 'text-stone-600';
-              return `
+              return html`
               <tr class="border-t border-stone-200">
-                <td class="px-4 py-3 font-bold text-stone-800">${escapeHtml(l.libros?.titulo)}</td>
+                <td class="px-4 py-3 font-bold text-stone-800">${l.libros?.titulo}</td>
                 <td class="px-4 py-3 text-stone-600">
-                  <div>${escapeHtml(l.lectores?.nombre)}</div>
-                  <div class="text-[11px] text-stone-500 font-mono">${escapeHtml(l.lectores?.rut || '')}</div>
+                  <div>${l.lectores?.nombre}</div>
+                  <div class="text-[11px] text-stone-500 font-mono">${l.lectores?.rut || ''}</div>
                 </td>
                 <td class="px-4 py-3 ${colorFecha}">
                   <div>${this._fechaLegible(l.fecha_devolucion_esperada)}</div>
                   ${estado.clave === 'vencido'
-                    ? `<span class="stamp stamp-danger mt-1"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> ${escapeHtml(estado.etiqueta)}</span>`
-                    : `<div class="text-[11px] font-medium ${estado.clave === 'porVencer' ? 'text-amber-700' : 'text-stone-500'}">${escapeHtml(estado.etiqueta)}</div>`}
+                    ? html`<span class="stamp stamp-danger mt-1"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> ${estado.etiqueta}</span>`
+                    : html`<div class="text-[11px] font-medium ${estado.clave === 'porVencer' ? 'text-amber-700' : 'text-stone-500'}">${estado.etiqueta}</div>`}
                 </td>
                 <td class="px-4 py-3 text-right whitespace-nowrap space-x-3">
-                  ${estado.clave !== 'alDia' ? `
+                  ${estado.clave !== 'alDia' ? html`
                     <button class="notify-loan-btn font-bold ${sinContacto ? 'text-stone-500' : 'text-patrimonio-madera'}" data-id="${l.id}"
                       title="${sinContacto ? 'Sin datos de contacto' : 'Enviar aviso al lector'}">
                       <i aria-hidden="true" class="fas fa-bell"></i> Avisar
                     </button>` : ''}
-                  ${estado.clave !== 'vencido' && (l.renovaciones ?? 0) < this.param('max_renovaciones') ? `
+                  ${estado.clave !== 'vencido' && (l.renovaciones ?? 0) < this.param('max_renovaciones') ? html`
                     <button class="renew-loan-btn text-patrimonio-lago font-bold" data-id="${l.id}"
                       title="Extiende 7 días. Quedan ${this.param('max_renovaciones') - (l.renovaciones ?? 0)}.">
                       <i aria-hidden="true" class="fas fa-clock-rotate-left"></i> Renovar
@@ -117,15 +117,15 @@ export default {
                   <button class="return-loan-btn text-patrimonio-bosque font-bold" data-id="${l.id}">Devolver</button>
                 </td>
               </tr>
-            `; }).join('') || `<tr><td colspan="4" class="px-4 py-8 text-center text-stone-500">${
+            `; }) : html`<tr><td colspan="4" class="px-4 py-8 text-center text-stone-500">${
               filtro === 'vencidos' ? 'No hay préstamos atrasados.'
               : filtro === 'porVencer' ? 'No hay préstamos por vencer.'
               : 'No hay préstamos activos.'}</td></tr>`}
           </tbody>
         </table>
-        <div id="loans-pagination">${this._paginacionHtml(this.loanPage, total, porPagina, 'loan-page-btn')}</div>
+        <div id="loans-pagination">${crudo(this._paginacionHtml(this.loanPage, total, porPagina, 'loan-page-btn'))}</div>
       </div>
-    `;
+    `.toString();
 
     this._bindPaginacion(container, '.loan-page-btn', p => { this.loanPage = p; this.renderLoans(); });
 
@@ -201,7 +201,7 @@ export default {
   showBulkNotifyModal(prestamos) {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh]">
         <div class="p-6 pb-4">
           <h3 class="font-serif text-lg font-bold text-stone-900">Avisos pendientes</h3>
@@ -210,24 +210,24 @@ export default {
         <div class="overflow-y-auto px-6 divide-y divide-stone-200 border-t border-stone-200">
           ${prestamos.map(l => {
             const estado = this._estadoPrestamo(l.fecha_devolucion_esperada);
-            return `
+            return html`
             <div class="py-3 flex items-center justify-between gap-3">
               <div class="min-w-0">
-                <p class="font-bold text-stone-800 text-sm truncate">${escapeHtml(l.lectores?.nombre)}</p>
-                <p class="text-xs text-stone-500 truncate">${escapeHtml(l.libros?.titulo)}</p>
-                <p class="text-[11px] font-bold ${estado.clave === 'vencido' ? 'text-rose-700' : 'text-amber-700'}">${escapeHtml(estado.etiqueta)}</p>
+                <p class="font-bold text-stone-800 text-sm truncate">${l.lectores?.nombre}</p>
+                <p class="text-xs text-stone-500 truncate">${l.libros?.titulo}</p>
+                <p class="text-[11px] font-bold ${estado.clave === 'vencido' ? 'text-rose-700' : 'text-amber-700'}">${estado.etiqueta}</p>
               </div>
               <button data-notify-id="${l.id}" class="btn-secundario shrink-0 bg-patrimonio-madera text-white px-3 py-1.5 rounded-lg text-xs font-bold">
                 <i aria-hidden="true" class="fas fa-bell mr-1"></i> Avisar
               </button>
             </div>`;
-          }).join('')}
+          })}
         </div>
         <div class="p-6 pt-4 flex justify-end border-t border-stone-200">
           <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
         </div>
       </div>
-    `;
+    `.toString();
     document.body.appendChild(overlay);
 
     const cerrar = this._prepararModal(overlay);
@@ -280,46 +280,46 @@ export default {
 
     if (!estado.existe) {
       // Lector nuevo
-      cuerpo = `
+      cuerpo = html`
         <div class="bg-patrimonio-lago/5 border border-patrimonio-lago/20 rounded-xl p-4 text-center">
           <i aria-hidden="true" class="fas fa-user-plus text-2xl text-patrimonio-lago mb-2"></i>
           <p class="font-bold text-stone-800">Lector nuevo</p>
-          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${escapeHtml(rut)}</span> no está registrado.</p>
+          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${rut}</span> no está registrado.</p>
           <p class="text-xs text-stone-500 mt-2">Regístralo para poder prestarle libros.</p>
         </div>`;
-      acciones = `
+      acciones = html`
         <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
         <button data-action="registrar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar lector</button>`;
     } else if (!estado.puede_prestar) {
       // Impedido
-      cuerpo = `
+      cuerpo = html`
         <div class="bg-rose-50 border border-rose-200 rounded-xl p-4">
           <p class="font-bold text-rose-800 mb-1"><i aria-hidden="true" class="fas fa-ban mr-1.5"></i>No se puede prestar</p>
-          <p class="text-sm text-rose-700">${escapeHtml(estado.motivo_rechazo || 'El lector está impedido de pedir libros.')}</p>
+          <p class="text-sm text-rose-700">${estado.motivo_rechazo || 'El lector está impedido de pedir libros.'}</p>
         </div>
         ${this._resumenLector(estado)}`;
-      acciones = `
+      acciones = html`
         <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
         <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
     } else {
       // Todo en orden
-      cuerpo = `
+      cuerpo = html`
         <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-          <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${escapeHtml(estado.nombre)}</p>
+          <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${estado.nombre}</p>
           <p class="text-sm text-emerald-700 mt-0.5">Puede llevar este libro.</p>
         </div>
         ${this._resumenLector(estado)}`;
-      acciones = `
+      acciones = html`
         <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
         <button data-action="prestar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Confirmar préstamo</button>`;
     }
 
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <h3 class="font-serif text-lg font-bold text-stone-900">Situación del lector</h3>
         ${cuerpo}
         <div class="flex justify-end gap-3 pt-1 flex-wrap">${acciones}</div>
-      </div>`;
+      </div>`.toString();
     document.body.appendChild(overlay);
 
     const cerrar = this._prepararModal(overlay);
@@ -366,20 +366,20 @@ export default {
 
   // Resumen numérico de la situación de un lector
   _resumenLector(estado) {
-    const dato = (etiqueta, valor, color = 'text-stone-900') => `
+    const dato = (etiqueta, valor, color = 'text-stone-900') => html`
       <div class="text-center">
         <p class="font-serif font-bold text-2xl ${color}">${valor}</p>
         <p class="text-[10px] uppercase tracking-widest text-stone-500 mt-0.5">${etiqueta}</p>
       </div>`;
-    return `
+    return html`
       <div class="grid grid-cols-3 gap-2 border border-stone-200 rounded-xl py-3">
         ${dato('Activos', estado.prestamos_activos ?? 0)}
         ${dato('Atrasados', estado.prestamos_atrasados ?? 0, (estado.prestamos_atrasados ?? 0) > 0 ? 'text-rose-700' : 'text-stone-900')}
         ${dato('Máximo', this.param('max_prestamos_por_lector'))}
       </div>
-      ${estado.email || estado.telefono ? `
+      ${estado.email || estado.telefono ? html`
         <p class="text-[11px] text-stone-500 text-center">
-          ${estado.email ? escapeHtml(estado.email) : ''}${estado.email && estado.telefono ? ' · ' : ''}${estado.telefono ? escapeHtml(estado.telefono) : ''}
+          ${estado.email ? estado.email : ''}${estado.email && estado.telefono ? ' · ' : ''}${estado.telefono ? estado.telefono : ''}
         </p>` : ''}`;
   },
 
@@ -387,7 +387,7 @@ export default {
   showNuevoLectorModal(rut, alGuardar) {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <div>
           <h3 class="font-serif text-lg font-bold text-stone-900">Registrar lector nuevo</h3>
@@ -396,7 +396,7 @@ export default {
         <div class="space-y-3">
           <div>
             <label for="new-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
-            <input id="new-user-id" value="${escapeHtml(rut)}" readonly
+            <input id="new-user-id" value="${rut}" readonly
               class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm font-mono text-stone-600" />
           </div>
           <div>
@@ -415,12 +415,12 @@ export default {
               class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
-        ${this._bloqueConsentimiento('new')}
+        ${crudo(this._bloqueConsentimiento('new'))}
         <div class="flex justify-end gap-3 pt-1">
           <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
           <button data-action="save" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar y continuar</button>
         </div>
-      </div>`;
+      </div>`.toString();
     document.body.appendChild(overlay);
 
     const cerrar = this._prepararModal(overlay);
@@ -502,44 +502,44 @@ export default {
     let cuerpo, acciones;
 
     if (!estado.existe) {
-      cuerpo = `
+      cuerpo = html`
         <div class="bg-patrimonio-lago/5 border border-patrimonio-lago/20 rounded-xl p-4 text-center">
           <i aria-hidden="true" class="fas fa-user-plus text-2xl text-patrimonio-lago mb-2"></i>
           <p class="font-bold text-stone-800">Lector nuevo</p>
-          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${escapeHtml(rut)}</span> no está registrado.</p>
+          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${rut}</span> no está registrado.</p>
           <p class="text-xs text-stone-500 mt-2">Regístralo para poder reservarle un libro.</p>
         </div>`;
-      acciones = `
+      acciones = html`
         <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
         <button data-action="registrar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar lector</button>`;
     } else if (!estado.puede_prestar) {
-      cuerpo = `
+      cuerpo = html`
         <div class="bg-rose-50 border border-rose-200 rounded-xl p-4">
           <p class="font-bold text-rose-800 mb-1"><i aria-hidden="true" class="fas fa-ban mr-1.5"></i>No se puede reservar</p>
-          <p class="text-sm text-rose-700">${escapeHtml(estado.motivo_rechazo || 'El lector está impedido de pedir libros.')}</p>
+          <p class="text-sm text-rose-700">${estado.motivo_rechazo || 'El lector está impedido de pedir libros.'}</p>
         </div>
         ${this._resumenLector(estado)}`;
-      acciones = `
+      acciones = html`
         <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
         <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
     } else {
-      cuerpo = `
+      cuerpo = html`
         <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-          <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${escapeHtml(estado.nombre)}</p>
+          <p class="font-bold text-emerald-800"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>${estado.nombre}</p>
           <p class="text-sm text-emerald-700 mt-0.5">Se puede poner en la fila de espera de este libro.</p>
         </div>
         ${this._resumenLector(estado)}`;
-      acciones = `
+      acciones = html`
         <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
         <button data-action="reservar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Confirmar reserva</button>`;
     }
 
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <h3 class="font-serif text-lg font-bold text-stone-900">Situación del lector</h3>
         ${cuerpo}
         <div class="flex justify-end gap-3 pt-1 flex-wrap">${acciones}</div>
-      </div>`;
+      </div>`.toString();
     document.body.appendChild(overlay);
 
     const cerrar = this._prepararModal(overlay);
@@ -587,16 +587,16 @@ export default {
       const estado = await LectorRepository.estadoLector(rut);
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
-      overlay.innerHTML = `
+      overlay.innerHTML = html`
         <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
           <div>
-            <h3 class="font-serif text-lg font-bold text-stone-900">${escapeHtml(estado.nombre || 'Lector')}</h3>
-            <p class="text-xs font-mono text-stone-500">${escapeHtml(estado.rut || rut)}</p>
+            <h3 class="font-serif text-lg font-bold text-stone-900">${estado.nombre || 'Lector'}</h3>
+            <p class="text-xs font-mono text-stone-500">${estado.rut || rut}</p>
           </div>
-          ${!estado.puede_prestar ? `
+          ${!estado.puede_prestar ? html`
             <div class="bg-rose-50 border border-rose-200 rounded-xl p-3">
-              <p class="text-sm text-rose-700"><i aria-hidden="true" class="fas fa-ban mr-1.5"></i>${escapeHtml(estado.motivo_rechazo || '')}</p>
-            </div>` : `
+              <p class="text-sm text-rose-700"><i aria-hidden="true" class="fas fa-ban mr-1.5"></i>${estado.motivo_rechazo || ''}</p>
+            </div>` : html`
             <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
               <p class="text-sm text-emerald-700"><i aria-hidden="true" class="fas fa-circle-check mr-1.5"></i>Puede pedir libros prestados.</p>
             </div>`}
@@ -604,7 +604,7 @@ export default {
           <div class="flex justify-end pt-1">
             <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
           </div>
-        </div>`;
+        </div>`.toString();
       document.body.appendChild(overlay);
       const cerrar = this._prepararModal(overlay);
       overlay.querySelector('[data-action="close"]').addEventListener('click', cerrar);

@@ -10,28 +10,28 @@
 // prototipo: `this.foo()` no le importa en qué archivo se declaró `foo`.
 
 import { LectorRepository } from '../repositorios/LectorRepository.js';
-import { escapeHtml } from '../modules/utilidades.js';
+import { html, crudo } from '../modules/utilidades.js';
 
 export default {
   // UX-04: HTML de las filas de lectores. Separado para refrescar solo el tbody 
   // al buscar, sin destruir el formulario superior.
   _renderUserRows(users) {
-    return users.map(u => `
+    return users.length ? users.map(u => html`
       <tr class="border-t border-stone-200">
-        <td class="px-4 py-3 font-bold text-stone-800">${escapeHtml(u.nombre)}</td>
-        <td class="px-4 py-3 text-stone-600 font-mono">${escapeHtml(u.rut)}</td>
+        <td class="px-4 py-3 font-bold text-stone-800">${u.nombre}</td>
+        <td class="px-4 py-3 text-stone-600 font-mono">${u.rut}</td>
         <td class="px-4 py-3 text-stone-600">
-          <div>${escapeHtml(u.email || '—')}</div>
-          <div class="text-xs text-stone-500">${escapeHtml(u.telefono || '—')}</div>
+          <div>${u.email || '—'}</div>
+          <div class="text-xs text-stone-500">${u.telefono || '—'}</div>
         </td>
         <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
           <button class="edit-user-btn text-stone-500 hover:text-patrimonio-madera font-bold" data-id="${u.id}">Editar</button>
           ${this.currentUserRole === 'admin'
-            ? `<button class="delete-user-btn text-rose-700 font-bold" data-id="${u.id}">Eliminar</button>`
+            ? html`<button class="delete-user-btn text-rose-700 font-bold" data-id="${u.id}">Eliminar</button>`
             : ''}
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">${this.userSearch ? 'Ningún lector coincide con la búsqueda.' : 'Sin lectores registrados. Agrega el primero con el formulario de arriba.'}</td></tr>`;
+    `) : html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">${this.userSearch ? 'Ningún lector coincide con la búsqueda.' : 'Sin lectores registrados. Agrega el primero con el formulario de arriba.'}</td></tr>`;
   },
 
   _bindUserRowEvents(container) {
@@ -76,7 +76,7 @@ export default {
     if (soloTabla) {
       const tbody = container.querySelector('tbody');
       if (tbody) {
-        tbody.innerHTML = this._renderUserRows(users);
+        tbody.innerHTML = crudo(this._renderUserRows(users)).toString();
         const pag = container.querySelector('#users-pagination');
         if (pag) pag.innerHTML = this._paginacionHtml(this.userPage, total, porPagina, 'user-page-btn');
         this._bindUserRowEvents(container);
@@ -85,7 +85,7 @@ export default {
       return;
     }
 
-    container.innerHTML = `
+    container.innerHTML = html`
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mb-6">
         <div class="catalog-card-header">
           <h3 class="font-serif font-semibold text-lg text-stone-900">Agregar lector</h3>
@@ -109,7 +109,7 @@ export default {
               <input id="new-user-email" required type="email" placeholder="nombre@correo.cl" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
             </div>
           </div>
-          <div class="mt-4">${this._bloqueConsentimiento('new')}</div>
+          <div class="mt-4">${crudo(this._bloqueConsentimiento('new'))}</div>
           <button type="submit" class="btn-madera mt-4 w-full md:w-auto md:px-8 text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm">Agregar lector</button>
         </form>
       </div>
@@ -118,7 +118,7 @@ export default {
           <h3 class="font-serif font-semibold text-lg text-stone-900">Lectores registrados</h3>
           <div class="relative sm:w-64">
             <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-xs"></i>
-            <input id="user-search-input" aria-label="Buscar lector por nombre, RUT o correo" type="text" placeholder="Buscar por nombre, RUT o correo..." value="${escapeHtml(this.userSearch || '')}"
+            <input id="user-search-input" aria-label="Buscar lector por nombre, RUT o correo" type="text" placeholder="Buscar por nombre, RUT o correo..." value="${this.userSearch || ''}"
               class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 rounded-md bg-white focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
@@ -135,7 +135,7 @@ export default {
             ${this._renderUserRows(users)}
           </tbody>
         </table>
-        <div id="users-pagination">${this._paginacionHtml(this.userPage, total, porPagina, 'user-page-btn')}</div>
+        <div id="users-pagination">${crudo(this._paginacionHtml(this.userPage, total, porPagina, 'user-page-btn'))}</div>
       </div>
     `;
 
@@ -182,10 +182,10 @@ export default {
   showEditUserModal(lector) {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
-    const campo = (id, etiqueta, valor, extra = '') => `
+    const campo = (id, etiqueta, valor, extra = '') => html`
       <div>
         <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">${etiqueta}</label>
-        <input id="${id}" value="${escapeHtml(valor ?? '')}" ${extra}
+        <input id="${id}" value="${valor ?? ''}" ${crudo(extra)}
           class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
       </div>`;
 
@@ -195,16 +195,16 @@ export default {
     // quien detecta que falta un teléfono es justamente quien está en el mesón.
     const esAdmin = this.currentUserRole === 'admin';
 
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <h3 class="font-serif text-lg font-bold text-stone-900">Editar lector</h3>
         <div class="space-y-3">
           ${campo('edit-user-name', 'Nombre completo', lector.nombre)}
           ${esAdmin
             ? campo('edit-user-id', 'RUT', lector.rut)
-            : `<div>
+            : html`<div>
                  <label for="edit-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
-                 <input id="edit-user-id" value="${escapeHtml(lector.rut ?? '')}" readonly
+                 <input id="edit-user-id" value="${lector.rut ?? ''}" readonly
                    class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm font-mono text-stone-500" />
                  <p class="text-[11px] text-stone-500 mt-1">Solo un administrador puede corregir un RUT.</p>
                </div>`}
@@ -215,7 +215,7 @@ export default {
           <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
           <button data-action="save" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Guardar cambios</button>
         </div>
-      </div>`;
+      </div>`.toString();
     document.body.appendChild(overlay);
 
     const cerrar = this._prepararModal(overlay);

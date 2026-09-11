@@ -16,7 +16,10 @@ export default {
   // UX-04: HTML de las filas de lectores. Separado para refrescar solo el tbody 
   // al buscar, sin destruir el formulario superior.
   _renderUserRows(users) {
-    return users.length ? users.map(u => html`
+    if (!users.length) {
+      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">${this.userSearch ? 'Ningún lector coincide con la búsqueda.' : 'Sin lectores registrados. Agrega el primero con el formulario de arriba.'}</td></tr>`;
+    }
+    return html`${users.map(u => html`
       <tr class="border-t border-stone-200">
         <td class="px-4 py-3 font-bold text-stone-800">${u.nombre}</td>
         <td class="px-4 py-3 text-stone-600 font-mono">${u.rut}</td>
@@ -31,7 +34,7 @@ export default {
             : ''}
         </td>
       </tr>
-    `) : html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">${this.userSearch ? 'Ningún lector coincide con la búsqueda.' : 'Sin lectores registrados. Agrega el primero con el formulario de arriba.'}</td></tr>`;
+    `)}`;
   },
 
   _bindUserRowEvents(container) {
@@ -76,7 +79,7 @@ export default {
     if (soloTabla) {
       const tbody = container.querySelector('tbody');
       if (tbody) {
-        tbody.innerHTML = crudo(this._renderUserRows(users)).toString();
+        tbody.innerHTML = this._renderUserRows(users).toString();
         const pag = container.querySelector('#users-pagination');
         if (pag) pag.innerHTML = this._paginacionHtml(this.userPage, total, porPagina, 'user-page-btn');
         this._bindUserRowEvents(container);

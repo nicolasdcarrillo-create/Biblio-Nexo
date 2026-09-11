@@ -111,8 +111,8 @@ export default {
         const tbody = document.getElementById('catalog-tbody');
         if (this.currentView !== 'catalog' || !tbody) return;
         this._booksCache = resultados;
-        // Se usa crudo() porque this._renderBookRows devuelve un objeto HtmlSeguro
-        tbody.innerHTML = crudo(this._renderBookRows(resultados)).toString();
+        // _renderBookRows siempre devuelve HtmlSeguro — llamar .toString() es suficiente
+        tbody.innerHTML = this._renderBookRows(resultados).toString();
         const paginacion = document.getElementById('catalog-pagination');
         if (paginacion) {
           paginacion.innerHTML = this._paginacionHtml(0, totalNuevo, porPagina, 'catalog-page-btn');
@@ -126,7 +126,10 @@ export default {
   // HTML de las filas del catálogo. Separado de renderCatalog para poder
   // refrescar solo el <tbody> cuando se busca, sin recrear todo el formulario.
   _renderBookRows(books) {
-    return books.length ? books.map(b => html`
+    if (!books.length) {
+      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">Sin libros que coincidan con la búsqueda.</td></tr>`;
+    }
+    return html`${books.map(b => html`
       <tr class="border-t border-stone-200">
         <td class="px-4 py-3">
           <div class="flex items-start gap-3">
@@ -153,7 +156,7 @@ export default {
             <button class="delete-book-btn text-rose-700 font-bold" data-id="${b.id}">Eliminar</button>` : ''}
         </td>
       </tr>
-    `) : html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">Sin libros que coincidan con la búsqueda.</td></tr>`;
+    `)}`;
   },
 
   // Vuelve a enganchar los botones de Prestar/Reservar/Eliminar del catálogo. Se

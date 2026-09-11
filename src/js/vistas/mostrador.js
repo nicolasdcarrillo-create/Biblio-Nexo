@@ -497,7 +497,7 @@ export default {
         btn.disabled = true;
         try {
           await ReservaRepository.retirarReserva(btn.dataset.entregarReserva);
-          this.showToast('Reserva entregada. Se ha registrado el pr�stamo.', 'success');
+          this.showToast('Reserva entregada. Se ha registrado el préstamo.', 'success');
           recargar();
         } catch (err) {
           this.showToast(err.message || 'Error al entregar la reserva.', 'error');
@@ -510,7 +510,10 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const { lector } = await LectorRepository.estadoLector(btn.dataset.rut);
+          // estadoLector devuelve objeto plano (nombre, email, telefono, etc.),
+          // no un objeto anidado { lector: {...} }. Se mapea al formato que espera showNotifyReservaModal.
+          const datos = await LectorRepository.estadoLector(btn.dataset.rut);
+          const lector = { nombre: datos.nombre, email: datos.email, telefono: datos.telefono };
           if (typeof this.showNotifyReservaModal === 'function') {
             this.showNotifyReservaModal(
               { vence_apartado_en: btn.dataset.vence },
@@ -518,7 +521,7 @@ export default {
               lector
             );
           } else {
-            this.showToast('El m�dulo de notificaciones no est� disponible.', 'error');
+            this.showToast('El módulo de notificaciones no está disponible.', 'error');
           }
         } catch (err) {
           this.showToast(err.message || 'Error al obtener datos del lector.', 'error');

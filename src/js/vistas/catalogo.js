@@ -37,14 +37,32 @@ export default {
         <div class="catalog-card-header">
           <h3 class="font-serif font-semibold text-lg text-stone-900">Agregar libro</h3>
         </div>
-        <form id="add-book-form" class="grid grid-cols-2 md:grid-cols-6 gap-3 p-5">
-          <input id="new-book-isbn" aria-label="ISBN del libro" placeholder="ISBN" class="col-span-2 md:col-span-1 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <input id="new-book-title" aria-label="Título del libro" placeholder="Título" class="col-span-2 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <input id="new-book-author" aria-label="Autor del libro" placeholder="Autor" class="col-span-2 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <input id="new-book-genre" aria-label="Género del libro" placeholder="Género" class="px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <input id="new-book-location" aria-label="Ubicación en la biblioteca" placeholder="Ubicación" class="px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <input id="new-book-qty" aria-label="Cantidad de ejemplares" type="number" min="1" value="1" placeholder="Cantidad" class="px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <button type="submit" class="btn-madera col-span-2 md:col-span-1 text-white font-sans font-medium rounded-xl shadow py-2 text-sm">Agregar</button>
+        <form id="add-book-form" class="grid grid-cols-2 md:grid-cols-6 gap-3 p-5 items-end">
+          <div class="col-span-2 md:col-span-1">
+            <label for="new-book-isbn" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">ISBN</label>
+            <input id="new-book-isbn" aria-label="ISBN del libro" placeholder="978..." class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          </div>
+          <div class="col-span-2">
+            <label for="new-book-title" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Título</label>
+            <input id="new-book-title" aria-label="Título del libro" placeholder="Cien años de soledad" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          </div>
+          <div class="col-span-2">
+            <label for="new-book-author" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Autor</label>
+            <input id="new-book-author" aria-label="Autor del libro" placeholder="Gabriel García Márquez" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          </div>
+          <div>
+            <label for="new-book-genre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Género</label>
+            <input id="new-book-genre" aria-label="Género del libro" placeholder="Opcional" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          </div>
+          <div>
+            <label for="new-book-location" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Ubicación</label>
+            <input id="new-book-location" aria-label="Ubicación en la biblioteca" placeholder="Estante 3" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          </div>
+          <div>
+            <label for="new-book-qty" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Ejemplares</label>
+            <input id="new-book-qty" aria-label="Cantidad de ejemplares" type="number" min="1" value="1" placeholder="1" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+          </div>
+          <button id="add-book-submit-btn" type="submit" class="btn-madera col-span-2 md:col-span-1 text-white font-sans font-medium rounded-xl shadow py-2 text-sm w-full h-[38px] flex items-center justify-center">Agregar</button>
         </form>
       </div>
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
@@ -76,6 +94,12 @@ export default {
     document.getElementById('add-book-form').addEventListener('submit', async e => {
       e.preventDefault();
       if (!this.validateBookForm(false)) return;
+      
+      const submitBtn = document.getElementById('add-book-submit-btn');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Guardando...';
+      
       try {
         const r = await LibroRepository.agregarLibro({
           isbn: document.getElementById('new-book-isbn').value.trim(),
@@ -93,6 +117,13 @@ export default {
         this.renderCatalog();
       } catch (err) {
         this.showToast(err.message || 'No se pudo agregar el libro.', 'error');
+      } finally {
+        // En caso de éxito, renderCatalog recarga todo el DOM, por lo que reestablecer el botón
+        // solo es visible en caso de error, pero es buena práctica.
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
       }
     });
 

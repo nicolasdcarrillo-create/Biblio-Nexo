@@ -60,7 +60,12 @@ export default {
           <input id="manual-scan-input" aria-label="Escribir el código del libro manualmente" placeholder="Ingrese el ISBN manualmente" class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           <button id="manual-scan-btn" class="bg-patrimonio-lago hover:bg-[#14303c] text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm transition-colors">Buscar</button>
         </div>
-        <div id="scan-result" class="mt-5"></div>
+        <div id="scan-result" class="mt-5">
+          <div class="text-center py-8 text-stone-400">
+            <i aria-hidden="true" class="fas fa-barcode text-4xl mb-3"></i>
+            <p class="text-sm">Ingrese el ISBN o escanee un libro para ver su situación.</p>
+          </div>
+        </div>
       </div>
     `;
 
@@ -92,13 +97,23 @@ export default {
     document.getElementById('qr-remoto-btn').addEventListener('click', () => this.showQrRemotoModal());
 
     const buscarManual = () => {
-      const code = document.getElementById('manual-scan-input').value.trim();
-      if (code) showResult(code);
+      const input = document.getElementById('manual-scan-input');
+      const code = input.value.trim();
+      if (code) {
+        showResult(code);
+        input.value = ''; // UX2: Limpiar para el siguiente escaneo
+        input.focus(); // UX1: Mantener el foco
+      }
     };
     document.getElementById('manual-scan-btn').addEventListener('click', buscarManual);
     document.getElementById('manual-scan-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') buscarManual();
     });
+
+    // UX1: Auto-focus al cargar la vista
+    setTimeout(() => {
+      document.getElementById('manual-scan-input')?.focus();
+    }, 100);
   },
 
   /**
@@ -171,13 +186,16 @@ export default {
     // llenarlo a mano — nunca bloquea el alta.
     const datos = await buscarPorIsbnExterno(code);
     const avisoBuscando = document.getElementById('scan-new-book-buscando');
-    if (avisoBuscando) avisoBuscando.remove();
     if (datos) {
+      if (avisoBuscando) avisoBuscando.remove();
       const tituloInput = document.getElementById('scan-new-book-title');
       const autorInput = document.getElementById('scan-new-book-author');
       // No se pisa lo que la persona ya haya escrito mientras se esperaba.
       if (tituloInput && !tituloInput.value.trim() && datos.titulo) tituloInput.value = datos.titulo;
       if (autorInput && !autorInput.value.trim() && datos.autor) autorInput.value = datos.autor;
+    } else {
+      // UX5: Feedback cuando Open Library no encuentra el libro
+      if (avisoBuscando) avisoBuscando.innerHTML = '<i aria-hidden="true" class="fas fa-info-circle mr-1 text-stone-400"></i> No se encontraron datos automáticos. Llene los campos manualmente.';
     }
   },
 

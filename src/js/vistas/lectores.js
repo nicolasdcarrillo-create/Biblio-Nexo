@@ -113,7 +113,7 @@ export default {
             </div>
           </div>
           <div class="mt-4">${crudo(this._bloqueConsentimiento('new'))}</div>
-          <button type="submit" class="btn-madera mt-4 w-full md:w-auto md:px-8 text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm">Agregar lector</button>
+          <button id="add-user-submit-btn" type="submit" class="btn-madera mt-4 w-full md:w-auto md:px-8 text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm h-[40px] flex items-center justify-center">Agregar lector</button>
         </form>
       </div>
       <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
@@ -142,9 +142,28 @@ export default {
       </div>
     `;
 
+    const inputNewRut = document.getElementById('new-user-id');
+    if (inputNewRut) {
+      inputNewRut.addEventListener('input', () => {
+        let val = inputNewRut.value;
+        if (/^[0-9kK\-\.]+$/.test(val)) {
+           const limpio = val.replace(/[.\-\s]/g, '').toUpperCase();
+           if (limpio.length > 1) {
+             inputNewRut.value = `${limpio.slice(0, -1)}-${limpio.slice(-1)}`;
+           }
+        }
+      });
+    }
+
     document.getElementById('add-user-form').addEventListener('submit', async e => {
       e.preventDefault();
       if (!this.validateUserForm(false)) return;
+      
+      const submitBtn = document.getElementById('add-user-submit-btn');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Guardando...';
+      
       try {
         const consent = this._datosConsentimiento('new');
         if (!consent) return;
@@ -159,6 +178,11 @@ export default {
         this.renderUsers();
       } catch (err) {
         this.showToast(err.message || 'No se pudo agregar el lector.', 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
       }
     });
 
@@ -209,7 +233,7 @@ export default {
                  <label for="edit-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
                  <input id="edit-user-id" value="${lector.rut ?? ''}" readonly
                    class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm font-mono text-stone-500" />
-                 <p class="text-[11px] text-stone-500 mt-1">Solo un administrador puede corregir un RUT.</p>
+                 <p class="text-[11px] text-stone-500 mt-1">Solo un administrador puede corregir un RUT. Si detectas un error, contacta al encargado de la biblioteca.</p>
                </div>`}
           ${campo('edit-user-phone', 'Teléfono', lector.telefono, 'type="tel"')}
           ${campo('edit-user-email', 'Correo', lector.email, 'type="email"')}
@@ -224,6 +248,21 @@ export default {
     const cerrar = this._prepararModal(overlay);
     overlay.querySelector('[data-action="cancel"]').addEventListener('click', cerrar);
     overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    if (esAdmin) {
+      const editRut = overlay.querySelector('#edit-user-id');
+      if (editRut) {
+        editRut.addEventListener('input', () => {
+          let val = editRut.value;
+          if (/^[0-9kK\-\.]+$/.test(val)) {
+             const limpio = val.replace(/[.\-\s]/g, '').toUpperCase();
+             if (limpio.length > 1) {
+               editRut.value = `${limpio.slice(0, -1)}-${limpio.slice(-1)}`;
+             }
+          }
+        });
+      }
+    }
 
     overlay.querySelector('[data-action="save"]').addEventListener('click', async e => {
       if (!this.validateUserForm(true)) return;

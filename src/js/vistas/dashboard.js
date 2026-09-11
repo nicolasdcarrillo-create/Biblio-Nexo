@@ -10,10 +10,22 @@ export default {
 
     // Llamada asíncrona a Supabase (nombres alineados con db.obtenerEstadisticas)
     const stats = await db.obtenerEstadisticas();
+    // UX12: Alerta de reservas apartadas por expirar
+    const reservasListas = await db.obtenerReservasApartadas();
+    
     // Si el usuario ya cambió de vista mientras esperábamos la respuesta, no pintamos nada
     if (this.currentView !== 'dashboard') return;
     const roleInfo = CONFIG.ROLE_LABELS[this.currentUserRole] || CONFIG.ROLE_LABELS.librero;
     const isAdmin = this.currentUserRole === 'admin';
+
+    // Determinar reservas a punto de vencer (< 24h)
+    const hoyMs = new Date().getTime();
+    const reservasPorVencer = reservasListas.filter(r => {
+      if (!r.vence_apartado_en) return false;
+      const venceEnMs = new Date(r.vence_apartado_en).getTime();
+      const diffHoras = (venceEnMs - hoyMs) / (1000 * 60 * 60);
+      return diffHoras >= 0 && diffHoras <= 24;
+    });
 
     const cards = [
       { label: 'Préstamos activos', value: stats.prestamos, icon: 'fa-right-left', color: 'text-patrimonio-lago' },
@@ -56,6 +68,16 @@ on conflict (id) do update set rol = 'admin';</pre>
         <h3 class="font-serif font-semibold text-xl text-stone-900">Hola, ${this._nombreParaSaludo()}</h3>
         <p class="text-xs text-stone-500">${roleInfo.welcome}</p>
       </div>
+
+      ${reservasPorVencer.length > 0 ? html`
+        <div class="mb-5 bg-sky-50 border border-sky-300 rounded-xl px-4 py-3" role="alert">
+          <p class="text-sm font-bold text-sky-900 mb-1">
+            <i aria-hidden="true" class="fas fa-clock mr-1.5"></i>Reservas a punto de vencer
+          </p>
+          <p class="text-xs text-sky-800 leading-relaxed">
+            Hay <strong>${reservasPorVencer.length}</strong> reserva(s) de libros apartados que expiran en menos de 24 horas si los lectores no los retiran. Considera enviarles un recordatorio.
+          </p>
+        </div>` : ''}
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         ${cards.map(c => html`

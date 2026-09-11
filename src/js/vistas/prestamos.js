@@ -242,15 +242,120 @@ export default {
     });
   },
 
+  // UX10: Búsqueda de lector por nombre (reemplaza al viejo prompt de RUT)
+  async _seleccionarLectorModal(titulo) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+      overlay.innerHTML = `
+        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <h3 class="font-serif text-lg font-bold text-stone-900">${escapeHtml(titulo)}</h3>
+          <p class="text-xs text-stone-500">Busca al lector por nombre o RUT. O escribe un RUT nuevo para registrarlo.</p>
+          <div class="relative">
+            <i aria-hidden="true" class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+            <input id="lector-search-input" autocomplete="off" class="w-full pl-9 pr-3 py-2.5 border border-stone-300 rounded-lg focus:ring-1 focus:ring-patrimonio-lago focus:border-patrimonio-lago text-sm" placeholder="Ej: María Pérez o 12345678-5">
+          </div>
+          <div id="lector-search-results" class="max-h-48 overflow-y-auto space-y-1 mt-2"></div>
+          <div class="flex justify-end gap-2 pt-2 border-t border-stone-200 mt-4">
+            <button id="lector-search-cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+            <button id="lector-search-confirm" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium" disabled>Continuar</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const input = overlay.querySelector('#lector-search-input');
+      const resultsContainer = overlay.querySelector('#lector-search-results');
+      const confirmBtn = overlay.querySelector('#lector-search-confirm');
+      
+      let timer;
+      let selectedRut = null;
+
+      const close = () => {
+        overlay.remove();
+        resolve(null);
+      };
+
+      const select = (rut, nombre) => {
+        selectedRut = rut;
+        input.value = rut; // Mostrar solo el RUT en el input
+        resultsContainer.innerHTML = `
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-sm">
+            <i aria-hidden="true" class="fas fa-check-circle mr-1.5"></i> ${escapeHtml(nombre)}
+          </div>`;
+        confirmBtn.disabled = false;
+        confirmBtn.focus();
+      };
+
+      overlay.querySelector('#lector-search-cancel').addEventListener('click', close);
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+      confirmBtn.addEventListener('click', () => {
+        const rutToReturn = selectedRut || input.value.trim();
+        overlay.remove();
+        resolve(rutToReturn);
+      });
+
+      input.addEventListener('input', () => {
+        // UX11: Auto-formateo básico de RUT mientras escribe (solo si parece un RUT sin letras)
+        let val = input.value;
+        if (/^[0-9kK\-\.]+$/.test(val)) {
+           const limpio = val.replace(/[.\-\s]/g, '').toUpperCase();
+           if (limpio.length > 1) {
+             input.value = `${limpio.slice(0, -1)}-${limpio.slice(-1)}`;
+           }
+        }
+
+        confirmBtn.disabled = !input.value.trim();
+        selectedRut = null;
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (q.length < 2) {
+          resultsContainer.innerHTML = '';
+          return;
+        }
+        timer = setTimeout(async () => {
+          resultsContainer.innerHTML = '<p class="text-xs text-stone-400 p-2"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Buscando...</p>';
+          try {
+            const res = await LectorRepository.obtenerLectores(q, 0, 5);
+            if (res.lectores.length === 0) {
+              resultsContainer.innerHTML = '<p class="text-xs text-stone-400 p-2">Ningún lector coincide. Escriba el RUT completo para registrarlo como nuevo.</p>';
+            } else {
+              resultsContainer.innerHTML = res.lectores.map(l => `
+                <button type="button" data-rut="${l.rut}" data-nombre="${escapeHtml(l.nombre)}" class="w-full text-left px-3 py-2 rounded-lg border border-transparent hover:bg-stone-50 hover:border-stone-200 focus:bg-stone-50 focus:border-stone-200 focus:outline-none transition-colors">
+                  <p class="text-sm font-medium text-stone-800">${escapeHtml(l.nombre)}</p>
+                  <p class="text-[11px] font-mono text-stone-500">${l.rut}</p>
+                </button>
+              `).join('');
+              
+              resultsContainer.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => select(btn.dataset.rut, btn.dataset.nombre));
+              });
+            }
+          } catch(err) {
+            resultsContainer.innerHTML = '<p class="text-xs text-rose-500 p-2">Error al buscar.</p>';
+          }
+        }, 350);
+      });
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !confirmBtn.disabled) {
+          confirmBtn.click();
+        }
+      });
+
+      // UX1: Auto focus
+      setTimeout(() => input.focus(), 100);
+    });
+  },
+
   /**
-   * Flujo de préstamo desde el mesón: se pide el RUT, se consulta la situación
-   * del lector y se muestra ANTES de confirmar. Así la persona del mesón sabe
+   * Flujo de préstamo desde el mesón: se pide el RUT (o se busca por nombre),
+   * se consulta la situación del lector y se muestra ANTES de confirmar. Así la persona del mesón sabe
    * si está bloqueado, si debe libros, o si no está registrado todavía.
    */
   async flujoPrestamo(libroId, alTerminar) {
-    const rut = await this.showPrompt('Escribe el RUT del lector:', {
-      title: 'Prestar libro', placeholder: '12345678-5', confirmText: 'Consultar'
-    });
+    const rut = await this._seleccionarLectorModal('Prestar libro');
     if (!rut) return;
     if (!this.isValidRut(rut)) {
       this.showToast('El RUT no es válido. Revisa el dígito verificador.', 'error');
@@ -468,9 +573,7 @@ export default {
    * ponerse en la fila de espera.
    */
   async flujoReserva(libroId, alTerminar) {
-    const rut = await this.showPrompt('Escribe el RUT del lector:', {
-      title: 'Reservar libro', placeholder: '12345678-5', confirmText: 'Consultar'
-    });
+    const rut = await this._seleccionarLectorModal('Reservar libro');
     if (!rut) return;
     if (!this.isValidRut(rut)) {
       this.showToast('El RUT no es válido. Revisa el dígito verificador.', 'error');

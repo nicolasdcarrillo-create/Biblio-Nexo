@@ -11,6 +11,19 @@ import { supabase, conTiempoLimite, ESPERA, esFuncionInexistente } from './compa
 
 export const reservas = {
     /**
+     * Trae todas las reservas que ya tienen un libro apartado (esperando retiro en mesón).
+     * Útil para alertar en el dashboard.
+     */
+    async obtenerReservasApartadas() {
+        const { data, error } = await conTiempoLimite(
+            supabase.rpc('listar_reservas', { p_libro_id: null })
+        ).catch(() => ({ data: null, error: null })); // Ignora si la rpc falla
+        
+        if (error || !data) return [];
+        return data.filter(r => r.estado === 'apartada');
+    },
+
+    /**
      * El lector desiste, o el personal la cancela por otro motivo. Si la
      * reserva ya tenía un ejemplar apartado, ese ejemplar pasa a quien sigue
      * en la fila o vuelve a stock general (ver cancelar_reserva() en

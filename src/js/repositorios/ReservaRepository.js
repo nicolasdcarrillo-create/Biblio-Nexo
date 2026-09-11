@@ -36,5 +36,12 @@ export const ReservaRepository = {
      */
     async listarReservas(libroId) {
         return db.listarReservas(libroId);
+    },
+
+    /**
+     * @returns {Promise<any[]>}
+     */
+    async obtenerReservasApartadas() {
+        return db.obtenerReservasApartadas();
     }
 };

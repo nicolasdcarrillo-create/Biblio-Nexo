@@ -14,16 +14,16 @@ export default {
         if (!container) return;
 
         const toast = document.createElement('div');
-        const bgColor = type === 'success' ? 'bg-patrimonio-bosque' : type === 'error' ? 'bg-rose-700' : 'bg-patrimonio-lago';
+        const bgColor = type === 'success' ? 'bg-emerald-500/90' : type === 'error' ? 'bg-rose-600/90' : 'bg-patrimonio-lago/90';
         const icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-triangle' : 'fa-info-circle';
 
-        toast.className = `${bgColor} text-white px-5 py-3.5 rounded-xl shadow-sm font-bold flex items-center gap-3 transform transition-all duration-300 translate-y-10 opacity-0 z-50 text-sm`;
+        toast.className = `\${bgColor} text-white px-5 py-4 rounded-2xl shadow-soft-xl border border-white/10 backdrop-blur-md font-bold flex items-center gap-3 transform transition-all duration-300 translate-y-10 scale-95 opacity-0 z-50 text-sm`;
         toast.innerHTML = `<i aria-hidden="true" class="fas ${icon} text-lg"></i> <span>${escapeHtml(message)}</span>`;
 
         container.appendChild(toast);
-        setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
+        setTimeout(() => toast.classList.remove('translate-y-10', 'scale-95', 'opacity-0'), 10);
         setTimeout(() => {
-            toast.classList.add('translate-y-10', 'opacity-0');
+            toast.classList.add('translate-y-10', 'scale-95', 'opacity-0');
             setTimeout(() => toast.remove(), 300);
         }, 3500);
     },
@@ -32,9 +32,9 @@ export default {
     showConfirm(message, { title = 'Confirmar acción', confirmText = 'Confirmar', danger = true } = {}) {
         return new Promise(resolve => {
             const overlay = document.createElement('div');
-            overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+            overlay.className = 'fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-md z-[10000] transition-opacity duration-300 flex items-center justify-center p-4';
             overlay.innerHTML = `
-                <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+                <div class="bg-patrimonio-card/95 backdrop-blur-xl border border-white/20 rounded-[2rem] max-w-sm w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
                     <h3 class="font-serif text-lg font-bold text-stone-900">${escapeHtml(title)}</h3>
                     <p class="text-stone-600 text-sm">${escapeHtml(message)}</p>
                     <div class="flex justify-end gap-3 pt-2">
@@ -57,9 +57,9 @@ export default {
     showPrompt(message, { title = 'Ingresar dato', placeholder = '', confirmText = 'Aceptar' } = {}) {
         return new Promise(resolve => {
             const overlay = document.createElement('div');
-            overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+            overlay.className = 'fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-md z-[10000] transition-opacity duration-300 flex items-center justify-center p-4';
             overlay.innerHTML = `
-                <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+                <div class="bg-patrimonio-card/95 backdrop-blur-xl border border-white/20 rounded-[2rem] max-w-sm w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
                     <h3 class="font-serif text-lg font-bold text-stone-900">${escapeHtml(title)}</h3>
                     <p class="text-stone-600 text-sm">${escapeHtml(message)}</p>
                     <input id="modal-prompt-input" aria-label="Valor solicitado" type="text" placeholder="${escapeHtml(placeholder)}"

@@ -415,9 +415,9 @@ class UIManager {
       : 'Recordatorio de devolución — Biblioteca Municipal de Futrono';
 
     const overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+    overlay.className = 'fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-md z-[10000] transition-opacity duration-300 flex items-center justify-center p-4';
     overlay.innerHTML = `
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="bg-patrimonio-card/95 backdrop-blur-xl border border-white/20 rounded-[2rem] max-w-lg w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
         <div>
           <h3 class="font-serif text-lg font-bold text-stone-900">Avisar a ${escapeHtml(lector.nombre || 'el lector')}</h3>
           <p class="text-xs text-stone-500 mt-0.5">${escapeHtml(estado.etiqueta)} · ${escapeHtml(prestamo.libros?.titulo || '')}</p>
@@ -497,9 +497,9 @@ class UIManager {
     const asunto = 'Tu reserva está lista — Biblioteca Municipal de Futrono';
 
     const overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+    overlay.className = 'fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-md z-[10000] transition-opacity duration-300 flex items-center justify-center p-4';
     overlay.innerHTML = `
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="bg-patrimonio-card/95 backdrop-blur-xl border border-white/20 rounded-[2rem] max-w-lg w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
         <div>
           <h3 class="font-serif text-lg font-bold text-stone-900">Avisar a ${escapeHtml(lector.nombre || 'el lector')}</h3>
           <p class="text-xs text-stone-500 mt-0.5">Reserva disponible · ${escapeHtml(libro?.titulo || '')}</p>
@@ -953,7 +953,7 @@ class UIManager {
         console.error(`Fallo al cargar la vista "${viewName}":`, e);
         registroErrores.registrarOperacion(`cargar la vista ${viewName}`, e);
         if (container) container.innerHTML = `
-          <div class="catalog-card bg-patrimonio-card rounded-2xl border border-rose-300 p-6 max-w-lg">
+          <div class="catalog-card bg-patrimonio-card/95 backdrop-blur-xl rounded-[2rem] border border-rose-300/50 p-8 max-w-lg shadow-soft-xl">
             <p class="font-serif font-semibold text-lg text-stone-900 mb-1">No se pudo cargar esta sección</p>
             <p class="text-sm text-stone-600">${escapeHtml(e?.message || 'Error desconocido.')}</p>
             <button id="retry-view-btn" class="btn-madera mt-4 text-white rounded-xl px-4 py-2 text-sm font-medium">
@@ -1283,7 +1283,7 @@ class UIManager {
       <div class="h-screen w-full flex bg-patrimonio-base overflow-hidden">
 
         <!-- Fondo oscuro para cerrar el menú lateral en móvil -->
-        <div id="sidebar-overlay" class="hidden fixed inset-0 bg-patrimonio-lago/50 z-40"></div>
+        <div id="sidebar-overlay" class="hidden fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-sm z-40 transition-opacity"></div>
 
         <!-- Menú lateral: identidad institucional + navegación agrupada por rol -->
         <a href="#views-container" class="skip-link">Saltar al contenido principal</a>
@@ -1323,7 +1323,7 @@ class UIManager {
         <!-- Columna principal -->
         <div class="flex-1 flex flex-col min-w-0">
           <!-- Franja de título: como la etiqueta de un cajón de fichero -->
-          <div class="franja-titulo bg-patrimonio-card border-b border-stone-300 px-4 md:px-6 py-3 flex items-center gap-3 shrink-0">
+          <div class="franja-titulo bg-white/95 backdrop-blur-md border-b border-stone-200/50 px-4 md:px-6 py-4 flex shadow-sm items-center gap-3 shrink-0">
             <button id="sidebar-toggle-btn" class="md:hidden w-8 h-8 flex items-center justify-center text-stone-500 hover:text-stone-800">
               <i aria-hidden="true" class="fas fa-bars"></i>
             </button>
@@ -1537,7 +1537,7 @@ class UIManager {
   // sin volver a escaparse, o asignarse directo a innerHTML.
   _avisoMigracion(numero, archivo) {
     return html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl border border-stone-300 p-6 max-w-xl">
+      <div class="catalog-card bg-patrimonio-card/95 backdrop-blur-xl rounded-[2rem] border border-stone-200 p-8 max-w-xl shadow-soft-xl">
         <h3 class="font-serif font-semibold text-lg text-stone-900 mb-2">Falta un paso en la base de datos</h3>
         <p class="text-sm text-stone-600">
           Esta herramienta necesita la migración ${numero}. Abre el editor SQL de Supabase y ejecuta

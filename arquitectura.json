@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arquitectura de BiblioNexo",
+    "output": "arquitectura.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Usuarios", "sublabel": "Personal de Biblioteca", "pos": [40, 240], "size": [130, 60] },
+    { "id": "pwa", "type": "frontend", "label": "BiblioNexo PWA", "sublabel": "Vite + Vanilla JS", "pos": [280, 240], "size": [160, 60] },
+    { "id": "indexeddb", "type": "database", "label": "IndexedDB", "sublabel": "Almacenamiento Local", "pos": [280, 420], "size": [160, 60], "tag": "Offline-First" },
+    { "id": "openlibrary", "type": "external", "label": "Open Library API", "sublabel": "Metadatos y Portadas", "pos": [280, 60], "size": [160, 60] },
+    { "id": "supabase_auth", "type": "security", "label": "Supabase Auth", "sublabel": "Autenticación", "pos": [600, 100], "size": [150, 60] },
+    { "id": "supabase_db", "type": "database", "label": "PostgreSQL", "sublabel": "Supabase (PostgREST)", "pos": [600, 240], "size": [150, 60] },
+    { "id": "supabase_functions", "type": "backend", "label": "Edge Functions", "sublabel": "Deno", "pos": [600, 380], "size": [150, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Navegador Cliente", "wraps": ["pwa", "indexeddb"] },
+    { "kind": "region", "label": "Plataforma Supabase", "wraps": ["supabase_auth", "supabase_db", "supabase_functions"] }
+  ],
+  "connections": [
+    { "from": "users", "to": "pwa", "label": "Usa", "variant": "emphasis" },
+    { "from": "pwa", "to": "indexeddb", "label": "Offline-First", "variant": "dashed" },
+    { "from": "pwa", "to": "openlibrary", "label": "Consulta ISBN" },
+    { "from": "pwa", "to": "supabase_auth", "label": "Sesión" },
+    { "from": "pwa", "to": "supabase_db", "label": "Sincroniza", "variant": "emphasis" },
+    { "from": "pwa", "to": "supabase_functions", "label": "Llamadas RPC" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "PWA Offline-First", "items": ["Funciona sin conexión a internet.", "Los cambios se guardan localmente y se encolan para sincronizarse automáticamente al recuperar la conexión."] },
+    { "dot": "cyan", "title": "Plataforma Backend", "items": ["Todo el backend es gestionado mediante Supabase.", "Usa Edge Functions para tareas como envíos de correos de invitaciones."] }
+  ]
+}

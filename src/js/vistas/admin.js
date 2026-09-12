@@ -1,5 +1,9 @@
 // Vista Administración. Extraído mecánicamente de js/modules/ui.js (Fase 4).
-import { db } from '../modules/db.js';
+import { AdminRepository } from '../repositorios/AdminRepository.js';
+import { LibroRepository } from '../repositorios/LibroRepository.js';
+import { ReservaRepository } from '../repositorios/ReservaRepository.js';
+import { LectorRepository } from '../repositorios/LectorRepository.js';
+import { UsuarioRepository } from '../repositorios/UsuarioRepository.js';
 import { html, crudo } from '../modules/utilidades.js';
 
 export default {
@@ -65,7 +69,7 @@ export default {
 
   /** Detecta y corrige libros cuyo inventario no cuadra. */
   async _adminInventario(panel) {
-    const filas = await db.revisarInventario();
+    const filas = await LibroRepository.revisarInventario();
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('006', '006_bloqueo_inventario_admin.sql');
       return;
@@ -121,7 +125,7 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const r = await db.corregirInventario(btn.dataset.id);
+          const r = await LibroRepository.corregirInventario(btn.dataset.id);
           this.showToast(`Corregido: ${r.copias_totales} ejemplares, ${r.stock} disponibles.`, 'success');
           this.renderAdmin();
         } catch (err) {
@@ -140,7 +144,7 @@ export default {
    * haga nada con ella.
    */
   async _adminReservas(panel) {
-    const filas = await db.listarReservas();
+    const filas = await ReservaRepository.listarReservas();
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('022', '022_reservas.sql');
       return;
@@ -212,7 +216,7 @@ export default {
         if (!ok) return;
         btn.disabled = true;
         try {
-          await db.retirarReserva(btn.dataset.id);
+          await ReservaRepository.retirarReserva(btn.dataset.id);
           this.showToast('Retiro registrado: el préstamo ya quedó a nombre del lector.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -231,7 +235,7 @@ export default {
         if (!ok) return;
         btn.disabled = true;
         try {
-          await db.cancelarReserva(btn.dataset.id);
+          await ReservaRepository.cancelarReserva(btn.dataset.id);
           this.showToast('Reserva cancelada.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -244,7 +248,7 @@ export default {
 
   /** Lectores bloqueados manualmente, con opción de levantar la sanción. */
   async _adminBloqueados(panel) {
-    const filas = await db.obtenerBloqueados();
+    const filas = await LectorRepository.obtenerBloqueados();
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('006', '006_bloqueo_inventario_admin.sql');
       return;
@@ -304,7 +308,7 @@ export default {
         const ok = await this.showConfirm('¿Levantar el bloqueo de este lector?', { title: 'Desbloquear', confirmText: 'Desbloquear', danger: false });
         if (!ok) return;
         try {
-          await db.bloquearLector(btn.dataset.id, false);
+          await LectorRepository.bloquearLector(btn.dataset.id, false);
           this.showToast('Lector desbloqueado.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -327,13 +331,13 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const estado = await db.estadoLector(this.formatRut(rut));
+        const estado = await LectorRepository.estadoLector(this.formatRut(rut));
         if (!estado.existe) {
           this.showToast('Ese RUT no está registrado.', 'error');
           btn.disabled = false;
           return;
         }
-        await db.bloquearLector(estado.lector_id, true, motivo);
+        await LectorRepository.bloquearLector(estado.lector_id, true, motivo);
         this.showToast(`${estado.nombre} quedó bloqueado.`, 'success');
         this.renderAdmin();
       } catch (err) {
@@ -345,7 +349,7 @@ export default {
 
   /** Personal con acceso y sus roles. */
   async _adminPersonal(panel) {
-    const filas = await db.listarPersonal();
+    const filas = await UsuarioRepository.listarPersonal();
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('006', '006_bloqueo_inventario_admin.sql');
       return;
@@ -434,7 +438,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        await db.invitarPersonal(email, rol);
+        await UsuarioRepository.invitarPersonal(email, rol);
         this.showToast(`Invitación enviada a ${email}.`, 'success');
         document.getElementById('invite-email').value = '';
         this.renderAdmin();
@@ -453,7 +457,7 @@ export default {
         );
         if (!ok) return;
         try {
-          await db.asignarRol(btn.dataset.id, nuevoRol);
+          await UsuarioRepository.asignarRol(btn.dataset.id, nuevoRol);
           this.showToast('Rol actualizado.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -471,7 +475,7 @@ export default {
         if (!ok) return;
         btn.disabled = true;
         try {
-          await db.eliminarPersonal(btn.dataset.id);
+          await UsuarioRepository.eliminarPersonal(btn.dataset.id);
           this.showToast('Cuenta eliminada.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -489,7 +493,7 @@ export default {
    * todos los que existen y puede revocar cualquiera, no solo los propios.
    */
   async _adminEnlacesEscaneo(panel) {
-    const filas = await db.listarEnlacesEscaneo();
+    const filas = await AdminRepository.listarEnlacesEscaneo();
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('014', '014_enlaces_escaneo_remoto.sql');
       return;
@@ -563,7 +567,7 @@ export default {
         if (!ok) return;
         btn.disabled = true;
         try {
-          await db.revocarEnlaceEscaneo(btn.dataset.id);
+          await AdminRepository.revocarEnlaceEscaneo(btn.dataset.id);
           this.showToast('Enlace revocado.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -580,7 +584,7 @@ export default {
    * ya guarda `auditoria` de cada borrado — no hay ninguna tabla nueva.
    */
   async _adminEliminados(panel) {
-    const filas = await db.listarLibrosEliminados();
+    const filas = await LibroRepository.listarLibrosEliminados();
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('021', '021_papelera_libros.sql');
       return;
@@ -643,7 +647,7 @@ export default {
         if (!ok) return;
         btn.disabled = true;
         try {
-          await db.restaurarLibro(btn.dataset.id);
+          await LibroRepository.restaurarLibro(btn.dataset.id);
           this.showToast('Libro restaurado.', 'success');
           this.renderAdmin();
         } catch (err) {
@@ -656,7 +660,7 @@ export default {
 
   /** Bitácora de movimientos registrada por los triggers. */
   async _adminAuditoria(panel) {
-    const filas = await db.obtenerAuditoria(100);
+    const filas = await AdminRepository.obtenerAuditoria(100);
     if (filas === null) {
       panel.innerHTML = this._avisoMigracion('005', '005_renovaciones_auditoria_busqueda.sql');
       return;
@@ -708,7 +712,7 @@ export default {
    */
   async _adminCumplimiento(panel) {
     const [rls, parametros, circulacion, respaldos] = await Promise.all([
-      db.verificarRls(), db.obtenerParametros(), db.verificarCirculacion(), db.obtenerRespaldos(5)
+      AdminRepository.verificarRls(), UsuarioRepository.obtenerParametros(), AdminRepository.verificarCirculacion(), AdminRepository.obtenerRespaldos(5)
     ]);
 
     if (rls === null || parametros === null) {
@@ -938,7 +942,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const datos = await db.exportarDatosLector(this.formatRut(rut));
+        const datos = await LectorRepository.exportarDatosLector(this.formatRut(rut));
         this._descargar(JSON.stringify(datos, null, 2),
           `datos-personales-${this.formatRut(rut)}.json`, 'application/json');
         this.showToast('Datos entregados. Guarda constancia de la solicitud.', 'success');
@@ -953,7 +957,7 @@ export default {
       const rut = document.getElementById('arco-rut').value.trim();
       if (!this.isValidRut(rut)) return this.showToast('El RUT no es válido.', 'error');
 
-      const estado = await db.estadoLector(this.formatRut(rut));
+      const estado = await LectorRepository.estadoLector(this.formatRut(rut));
       if (!estado.existe) return this.showToast('Ese RUT no está registrado.', 'error');
 
       const ok = await this.showConfirm(
@@ -971,7 +975,7 @@ export default {
       }
 
       try {
-        await db.anonimizarLector(estado.lector_id, motivo);
+        await LectorRepository.anonimizarLector(estado.lector_id, motivo);
         this.showToast('Datos personales suprimidos.', 'success');
         this.renderAdmin();
       } catch (err) {
@@ -989,7 +993,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const total = await db.purgarDatosAntiguos();
+        const total = await AdminRepository.purgarDatosAntiguos();
         this.showToast(total === 0 ? 'No había titulares que superaran el plazo.' : `${total} titular(es) anonimizado(s).`, 'success');
       } catch (err) {
         this.showToast(err.message || 'No se pudo ejecutar la purga.', 'error');
@@ -1010,7 +1014,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const ev = await db.evidenciaIncidente(`${desde}T00:00:00`, `${hasta}T23:59:59`);
+        const ev = await AdminRepository.evidenciaIncidente(`${desde}T00:00:00`, `${hasta}T23:59:59`);
         this._descargar(JSON.stringify(ev, null, 2), `evidencia-incidente-${desde}-a-${hasta}.json`, 'application/json');
         this.showToast('Evidencia extraída.', 'success');
       } catch (err) {
@@ -1026,7 +1030,7 @@ export default {
       btn.disabled = true;
       try {
         for (const input of panel.querySelectorAll('.param-input')) {
-          await db.actualizarParametro(input.dataset.clave, input.value.trim());
+          await UsuarioRepository.actualizarParametro(input.dataset.clave, input.value.trim());
         }
         // Se recargan para que toda la interfaz refleje los valores nuevos
         await this.cargarParametros();
@@ -1049,9 +1053,9 @@ export default {
    */
   async _adminDiagnostico(panel) {
     const [resumen, errores, definiciones] = await Promise.all([
-      db.resumenErrores(),
-      db.listarErrores(100, false),
-      db.verificarDefiniciones()
+      AdminRepository.resumenErrores(),
+      AdminRepository.listarErrores(100, false),
+      AdminRepository.verificarDefiniciones()
     ]);
 
     if (resumen === null || errores === null) {
@@ -1197,7 +1201,7 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          await db.marcarErrorVisto(Number(btn.dataset.visto));
+          await AdminRepository.marcarErrorVisto(Number(btn.dataset.visto));
           this.renderAdmin();
         } catch (err) {
           this.showToast(err.message || 'No se pudo marcar.', 'error');
@@ -1208,7 +1212,7 @@ export default {
 
     document.getElementById('marcar-todos-btn')?.addEventListener('click', async () => {
       try {
-        await db.marcarErrorVisto(null);
+        await AdminRepository.marcarErrorVisto(null);
         this.showToast('Todos marcados como revisados.', 'success');
         this.renderAdmin();
       } catch (err) {
@@ -1223,7 +1227,7 @@ export default {
       );
       if (!ok) return;
       try {
-        const n = await db.purgarErrores(90);
+        const n = await AdminRepository.purgarErrores(90);
         this.showToast(`${n} registro${n === 1 ? '' : 's'} eliminado${n === 1 ? '' : 's'}.`, 'success');
         this.renderAdmin();
       } catch (err) {

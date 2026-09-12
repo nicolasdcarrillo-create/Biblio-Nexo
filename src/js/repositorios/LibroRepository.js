@@ -86,5 +86,7 @@ export const LibroRepository = {
      */
     async ajustarCopias(id, totalCopias) {
         return db.ajustarCopias(id, totalCopias);
-    }
+    },
+    async revisarInventario() { return db.revisarInventario(); },
+    async corregirInventario(id) { return db.corregirInventario(id); }
 };

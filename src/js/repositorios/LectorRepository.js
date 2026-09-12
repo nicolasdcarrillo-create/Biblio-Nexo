@@ -69,5 +69,9 @@ export const LectorRepository = {
      */
     async actualizarContactoLector(id, cambios) {
         return db.actualizarContactoLector(id, cambios);
-    }
+    },
+    async obtenerBloqueados() { return db.obtenerBloqueados(); },
+    async bloquearLector(id, bloqueado, motivo) { return db.bloquearLector(id, bloqueado, motivo); },
+    async exportarDatosLector(rut) { return db.exportarDatosLector(rut); },
+    async anonimizarLector(id, motivo) { return db.anonimizarLector(id, motivo); }
 };

@@ -27,7 +27,7 @@ import { LectorRepository } from '../repositorios/LectorRepository.js';
 import { escapeHtml, canalEscaneo } from '../modules/utilidades.js';
 import { buscarPorIsbnExterno } from '../modules/libros-externos.js';
 import { generarSvgQr } from '../modules/qr.js';
-import { supabase } from '../supabase-init.js';
+
 
 export default {
   /**
@@ -285,7 +285,7 @@ export default {
     
     const suscribirCanal = async (token) => {
       desuscribirCanal();
-      if (!supabase || modalCerrado) return;
+      if (modalCerrado) return;
       try {
         const nombre = await canalEscaneo(token);
         // BUG-10: Si el usuario cerró el modal mientras se resolvía canalEscaneo(), 

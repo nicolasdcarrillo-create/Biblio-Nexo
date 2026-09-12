@@ -19,4 +19,18 @@ export const EscaneoRepository = {
     async revocarEnlaceEscaneo(id) {
         return db.revocarEnlaceEscaneo(id);
     }
+    async escucharEscaneos(nombreCanal, onMensaje) {
+        const { supabase } = await import('../supabase-init.js');
+        if (!supabase) return null;
+        return supabase.channel(nombreCanal)
+            .on('broadcast', { event: 'libro-escaneado' }, onMensaje)
+            .subscribe();
+    },
+
+    async detenerEscucha(canal) {
+        const { supabase } = await import('../supabase-init.js');
+        if (canal && supabase) {
+            try { supabase.removeChannel(canal); } catch (e) { }
+        }
+    }
 };

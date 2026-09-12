@@ -1,4 +1,4 @@
-﻿import { db } from '../modules/db.js';
+import { db } from '../modules/db.js';
 
 /**
  * Repositorio para la gestion de perfiles de usuario y sesion.
@@ -28,5 +28,10 @@ export const UsuarioRepository = {
      */
     async obtenerParametros() {
         return db.obtenerParametros();
-    }
+    },
+    async listarPersonal() { return db.listarPersonal(); },
+    async invitarPersonal(email, rol) { return db.invitarPersonal(email, rol); },
+    async asignarRol(id, rol) { return db.asignarRol(id, rol); },
+    async eliminarPersonal(id) { return db.eliminarPersonal(id); },
+    async actualizarParametro(clave, valor) { return db.actualizarParametro(clave, valor); }
 };

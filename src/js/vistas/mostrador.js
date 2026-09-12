@@ -284,10 +284,8 @@ export default {
     let canalRealtime = null;
     let modalCerrado = false; // BUG-10: Evita que el canal quede suscrito si el modal se cerró antes
 
-    const desuscribirCanal = () => {
-      if (canalRealtime && supabase) {
-        try { supabase.removeChannel(canalRealtime); } catch (e) { /* best-effort */ }
-      }
+    const desuscribirCanal = async () => {
+      if (canalRealtime) { await EscaneoRepository.detenerEscucha(canalRealtime); }
       canalRealtime = null;
     };
 
@@ -314,17 +312,12 @@ export default {
         // no suscribimos el canal.
         if (modalCerrado) return; 
 
-        canalRealtime = supabase.channel(nombre)
-          .on('broadcast', { event: 'libro-escaneado' }, ({ payload }) => {
+        canalRealtime = await EscaneoRepository.escucharEscaneos(nombre, ({ payload }) => {
             this.showToast(`Escaneo remoto: ${payload?.titulo || payload?.isbn || 'libro'}`, 'info');
-            // Si la vista Escanear está abierta mostrando este mismo código,
-            // se refresca sola — reutiliza el mismo camino que un escaneo
-            // manual, así que también recarga los préstamos y reservas.
             if (payload?.isbn && payload.isbn === this._ultimoCodigoEscaneado && document.getElementById('scan-result')) {
               this._mostrarResultadoEscaneo?.(payload.isbn);
             }
-          })
-          .subscribe();
+          });
       } catch (e) {
         // best-effort: sin aviso en vivo, el escaneo remoto sigue
         // funcionando igual — solo no se refleja solo en esta ventana.

@@ -44,28 +44,60 @@ export default {
     if (!container) return;
 
     container.innerHTML = `
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-xl">
-        <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-          <h3 class="font-serif font-semibold text-lg text-stone-900"><i aria-hidden="true" class="fas fa-qrcode text-amber-400 mr-2"></i>Escanear libro</h3>
-          <button id="qr-remoto-btn" type="button"
-            class="btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-            <i aria-hidden="true" class="fas fa-mobile-screen-button mr-1"></i> Escanear desde el celular
-          </button>
+      <div class="flex flex-col md:flex-row gap-6 w-full h-full max-w-7xl mx-auto items-start">
+        <!-- Panel Izquierdo: El Esc�ner y B�squeda -->
+        <div class="flex-1 w-full flex flex-col gap-6 sticky top-0">
+           <div class="bg-patrimonio-card rounded-3xl shadow-soft-xl border border-stone-200 p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+               <div class="absolute -top-24 -right-24 w-64 h-64 bg-patrimonio-lago/5 rounded-full blur-3xl pointer-events-none"></div>
+
+               <h3 class="font-serif font-bold text-3xl text-stone-900 mb-2">Mes�n de Circulaci�n</h3>
+               <p class="text-sm text-stone-500 mb-8 max-w-sm">Escanee un libro o ingrese el c�digo manualmente para registrar pr�stamos y devoluciones.</p>
+               
+               <div class="w-full max-w-md flex flex-col gap-4">
+                  <div class="relative">
+                    <i aria-hidden="true" class="fas fa-barcode absolute left-5 top-1/2 -translate-y-1/2 text-xl text-stone-400"></i>
+                    <input id="manual-scan-input" aria-label="Escribir el c�digo del libro" placeholder="Ingrese el ISBN..." class="w-full pl-12 pr-4 py-4 bg-white border-2 border-stone-200 rounded-2xl text-lg font-bold text-stone-800 placeholder-stone-400 focus:border-patrimonio-lago focus:ring-4 focus:ring-patrimonio-lago/10 transition-all shadow-sm outline-none" autocomplete="off" />
+                  </div>
+                  
+                  <button id="manual-scan-btn" class="w-full bg-patrimonio-lago hover:bg-[#14303c] text-white font-bold rounded-2xl shadow-lg shadow-patrimonio-lago/20 px-6 py-4 text-base transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <i aria-hidden="true" class="fas fa-search"></i> Buscar Libro
+                  </button>
+               </div>
+
+               <div class="mt-8 pt-6 border-t border-stone-100 w-full flex flex-wrap items-center justify-between gap-4">
+                  <label class="flex items-center gap-3 cursor-pointer group" title="Si est� activo, al escanear un libro prestado se devuelve inmediatamente.">
+                    <div class="relative">
+                      <input type="checkbox" id="fast-return-toggle" class="sr-only toggle-switch-input">
+                      <div class="block bg-stone-200 w-12 h-7 rounded-full transition-colors duration-300 ease-in-out toggle-switch-bg group-hover:bg-stone-300">
+                         <div class="absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 ease-in-out shadow-sm toggle-switch-knob flex items-center justify-center">
+                         </div>
+                      </div>
+                    </div>
+                    <div class="flex flex-col text-left">
+                       <span class="text-sm font-bold text-stone-800 leading-none">Devoluci�n r�pida</span>
+                       <span class="text-[10px] text-stone-500 uppercase tracking-wider font-bold mt-1">Escaneo continuo</span>
+                    </div>
+                  </label>
+
+                  <button id="qr-remoto-btn" type="button" class="bg-white border-2 border-stone-200 text-stone-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-stone-50 transition-all active:scale-95 shadow-sm">
+                     <i aria-hidden="true" class="fas fa-mobile-screen-button text-patrimonio-lago"></i>
+                     <span class="hidden sm:inline">Usar celular</span>
+                  </button>
+               </div>
+           </div>
         </div>
-        <p class="text-xs text-stone-500 mb-4">
-          Use "Escanear desde el celular" para leer códigos de barras con la cámara.
-          Aquí también puede escribir el código a mano.
-        </p>
-        <div class="flex gap-3">
-          <input id="manual-scan-input" aria-label="Escribir el código del libro manualmente" placeholder="Ingrese el ISBN manualmente" class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          <button id="manual-scan-btn" class="bg-patrimonio-lago hover:bg-[#14303c] text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm transition-colors">Buscar</button>
-        </div>
-        <label class="flex items-center gap-2 mt-3 cursor-pointer"><input type="checkbox" id="fast-return-toggle" class="rounded text-patrimonio-lago focus:ring-patrimonio-lago w-4 h-4 border-stone-300"><span class="text-sm text-stone-700 font-medium">Modo devolución rápida (escaneo continuo)</span></label>
-          <div id="scan-result" class="mt-5">
-          <div class="text-center py-8 text-stone-500">
-            <i aria-hidden="true" class="fas fa-barcode text-4xl mb-3"></i>
-            <p class="text-sm">Ingrese el ISBN o escanee un libro para ver su situación.</p>
-          </div>
+
+        <!-- Panel Derecho: Resultados (scan-result) -->
+        <div class="flex-[1.5] w-full bg-patrimonio-card rounded-3xl shadow-soft-xl border border-stone-200 overflow-hidden flex flex-col relative min-h-[500px]">
+           <div id="scan-result" class="flex-1 flex flex-col p-6 overflow-y-auto">
+              <div class="m-auto text-center py-12 text-stone-400">
+                <div class="w-24 h-24 mx-auto bg-stone-50 rounded-full flex items-center justify-center mb-4 border border-stone-100 shadow-inner">
+                  <i aria-hidden="true" class="fas fa-book-open text-4xl text-stone-300"></i>
+                </div>
+                <p class="text-base font-bold text-stone-500">Esperando escaneo...</p>
+                <p class="text-sm mt-1">El resultado aparecer� aqu�.</p>
+              </div>
+           </div>
         </div>
       </div>
     `;
@@ -93,10 +125,12 @@ export default {
                   try {
                       await PrestamoRepository.devolverPrestamo(prestamoActivo.id);
                       this.showToast('Devolución rápida exitosa.', 'success');
-                      resultEl.innerHTML = `<div class="text-center py-8 text-stone-500">
-                          <i aria-hidden="true" class="fas fa-check-circle text-4xl mb-3 text-emerald-600"></i>
-                          <p class="text-sm font-bold text-emerald-700">¡Libro devuelto!</p>
-                          <p class="text-xs">Puede escanear el siguiente.</p>
+                      resultEl.innerHTML = `<div class="m-auto text-center py-12 text-stone-500">
+                          <div class="w-24 h-24 mx-auto bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100 shadow-inner">
+                             <i aria-hidden="true" class="fas fa-check text-4xl text-emerald-500"></i>
+                          </div>
+                          <p class="text-xl font-bold text-emerald-700">�Libro devuelto!</p>
+                          <p class="text-sm mt-1">Puede escanear el siguiente.</p>
                       </div>`;
                       return;
                   } catch (e) {

@@ -17,18 +17,18 @@ export default {
   // al buscar, sin destruir el formulario superior.
   _renderUserRows(users) {
     if (!users.length) {
-      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">${this.userSearch ? 'Ningún lector coincide con la búsqueda.' : 'Sin lectores registrados. Agrega el primero con el formulario de arriba.'}</td></tr>`;
+      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500 dark:text-stone-400">${this.userSearch ? 'Ningún lector coincide con la búsqueda.' : 'Sin lectores registrados. Agrega el primero con el formulario de arriba.'}</td></tr>`;
     }
     return html`${users.map(u => html`
-      <tr class="border-t border-stone-200">
-        <td class="px-4 py-3 font-bold text-stone-800">${u.nombre}</td>
-        <td class="px-4 py-3 text-stone-600 font-mono">${u.rut}</td>
-        <td class="px-4 py-3 text-stone-600">
+      <tr class="border-t border-stone-200 dark:border-stone-700">
+        <td class="px-4 py-3 font-bold text-stone-800 dark:text-stone-200">${u.nombre}</td>
+        <td class="px-4 py-3 text-stone-600 dark:text-stone-300 font-mono">${u.rut}</td>
+        <td class="px-4 py-3 text-stone-600 dark:text-stone-300">
           <div>${u.email || '—'}</div>
-          <div class="text-xs text-stone-500">${u.telefono || '—'}</div>
+          <div class="text-xs text-stone-500 dark:text-stone-400">${u.telefono || '—'}</div>
         </td>
         <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
-          <button class="edit-user-btn text-stone-500 hover:text-patrimonio-madera font-bold" data-id="${u.id}">Editar</button>
+          <button class="edit-user-btn text-stone-500 dark:text-stone-400 hover:text-patrimonio-madera font-bold" data-id="${u.id}">Editar</button>
           ${this.currentUserRole === 'admin'
             ? html`<button class="delete-user-btn text-rose-700 font-bold" data-id="${u.id}">Eliminar</button>`
             : ''}
@@ -89,40 +89,40 @@ export default {
     }
 
     container.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mb-6">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mb-6">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Agregar lector</h3>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Agregar lector</h3>
         </div>
         <form id="add-user-form" class="p-5">
-          <p class="text-xs text-stone-500 mb-4">Todos los datos son obligatorios. El correo y el teléfono se usan para avisar cuando un préstamo está por vencer.</p>          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Todos los datos son obligatorios. El correo y el teléfono se usan para avisar cuando un préstamo está por vencer.</p>          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label for="new-user-name" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Nombre completo</label>
-              <input id="new-user-name" required placeholder="María Antileo Huenchumán" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+              <label for="new-user-name" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Nombre completo</label>
+              <input id="new-user-name" required placeholder="María Antileo Huenchumán" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
             </div>
             <div>
-              <label for="new-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
-              <input id="new-user-id" required placeholder="12345678-5" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm font-mono" />
+              <label for="new-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">RUT</label>
+              <input id="new-user-id" required placeholder="12345678-5" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm font-mono" />
             </div>
             <div>
-              <label for="new-user-phone" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Teléfono</label>
-              <input id="new-user-phone" required type="tel" placeholder="9 1234 5678" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+              <label for="new-user-phone" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Teléfono</label>
+              <input id="new-user-phone" required type="tel" placeholder="9 1234 5678" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
             </div>
             <div>
-              <label for="new-user-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Correo</label>
-              <input id="new-user-email" required type="email" placeholder="nombre@correo.cl" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+              <label for="new-user-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Correo</label>
+              <input id="new-user-email" required type="email" placeholder="nombre@correo.cl" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
             </div>
           </div>
           <div class="mt-4">${crudo(this._bloqueConsentimiento('new'))}</div>
           <button id="add-user-submit-btn" type="submit" class="btn-madera mt-4 w-full md:w-auto md:px-8 text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm h-[40px] flex items-center justify-center">Agregar lector</button>
         </form>
       </div>
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Lectores registrados</h3>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Lectores registrados</h3>
           <div class="relative sm:w-64">
-            <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-xs"></i>
+            <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400 text-xs"></i>
             <input id="user-search-input" aria-label="Buscar lector por nombre, RUT o correo" type="text" placeholder="Buscar por nombre, RUT o correo..." value="${this.userSearch || ''}"
-              class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 rounded-md bg-white focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
         <div id="users-tbody" class="flex flex-col gap-4 p-4">${this._renderUserRows(users)}</div>
@@ -199,9 +199,9 @@ export default {
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
     const campo = (id, etiqueta, valor, extra = '') => html`
       <div>
-        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">${etiqueta}</label>
+        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">${etiqueta}</label>
         <input id="${id}" value="${valor ?? ''}" ${crudo(extra)}
-          class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+          class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
       </div>`;
 
     // El RUT identifica al lector y es la clave con la que se buscan sus
@@ -211,23 +211,23 @@ export default {
     const esAdmin = this.currentUserRole === 'admin';
 
     overlay.innerHTML = html`
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-        <h3 class="font-serif text-lg font-bold text-stone-900">Editar lector</h3>
+      <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Editar lector</h3>
         <div class="space-y-3">
           ${campo('edit-user-name', 'Nombre completo', lector.nombre)}
           ${esAdmin
             ? campo('edit-user-id', 'RUT', lector.rut)
             : html`<div>
-                 <label for="edit-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
+                 <label for="edit-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">RUT</label>
                  <input id="edit-user-id" value="${lector.rut ?? ''}" readonly
-                   class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm font-mono text-stone-500" />
-                 <p class="text-[11px] text-stone-500 mt-1">Solo un administrador puede corregir un RUT. Si detectas un error, contacta al encargado de la biblioteca.</p>
+                   class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-stone-50 dark:bg-stone-800/50 text-sm font-mono text-stone-500 dark:text-stone-400" />
+                 <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Solo un administrador puede corregir un RUT. Si detectas un error, contacta al encargado de la biblioteca.</p>
                </div>`}
           ${campo('edit-user-phone', 'Teléfono', lector.telefono, 'type="tel"')}
           ${campo('edit-user-email', 'Correo', lector.email, 'type="email"')}
         </div>
         <div class="flex justify-end gap-3 pt-1">
-          <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+          <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
           <button data-action="save" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Guardar cambios</button>
         </div>
       </div>`.toString();

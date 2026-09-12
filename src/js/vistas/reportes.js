@@ -42,9 +42,9 @@ export default {
       reporte = await ReportesRepository.obtenerReporte(rango.desde, rango.hasta);
     } catch (err) {
       if (this.currentView !== 'reports') return;
-      container.innerHTML = html`<div class="catalog-card bg-patrimonio-card rounded-2xl border border-stone-300 p-6 text-center">
-        <p class="text-sm text-stone-600">No se pudo generar el reporte.</p>
-        <p class="text-xs text-stone-500 mt-1">${err.message || ''}</p>
+      container.innerHTML = html`<div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl border border-stone-300 dark:border-stone-600 p-6 text-center">
+        <p class="text-sm text-stone-600 dark:text-stone-300">No se pudo generar el reporte.</p>
+        <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">${err.message || ''}</p>
       </div>`;
       return;
     }
@@ -53,14 +53,14 @@ export default {
     // La migración 004 agrega las columnas de fecha que los reportes necesitan
     if (reporte.faltaMigracion) {
       container.innerHTML = `
-        <div class="catalog-card bg-patrimonio-card rounded-2xl border border-stone-300 p-6 max-w-xl">
-          <h3 class="font-serif font-semibold text-lg text-stone-900 mb-2">Falta un paso en la base de datos</h3>
-          <p class="text-sm text-stone-600 mb-3">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl border border-stone-300 dark:border-stone-600 p-6 max-w-xl">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-2">Falta un paso en la base de datos</h3>
+          <p class="text-sm text-stone-600 dark:text-stone-300 mb-3">
             Los reportes necesitan saber en qué fecha se hizo cada préstamo, y esa columna todavía no existe.
           </p>
-          <p class="text-sm text-stone-600">
+          <p class="text-sm text-stone-600 dark:text-stone-300">
             Abre el editor SQL de tu proyecto en Supabase y ejecuta el archivo
-            <code class="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">supabase/migrations/004_reportes_portadas_zona_horaria.sql</code>.
+            <code class="bg-stone-100 dark:bg-stone-700 px-1.5 py-0.5 rounded text-xs font-mono">supabase/migrations/004_reportes_portadas_zona_horaria.sql</code>.
             Luego vuelve a esta pantalla.
           </p>
         </div>`;
@@ -71,7 +71,7 @@ export default {
       <button data-period="${clave}" class="report-period-btn px-3.5 py-1.5 rounded-lg text-xs font-bold border transition ${
         periodo === clave
           ? 'bg-patrimonio-lago text-white border-patrimonio-lago'
-          : 'bg-white text-stone-600 border-stone-300 hover:border-patrimonio-lago'
+          : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-300 dark:border-stone-600 hover:border-patrimonio-lago'
       }">${texto}</button>`;
 
     const tarjetas = [
@@ -82,15 +82,15 @@ export default {
     ];
 
     const ranking = (titulo, items, vacio) => html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-        <h3 class="font-serif font-semibold text-lg text-stone-900 mb-3">${titulo}</h3>
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+        <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-3">${titulo}</h3>
         ${items.length ? html`<ol class="space-y-2">${items.map((i, n) => html`
           <li class="flex items-center gap-3 text-sm">
-            <span class="w-5 h-5 rounded bg-stone-100 text-stone-500 text-[10px] font-black flex items-center justify-center shrink-0">${n + 1}</span>
+            <span class="w-5 h-5 rounded bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400 text-[10px] font-black flex items-center justify-center shrink-0">${n + 1}</span>
             <span class="flex-1 truncate text-stone-700">${i.etiqueta}</span>
-            <span class="font-bold text-stone-900 tabular-nums">${i.total}</span>
+            <span class="font-bold text-stone-900 dark:text-stone-100 tabular-nums">${i.total}</span>
           </li>`)}</ol>`
-        : html`<p class="text-sm text-stone-500 py-4 text-center">${vacio}</p>`}
+        : html`<p class="text-sm text-stone-500 dark:text-stone-400 py-4 text-center">${vacio}</p>`}
       </div>`;
 
     container.innerHTML = html`
@@ -102,10 +102,10 @@ export default {
           ${botonPeriodo('anio', 'Anual')}
         </div>
         <div class="flex flex-wrap gap-2">
-          <button id="backup-btn" class="btn-secundario border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-medium rounded-xl px-4 py-2 text-sm" title="Descarga una copia completa de libros, lectores y préstamos">
+          <button id="backup-btn" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 hover:bg-stone-50 dark:bg-stone-800/50 text-stone-700 font-medium rounded-xl px-4 py-2 text-sm" title="Descarga una copia completa de libros, lectores y préstamos">
             <i aria-hidden="true" class="fas fa-database mr-1.5"></i> Respaldo completo
           </button>
-          <button id="export-csv-btn" class="btn-secundario border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-medium rounded-xl px-4 py-2 text-sm">
+          <button id="export-csv-btn" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 hover:bg-stone-50 dark:bg-stone-800/50 text-stone-700 font-medium rounded-xl px-4 py-2 text-sm">
             <i aria-hidden="true" class="fas fa-file-csv mr-1.5"></i> Exportar CSV
           </button>
           <button id="print-report-btn" class="btn-madera text-white font-medium rounded-xl shadow px-4 py-2 text-sm">
@@ -116,28 +116,28 @@ export default {
 
       <div id="report-sheet">
         <!-- Encabezado: se ve principalmente al imprimir -->
-        <div class="mb-5 pb-4 border-b border-stone-300">
-          <h2 class="font-serif font-semibold text-xl text-stone-900">Reporte de actividad — ${rango.titulo}</h2>
-          <p class="text-xs text-stone-500 mt-1">
+        <div class="mb-5 pb-4 border-b border-stone-300 dark:border-stone-600">
+          <h2 class="font-serif font-semibold text-xl text-stone-900 dark:text-stone-100">Reporte de actividad — ${rango.titulo}</h2>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">
             ${this._fechaLegible(rango.desde)} al ${this._fechaLegible(rango.hasta)}
             · ${CONFIG.BIBLIOTECA.nombreLargo}
           </p>
-          <p class="text-[11px] text-stone-500 mt-0.5">Generado el ${this._fechaLegible(this._rangoPeriodo('dia').desde)}</p>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">Generado el ${this._fechaLegible(this._rangoPeriodo('dia').desde)}</p>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           ${tarjetas.map(c => html`
-            <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
+            <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
               <i aria-hidden="true" class="fas ${c.icono} ${c.color} text-xl mb-2"></i>
-              <p class="font-serif font-semibold text-4xl text-stone-900">${c.valor}</p>
-              <p class="text-xs text-stone-500 font-bold uppercase tracking-wide mt-1">${c.label}</p>
+              <p class="font-serif font-semibold text-4xl text-stone-900 dark:text-stone-100">${c.valor}</p>
+              <p class="text-xs text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wide mt-1">${c.label}</p>
             </div>`)}
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-            <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Movimiento del período</h3>
-            <p class="text-xs text-stone-500 mb-4">Proporción entre lo prestado y lo devuelto.</p>
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Movimiento del período</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Proporción entre lo prestado y lo devuelto.</p>
             <div class="relative h-44 mb-3">
               <canvas id="reporte-chart"></canvas>
               <div id="reporte-chart-centro" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center"></div>

@@ -6,6 +6,7 @@ import { CONFIG } from '../config.js';
 import { escapeHtml, html } from './utilidades.js';
 import estadoConexion from './estado-conexion.js';
 import { portadaUrl, portadaHtml, vigilarPortadas } from './portadas.js';
+import { PrestamoRepository } from '../repositorios/PrestamoRepository.js';
 
 // Instancias de Chart.js activas, indexadas por id de canvas. Se destruyen
 // antes de volver a dibujar para no acumular gráficos huérfanos en memoria.
@@ -417,16 +418,16 @@ class UIManager {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-md z-[10000] transition-opacity duration-300 flex items-center justify-center p-4';
     overlay.innerHTML = `
-      <div class="bg-patrimonio-card/95 backdrop-blur-xl border border-white/20 rounded-[2rem] max-w-lg w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
+      <div class="bg-patrimonio-card dark:bg-stone-900/95 backdrop-blur-xl border border-white/20 dark:border-stone-700/50 rounded-[2rem] max-w-lg w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
         <div>
-          <h3 class="font-serif text-lg font-bold text-stone-900">Avisar a ${escapeHtml(lector.nombre || 'el lector')}</h3>
-          <p class="text-xs text-stone-500 mt-0.5">${escapeHtml(estado.etiqueta)} · ${escapeHtml(prestamo.libros?.titulo || '')}</p>
+          <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Avisar a ${escapeHtml(lector.nombre || 'el lector')}</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">${escapeHtml(estado.etiqueta)} · ${escapeHtml(prestamo.libros?.titulo || '')}</p>
         </div>
 
         <div>
-          <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Mensaje</label>
-          <textarea id="notify-message" aria-label="Texto del aviso al lector" rows="7" class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white text-sm text-stone-800 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">${escapeHtml(mensaje)}</textarea>
-          <p class="text-[11px] text-stone-500 mt-1">Puedes editarlo antes de enviarlo.</p>
+          <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Mensaje</label>
+          <textarea id="notify-message" aria-label="Texto del aviso al lector" rows="7" class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm text-stone-800 dark:text-stone-200 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">${escapeHtml(mensaje)}</textarea>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Puedes editarlo antes de enviarlo.</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
@@ -439,14 +440,14 @@ class UIManager {
             <i aria-hidden="true" class="fas fa-envelope"></i> Correo
           </button>
           <button data-action="copy"
-            class="btn-secundario flex items-center justify-center gap-2 border border-stone-300 hover:bg-stone-50 text-stone-700 px-3 py-2.5 rounded-xl text-sm font-medium">
+            class="btn-secundario flex items-center justify-center gap-2 border border-stone-300 dark:border-stone-600 hover:bg-stone-50 dark:bg-stone-800/50 text-stone-700 px-3 py-2.5 rounded-xl text-sm font-medium">
             <i aria-hidden="true" class="fas fa-copy"></i> Copiar
           </button>
         </div>
         ${(telefono.length < 11 || !email) ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">Este lector no tiene ${!email ? 'correo' : ''}${(!email && telefono.length < 11) ? ' ni ' : ''}${telefono.length < 11 ? 'teléfono' : ''} registrado. Complétalo en la vista Lectores para poder avisarle.</p>` : ''}
 
         <div class="flex justify-end pt-1">
-          <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
+          <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cerrar</button>
         </div>
       </div>
     `;
@@ -499,17 +500,17 @@ class UIManager {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-md z-[10000] transition-opacity duration-300 flex items-center justify-center p-4';
     overlay.innerHTML = `
-      <div class="bg-patrimonio-card/95 backdrop-blur-xl border border-white/20 rounded-[2rem] max-w-lg w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
+      <div class="bg-patrimonio-card dark:bg-stone-900/95 backdrop-blur-xl border border-white/20 dark:border-stone-700/50 rounded-[2rem] max-w-lg w-full p-8 shadow-soft-xl shadow-patrimonio-lago/20 transform transition-all space-y-4">
         <div>
-          <h3 class="font-serif text-lg font-bold text-stone-900">Avisar a ${escapeHtml(lector.nombre || 'el lector')}</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Reserva disponible · ${escapeHtml(libro?.titulo || '')}</p>
+          <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Avisar a ${escapeHtml(lector.nombre || 'el lector')}</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Reserva disponible · ${escapeHtml(libro?.titulo || '')}</p>
         </div>
 
         <div>
-          <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Mensaje</label>
+          <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Mensaje</label>
           <textarea id="notify-reserva-message" aria-label="Texto del aviso al lector" rows="7"
-            class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white text-sm text-stone-800 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">${escapeHtml(mensaje)}</textarea>
-          <p class="text-[11px] text-stone-500 mt-1">Puedes editarlo antes de enviarlo.</p>
+            class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm text-stone-800 dark:text-stone-200 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">${escapeHtml(mensaje)}</textarea>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Puedes editarlo antes de enviarlo.</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
@@ -522,14 +523,14 @@ class UIManager {
             <i aria-hidden="true" class="fas fa-envelope"></i> Correo
           </button>
           <button data-action="copy"
-            class="btn-secundario flex items-center justify-center gap-2 border border-stone-300 hover:bg-stone-50 text-stone-700 px-3 py-2.5 rounded-xl text-sm font-medium">
+            class="btn-secundario flex items-center justify-center gap-2 border border-stone-300 dark:border-stone-600 hover:bg-stone-50 dark:bg-stone-800/50 text-stone-700 px-3 py-2.5 rounded-xl text-sm font-medium">
             <i aria-hidden="true" class="fas fa-copy"></i> Copiar
           </button>
         </div>
         ${(telefono.length < 11 || !email) ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">Este lector no tiene ${!email ? 'correo' : ''}${(!email && telefono.length < 11) ? ' ni ' : ''}${telefono.length < 11 ? 'teléfono' : ''} registrado. Complétalo en la vista Lectores para poder avisarle.</p>` : ''}
 
         <div class="flex justify-end pt-1">
-          <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
+          <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cerrar</button>
         </div>
       </div>
     `;
@@ -589,16 +590,16 @@ class UIManager {
     const hasta = Math.min((pagina + 1) * porPagina, total);
 
     return `
-      <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-stone-200 bg-stone-50/60">
-        <p class="text-xs text-stone-500">Mostrando ${desde}–${hasta} de ${total}</p>
+      <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50/60">
+        <p class="text-xs text-stone-500 dark:text-stone-400">Mostrando ${desde}–${hasta} de ${total}</p>
         <div class="flex items-center gap-1">
           <button data-page="${pagina - 1}" aria-label="Página anterior" ${pagina === 0 ? 'disabled' : ''}
-            class="${claseBoton} px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-600 text-xs font-bold hover:border-patrimonio-lago disabled:opacity-40 disabled:cursor-not-allowed">
+            class="${claseBoton} px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-bold hover:border-patrimonio-lago disabled:opacity-40 disabled:cursor-not-allowed">
             <i aria-hidden="true" class="fas fa-chevron-left"></i>
           </button>
-          <span class="text-xs text-stone-600 px-2 tabular-nums">${pagina + 1} / ${paginas}</span>
+          <span class="text-xs text-stone-600 dark:text-stone-300 px-2 tabular-nums">${pagina + 1} / ${paginas}</span>
           <button data-page="${pagina + 1}" aria-label="Página siguiente" ${pagina >= paginas - 1 ? 'disabled' : ''}
-            class="${claseBoton} px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-600 text-xs font-bold hover:border-patrimonio-lago disabled:opacity-40 disabled:cursor-not-allowed">
+            class="${claseBoton} px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-bold hover:border-patrimonio-lago disabled:opacity-40 disabled:cursor-not-allowed">
             <i aria-hidden="true" class="fas fa-chevron-right"></i>
           </button>
         </div>
@@ -622,9 +623,9 @@ class UIManager {
   _bloqueConsentimiento(prefijo = 'new') {
     const c = UIManager.CONSENTIMIENTO;
     return `
-      <div class="border border-stone-300 rounded-xl p-3 bg-stone-50/60 space-y-2">
-        <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">Tratamiento de datos personales</p>
-        <p class="text-[11px] text-stone-600 leading-relaxed">${escapeHtml(c.texto)} <a href="/privacidad.html" target="_blank" rel="noopener" class="text-patrimonio-lago hover:underline">Ver la política completa.</a></p>
+      <div class="border border-stone-300 dark:border-stone-600 rounded-xl p-3 bg-stone-50 dark:bg-stone-800/50/60 space-y-2">
+        <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 dark:text-stone-400">Tratamiento de datos personales</p>
+        <p class="text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed">${escapeHtml(c.texto)} <a href="/privacidad.html" target="_blank" rel="noopener" class="text-patrimonio-lago hover:underline">Ver la política completa.</a></p>
         <label class="flex items-start gap-2 cursor-pointer pt-1">
           <input type="checkbox" id="${prefijo}-user-consent" class="mt-0.5 accent-[#7A431D]" />
           <span class="text-[11px] text-stone-700">El lector fue informado y autoriza el uso de sus datos para este fin.</span>
@@ -635,9 +636,9 @@ class UIManager {
         </label>
         <div id="${prefijo}-guardian-fields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
           <input id="${prefijo}-guardian-name" aria-label="Nombre del apoderado" placeholder="Nombre del apoderado"
-            class="px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago" />
+            class="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago" />
           <input id="${prefijo}-guardian-rut" aria-label="RUT del apoderado" placeholder="RUT del apoderado"
-            class="px-3 py-2 border border-stone-300 rounded-md bg-white text-sm font-mono focus:outline-none focus:border-patrimonio-lago" />
+            class="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm font-mono focus:outline-none focus:border-patrimonio-lago" />
         </div>
       </div>`;
   }
@@ -747,12 +748,12 @@ class UIManager {
       const aviso = document.createElement('div');
       aviso.id = 'aviso-inactividad';
       aviso.setAttribute('role', 'alert');
-      aviso.className = 'fixed bottom-5 left-5 z-[10001] max-w-xs bg-patrimonio-card border-2 border-amber-400 rounded-xl shadow-2xl p-4';
+      aviso.className = 'fixed bottom-5 left-5 z-[10001] max-w-xs bg-patrimonio-card dark:bg-stone-900 border-2 border-amber-400 rounded-xl shadow-2xl p-4';
       aviso.innerHTML = `
-        <p class="text-sm font-bold text-stone-900 mb-1">
+        <p class="text-sm font-bold text-stone-900 dark:text-stone-100 mb-1">
           <i aria-hidden="true" class="fas fa-clock text-amber-700 mr-1.5"></i>Sesión por cerrarse
         </p>
-        <p class="text-xs text-stone-600">Por seguridad, la sesión se cerrará en un minuto por inactividad.</p>
+        <p class="text-xs text-stone-600 dark:text-stone-300">Por seguridad, la sesión se cerrará en un minuto por inactividad.</p>
         <button id="seguir-activo-btn" class="btn-madera mt-3 w-full text-white rounded-lg py-2 text-xs font-bold">
           Seguir trabajando
         </button>`;
@@ -865,7 +866,24 @@ class UIManager {
   // Menú lateral agrupado por secciones (Panel / Gestión / Operación) y
   // adaptado al rol real del usuario, para que cada perfil vea solo lo
   // que necesita en su trabajo diario.
-  renderNavMenu() {
+  
+    async _actualizarBadgeAtrasados() {
+      const badge = document.getElementById('badge-atrasados');
+      if (!badge) return;
+      try {
+        const { conteos } = await PrestamoRepository.obtenerPrestamos('todos', 0, 1, 0);
+        if (conteos.vencidos > 0) {
+          badge.textContent = conteos.vencidos;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      } catch (e) {
+        badge.classList.add('hidden');
+      }
+    }
+
+    renderNavMenu() {
     const nav = document.getElementById('nav-menu');
     if (!nav) return;
 
@@ -885,12 +903,12 @@ class UIManager {
 
     nav.innerHTML = sections.map(group => `
       <div class="mb-5">
-        <p class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-widest text-stone-500">${escapeHtml(group.name)}</p>
+        <p class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-widest text-stone-500 dark:text-stone-400">${escapeHtml(group.name)}</p>
         <div class="space-y-0.5">
           ${group.items.map(v => `
             <button
               data-view="${v.id}"
-              class="nav-btn w-full px-3 py-2.5 rounded-lg text-sm font-bold flex items-center gap-3 transition text-stone-300 hover:bg-white/10 hover:text-white"
+              class="nav-btn w-full px-3 py-2.5 rounded-lg text-sm font-bold flex items-center gap-3 transition text-stone-300 hover:bg-white dark:bg-stone-800/10 hover:text-white"
             >
               <i aria-hidden="true" class="fas ${v.icon} w-4 text-center ${v.id === 'scanner' ? 'text-amber-400' : ''}"></i>
               <span>${escapeHtml(v.label)}</span>
@@ -906,9 +924,11 @@ class UIManager {
         // En móvil, cerramos el menú lateral tras elegir una vista
         document.getElementById('sidebar')?.classList.remove('active');
         document.getElementById('sidebar-overlay')?.classList.add('hidden');
+        });
       });
-    });
-  }
+
+      this._actualizarBadgeAtrasados();
+    }
 
   _setActiveNavButton(viewName) {
     document.querySelectorAll('#nav-menu .nav-btn').forEach(btn => {
@@ -919,7 +939,56 @@ class UIManager {
     });
   }
 
-  async switchView(viewName) {
+  
+    _skeletonLoader(viewName) {
+      if (viewName === 'catalog' || viewName === 'users' || viewName === 'loans') {
+        return `
+          <div class="flex flex-col gap-4 p-4 animate-pulse">
+            ${Array(4).fill(0).map(() => `
+              <div class="bg-white dark:bg-stone-800 rounded-2xl p-5 flex flex-col sm:flex-row gap-4 sm:items-center border border-stone-200 dark:border-stone-700 shadow-sm">
+                <div class="flex items-start gap-4 flex-1">
+                  <div class="w-16 h-24 bg-stone-200 rounded-lg shrink-0"></div>
+                  <div class="flex flex-col justify-center gap-2 flex-1 py-1">
+                    <div class="h-5 bg-stone-200 rounded-md w-3/4"></div>
+                    <div class="h-4 bg-stone-100 dark:bg-stone-700 rounded-md w-1/2"></div>
+                    <div class="flex gap-2 mt-2">
+                      <div class="h-5 bg-stone-100 dark:bg-stone-700 rounded-md w-16"></div>
+                      <div class="h-5 bg-stone-100 dark:bg-stone-700 rounded-md w-20"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex flex-col items-end gap-2 shrink-0 sm:w-32 hidden sm:flex">
+                   <div class="h-4 bg-stone-100 dark:bg-stone-700 rounded-md w-16"></div>
+                   <div class="h-8 bg-stone-200 rounded-xl w-24"></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      if (viewName === 'dashboard') {
+        return `
+          <div class="animate-pulse p-4">
+            <div class="mb-5 space-y-2">
+               <div class="h-6 bg-stone-200 rounded-md w-1/3"></div>
+               <div class="h-4 bg-stone-100 dark:bg-stone-700 rounded-md w-1/4"></div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              ${Array(4).fill(0).map(() => `
+                <div class="bg-white dark:bg-stone-800 rounded-[2rem] border border-stone-200 dark:border-stone-700 p-6 shadow-sm">
+                  <div class="h-6 w-6 bg-stone-200 rounded-full mb-3"></div>
+                  <div class="h-10 bg-stone-200 rounded-md w-1/2 mb-2"></div>
+                  <div class="h-4 bg-stone-100 dark:bg-stone-700 rounded-md w-3/4"></div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      return `<div class="flex justify-center py-20 animate-pulse"><i aria-hidden="true" class="fas fa-circle-notch fa-spin text-4xl text-patrimonio-lago"></i></div>`;
+    }
+
+    async switchView(viewName) {
     this.currentView = viewName;
     this._setActiveNavButton(viewName);
     
@@ -932,7 +1001,7 @@ class UIManager {
 
     // Loader mientras busca en BD
     const container = this._container();
-    if(container) container.innerHTML = `<div class="flex justify-center py-20"><i aria-hidden="true" class="fas fa-circle-notch fa-spin text-4xl text-patrimonio-lago"></i></div>`;
+      if(container) container.innerHTML = this._skeletonLoader(viewName);
 
     const renderers = {
       dashboard: () => this.renderDashboard(),
@@ -953,9 +1022,9 @@ class UIManager {
         console.error(`Fallo al cargar la vista "${viewName}":`, e);
         registroErrores.registrarOperacion(`cargar la vista ${viewName}`, e);
         if (container) container.innerHTML = `
-          <div class="catalog-card bg-patrimonio-card/95 backdrop-blur-xl rounded-[2rem] border border-rose-300/50 p-8 max-w-lg shadow-soft-xl">
-            <p class="font-serif font-semibold text-lg text-stone-900 mb-1">No se pudo cargar esta sección</p>
-            <p class="text-sm text-stone-600">${escapeHtml(e?.message || 'Error desconocido.')}</p>
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900/95 backdrop-blur-xl rounded-[2rem] border border-rose-300/50 p-8 max-w-lg shadow-soft-xl">
+            <p class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">No se pudo cargar esta sección</p>
+            <p class="text-sm text-stone-600 dark:text-stone-300">${escapeHtml(e?.message || 'Error desconocido.')}</p>
             <button id="retry-view-btn" class="btn-madera mt-4 text-white rounded-xl px-4 py-2 text-sm font-medium">
               <i aria-hidden="true" class="fas fa-rotate-right mr-1.5"></i> Reintentar
             </button>
@@ -1001,19 +1070,19 @@ class UIManager {
         </div>
 
         <div class="glass-panel relative z-10 w-full max-w-md rounded-2xl shadow-2xl p-8">
-          <h1 class="font-serif font-semibold text-xl text-stone-900 mb-1">Crea tu contraseña nueva</h1>
-          <p class="text-xs text-stone-600 mb-5">Debe tener al menos 8 caracteres.</p>
+          <h1 class="font-serif font-semibold text-xl text-stone-900 dark:text-stone-100 mb-1">Crea tu contraseña nueva</h1>
+          <p class="text-xs text-stone-600 dark:text-stone-300 mb-5">Debe tener al menos 8 caracteres.</p>
 
           <form id="new-password-form" class="space-y-4">
             <div>
-              <label for="np-1" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Contraseña nueva</label>
+              <label for="np-1" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Contraseña nueva</label>
               <input id="np-1" type="password" autocomplete="new-password" placeholder="••••••••"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <div>
-              <label for="np-2" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Repite la contraseña</label>
+              <label for="np-2" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Repite la contraseña</label>
               <input id="np-2" type="password" autocomplete="new-password" placeholder="••••••••"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <button type="submit" class="btn-madera w-full text-white font-medium rounded-xl shadow py-2.5 text-sm">
               Guardar contraseña
@@ -1086,32 +1155,32 @@ class UIManager {
         <div class="glass-panel relative z-10 w-full max-w-md rounded-2xl shadow-2xl p-8">
           <div class="flex items-center gap-2 mb-1">
             <i aria-hidden="true" class="fas fa-book text-patrimonio-madera"></i>
-            <h1 class="font-serif font-semibold text-xl text-stone-900">Bienvenido/a a Biblio<span class="text-patrimonio-madera">Nexo</span></h1>
+            <h1 class="font-serif font-semibold text-xl text-stone-900 dark:text-stone-100">Bienvenido/a a Biblio<span class="text-patrimonio-madera">Nexo</span></h1>
           </div>
-          <p class="text-xs text-stone-600 mb-5">Te invitaron a formar parte del equipo. Completa tus datos y crea tu contraseña para empezar.</p>
+          <p class="text-xs text-stone-600 dark:text-stone-300 mb-5">Te invitaron a formar parte del equipo. Completa tus datos y crea tu contraseña para empezar.</p>
 
           <form id="completar-invitacion-form" class="space-y-4">
             <div>
-              <label for="ci-nombre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Nombre completo</label>
+              <label for="ci-nombre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Nombre completo</label>
               <input id="ci-nombre" type="text" required placeholder="María Antileo Huenchumán"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <div>
-              <label for="ci-cargo" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Cargo <span class="normal-case font-normal text-stone-500">(opcional)</span></label>
+              <label for="ci-cargo" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Cargo <span class="normal-case font-normal text-stone-500 dark:text-stone-400">(opcional)</span></label>
               <input id="ci-cargo" type="text" placeholder="Encargada de biblioteca"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <div class="h-px bg-stone-300/70 my-1"></div>
             <div>
-              <label for="ci-pass-1" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Contraseña nueva</label>
+              <label for="ci-pass-1" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Contraseña nueva</label>
               <input id="ci-pass-1" type="password" autocomplete="new-password" placeholder="••••••••"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
-              <p class="text-[11px] text-stone-500 mt-1">Mínimo 8 caracteres, con al menos una mayúscula y un número.</p>
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Mínimo 8 caracteres, con al menos una mayúscula y un número.</p>
             </div>
             <div>
-              <label for="ci-pass-2" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Repite la contraseña</label>
+              <label for="ci-pass-2" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Repite la contraseña</label>
               <input id="ci-pass-2" type="password" autocomplete="new-password" placeholder="••••••••"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <button type="submit" class="btn-madera w-full text-white font-medium rounded-xl shadow py-2.5 text-sm">
               Crear mi cuenta y entrar
@@ -1202,29 +1271,29 @@ class UIManager {
         <div class="glass-panel relative z-10 w-full max-w-md rounded-2xl shadow-2xl p-8 md:p-9">
           <div class="flex items-center gap-2 mb-1">
             <i aria-hidden="true" class="fas fa-book text-patrimonio-madera"></i>
-            <h1 class="font-serif font-semibold text-2xl leading-tight text-stone-900">Biblio<span class="text-patrimonio-madera">Nexo</span></h1>
+            <h1 class="font-serif font-semibold text-2xl leading-tight text-stone-900 dark:text-stone-100">Biblio<span class="text-patrimonio-madera">Nexo</span></h1>
           </div>
-          <p class="text-[11px] text-stone-500 font-bold uppercase tracking-wide">Municipalidad de Futrono · Región de Los Ríos</p>
-          <p class="text-[11px] text-stone-500 italic font-serif mt-1.5">“Futronhue” — lugar de humo, a orillas del Lago Ranco.</p>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wide">Municipalidad de Futrono · Región de Los Ríos</p>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 italic font-serif mt-1.5">“Futronhue” — lugar de humo, a orillas del Lago Ranco.</p>
 
           <div class="h-px bg-stone-300/70 my-5"></div>
 
-          <h2 class="font-serif font-semibold text-lg text-stone-900 mb-1">Iniciar sesión</h2>
-          <p class="text-xs text-stone-600 mb-5">Acceso de personal — ingresa con tu cuenta institucional.</p>
+          <h2 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Iniciar sesión</h2>
+          <p class="text-xs text-stone-600 dark:text-stone-300 mb-5">Acceso de personal — ingresa con tu cuenta institucional.</p>
 
           <form id="login-form" class="space-y-4">
             <div>
-              <label for="email-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Correo</label>
+              <label for="email-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Correo</label>
               <input id="email-input" type="email" placeholder="nombre@futrono.cl" autocomplete="username"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <div>
               <div class="flex justify-between items-center mb-1">
-                <label for="password-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 block">Contraseña</label>
+                <label for="password-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 block">Contraseña</label>
                 <button type="button" id="forgot-password-btn" class="text-[11px] font-bold text-patrimonio-lago hover:underline">¿Olvidaste tu contraseña?</button>
               </div>
               <input id="password-input" type="password" placeholder="••••••••" autocomplete="current-password"
-                class="w-full px-3 py-2.5 border border-stone-300 rounded-md bg-white/90 text-sm text-stone-900 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
             </div>
             <button type="submit" class="btn-madera w-full text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm">
               Ingresar <i aria-hidden="true" class="fas fa-arrow-right ml-1"></i>
@@ -1233,15 +1302,15 @@ class UIManager {
 
           <div class="flex items-center gap-3 my-5">
             <div class="flex-1 h-px bg-stone-300/70"></div>
-            <span class="text-[10px] font-bold uppercase tracking-widest text-stone-500">o</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">o</span>
             <div class="flex-1 h-px bg-stone-300/70"></div>
           </div>
 
-          <button id="google-login-btn" type="button" class="btn-secundario w-full flex items-center justify-center gap-2.5 border border-stone-300 bg-white/70 hover:bg-white text-stone-700 font-medium rounded-xl py-2.5 text-sm">
+          <button id="google-login-btn" type="button" class="btn-secundario w-full flex items-center justify-center gap-2.5 border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800/70 hover:bg-white dark:bg-stone-800 text-stone-700 font-medium rounded-xl py-2.5 text-sm">
             <i aria-hidden="true" class="fa-brands fa-google text-[15px]"></i> Continuar con Google
           </button>
 
-          <p style="text-align:center; margin-top:16px;"><a href="/privacidad.html" class="text-[11px] font-bold text-stone-500 hover:underline">Política de privacidad y términos</a></p>
+          <p style="text-align:center; margin-top:16px;"><a href="/privacidad.html" class="text-[11px] font-bold text-stone-500 dark:text-stone-400 hover:underline">Política de privacidad y términos</a></p>
         </div>
       </div>
       <div id="toast-container" role="status" aria-live="polite" aria-atomic="false" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
@@ -1278,9 +1347,40 @@ class UIManager {
     });
   }
 
-  async renderShell(user) {
+  
+    _initDarkMode() {
+      const toggle = document.getElementById('dark-mode-toggle');
+      const icon = document.getElementById('dark-mode-icon');
+      if (!toggle) return;
+
+      let isDark = false;
+      try {
+        isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      } catch (e) {}
+      
+      const applyTheme = (dark) => {
+        if (dark) {
+          document.documentElement.classList.add('dark');
+          icon.classList.replace('fa-moon', 'fa-sun');
+          try { localStorage.setItem('theme', 'dark'); } catch(e) {}
+        } else {
+          document.documentElement.classList.remove('dark');
+          icon.classList.replace('fa-sun', 'fa-moon');
+          try { localStorage.setItem('theme', 'light'); } catch(e) {}
+        }
+      };
+
+      applyTheme(isDark);
+
+      toggle.addEventListener('click', () => {
+        const currentlyDark = document.documentElement.classList.contains('dark');
+        applyTheme(!currentlyDark);
+      });
+    }
+
+    async renderShell(user) {
     document.body.innerHTML = `
-      <div class="h-screen w-full flex bg-patrimonio-base overflow-hidden">
+      <div class="h-screen w-full flex bg-patrimonio-base dark:bg-stone-950 overflow-hidden">
 
         <!-- Fondo oscuro para cerrar el menú lateral en móvil -->
         <div id="sidebar-overlay" class="hidden fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-sm z-40 transition-opacity"></div>
@@ -1294,7 +1394,7 @@ class UIManager {
               <span class="font-serif font-semibold text-white text-lg block">
                 Biblio<span class="text-patrimonio-madera">Nexo</span>
               </span>
-              <span class="text-[9px] text-stone-500 font-bold uppercase tracking-widest">Futrono · Región de Los Ríos</span>
+              <span class="text-[9px] text-stone-500 dark:text-stone-400 font-bold uppercase tracking-widest">Futrono · Región de Los Ríos</span>
             </div>
           </div>
 
@@ -1304,17 +1404,18 @@ class UIManager {
                Ahora es un botón, porque es el lugar donde uno espera pinchar
                para ver y editar sus propios datos. -->
           <div class="border-t border-white/10 p-4 flex items-center gap-3">
-            <button id="perfil-btn" title="Ver y editar mi perfil"
-              class="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg -m-1 p-1 hover:bg-white/10 transition">
+            <button id="dark-mode-toggle" title="Alternar modo oscuro" class="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition shrink-0"><i id="dark-mode-icon" class="fas fa-moon"></i></button>
+              <button id="perfil-btn" title="Ver y editar mi perfil"
+              class="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg -m-1 p-1 hover:bg-white dark:bg-stone-800/10 transition">
               <span id="current-user-initial" class="w-9 h-9 rounded-full bg-patrimonio-madera flex items-center justify-center font-black text-sm shrink-0 text-white"></span>
               <span class="min-w-0 flex-1 block">
                 <span id="current-user-name" class="text-xs font-bold text-white leading-none truncate block"></span>
-                <span id="current-user-sub" class="text-[10px] text-stone-500 leading-none truncate block mt-0.5"></span>
+                <span id="current-user-sub" class="text-[10px] text-stone-500 dark:text-stone-400 leading-none truncate block mt-0.5"></span>
                 <span id="current-user-badge" class="stamp-onDark mt-1.5"></span>
               </span>
             </button>
             <button id="logout-btn" title="Cerrar sesión"
-              class="w-9 h-9 rounded-lg text-stone-300 hover:bg-white/10 hover:text-white flex items-center justify-center transition shrink-0">
+              class="w-9 h-9 rounded-lg text-stone-300 hover:bg-white dark:bg-stone-800/10 hover:text-white flex items-center justify-center transition shrink-0">
               <i aria-hidden="true" class="fas fa-right-from-bracket"></i>
             </button>
           </div>
@@ -1323,12 +1424,12 @@ class UIManager {
         <!-- Columna principal -->
         <div class="flex-1 flex flex-col min-w-0">
           <!-- Franja de título: como la etiqueta de un cajón de fichero -->
-          <div class="franja-titulo bg-white/95 backdrop-blur-md border-b border-stone-200/50 px-4 md:px-6 py-4 flex shadow-sm items-center gap-3 shrink-0">
-            <button id="sidebar-toggle-btn" class="md:hidden w-8 h-8 flex items-center justify-center text-stone-500 hover:text-stone-800">
+          <div class="franja-titulo bg-white dark:bg-stone-800/95 backdrop-blur-md border-b border-stone-200 dark:border-stone-700/50 px-4 md:px-6 py-4 flex shadow-sm items-center gap-3 shrink-0">
+            <button id="sidebar-toggle-btn" class="md:hidden w-8 h-8 flex items-center justify-center text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:text-stone-200">
               <i aria-hidden="true" class="fas fa-bars"></i>
             </button>
             <span class="w-1.5 h-4 bg-patrimonio-madera rounded-sm hidden sm:block"></span>
-            <h2 id="page-title" class="font-serif font-semibold text-stone-800 text-base">Dashboard</h2>
+            <h2 id="page-title" class="font-serif font-semibold text-stone-800 dark:text-stone-200 text-base">Dashboard</h2>
             <span id="estado-conexion" class="ml-auto shrink-0"></span>
           </div>
 
@@ -1339,6 +1440,7 @@ class UIManager {
     `;
 
     document.getElementById('logout-btn').addEventListener('click', () => auth.logout());
+      this._initDarkMode();
     document.getElementById('perfil-btn').addEventListener('click', () => this.switchView('profile'));
 
     const sidebar = document.getElementById('sidebar');
@@ -1443,7 +1545,7 @@ class UIManager {
     } catch (e) {
       host.innerHTML = `
         <div class="h-full flex flex-col items-center justify-center gap-2 text-center">
-          <p class="text-sm text-stone-500">No se pudo cargar el gráfico.</p>
+          <p class="text-sm text-stone-500 dark:text-stone-400">No se pudo cargar el gráfico.</p>
           <button class="retry-chart-btn text-xs font-bold text-patrimonio-lago hover:underline">
             <i aria-hidden="true" class="fas fa-rotate-right mr-1"></i> Reintentar
           </button>
@@ -1502,17 +1604,17 @@ class UIManager {
     // Total al centro del anillo
     const centro = document.getElementById(`${canvasId}-centro`);
     if (centro) centro.innerHTML = `
-      <span class="block font-serif font-bold text-3xl text-stone-900 leading-none">${escapeHtml(String(total))}</span>
-      <span class="block text-[10px] uppercase tracking-widest text-stone-500 mt-1">Total</span>`;
+      <span class="block font-serif font-bold text-3xl text-stone-900 dark:text-stone-100 leading-none">${escapeHtml(String(total))}</span>
+      <span class="block text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mt-1">Total</span>`;
 
     // Leyenda con cantidad y porcentaje
     const legend = document.getElementById(legendId);
     if (legend) legend.innerHTML = segmentos.map(s => `
       <div class="flex items-center gap-2.5 py-1.5">
         <span class="w-2.5 h-2.5 rounded-sm shrink-0" style="background:${escapeHtml(s.color)}"></span>
-        <span class="text-xs text-stone-600 flex-1 truncate">${escapeHtml(s.etiqueta)}</span>
-        <span class="text-xs font-bold text-stone-900 tabular-nums">${escapeHtml(String(s.valor))}</span>
-        <span class="text-[11px] text-stone-500 tabular-nums w-12 text-right">${escapeHtml(String(pct(s.valor)))}%</span>
+        <span class="text-xs text-stone-600 dark:text-stone-300 flex-1 truncate">${escapeHtml(s.etiqueta)}</span>
+        <span class="text-xs font-bold text-stone-900 dark:text-stone-100 tabular-nums">${escapeHtml(String(s.valor))}</span>
+        <span class="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums w-12 text-right">${escapeHtml(String(pct(s.valor)))}%</span>
       </div>
     `).join('');
   }
@@ -1537,11 +1639,11 @@ class UIManager {
   // sin volver a escaparse, o asignarse directo a innerHTML.
   _avisoMigracion(numero, archivo) {
     return html`
-      <div class="catalog-card bg-patrimonio-card/95 backdrop-blur-xl rounded-[2rem] border border-stone-200 p-8 max-w-xl shadow-soft-xl">
-        <h3 class="font-serif font-semibold text-lg text-stone-900 mb-2">Falta un paso en la base de datos</h3>
-        <p class="text-sm text-stone-600">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900/95 backdrop-blur-xl rounded-[2rem] border border-stone-200 dark:border-stone-700 p-8 max-w-xl shadow-soft-xl">
+        <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-2">Falta un paso en la base de datos</h3>
+        <p class="text-sm text-stone-600 dark:text-stone-300">
           Esta herramienta necesita la migración ${numero}. Abre el editor SQL de Supabase y ejecuta
-          <code class="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">${archivo}</code>,
+          <code class="bg-stone-100 dark:bg-stone-700 px-1.5 py-0.5 rounded text-xs font-mono">${archivo}</code>,
           luego vuelve aquí.
         </p>
       </div>`;

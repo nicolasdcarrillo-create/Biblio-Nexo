@@ -46,13 +46,14 @@ export default {
 
     // Se guardan para que los botones de aviso puedan recuperar el préstamo por id
     this._loansCache = visibles;
+    if(this._actualizarBadgeAtrasados) this._actualizarBadgeAtrasados();
     const pendientes = conteos.vencidos + conteos.porVencer;
 
     const chip = (clave, texto, cantidad, color) => html`
       <button data-filter="${clave}" class="loan-filter-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
         filtro === clave
           ? 'bg-patrimonio-lago text-white border-patrimonio-lago'
-          : 'bg-white text-stone-600 border-stone-300 hover:border-patrimonio-lago'
+          : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-300 dark:border-stone-600 hover:border-patrimonio-lago'
       }">
         ${texto} <span class="${filtro === clave ? 'text-white/70' : color}">${cantidad}</span>
       </button>`;
@@ -60,7 +61,7 @@ export default {
     container.innerHTML = html`
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div class="flex flex-wrap gap-2">
-          ${chip('todos', 'Todos', conteos.todos, 'text-stone-500')}
+          ${chip('todos', 'Todos', conteos.todos, 'text-stone-500 dark:text-stone-400')}
           ${chip('vencidos', 'Atrasados', conteos.vencidos, 'text-rose-700')}
           ${chip('porVencer', 'Por vencer', conteos.porVencer, 'text-amber-700')}
         </div>
@@ -70,10 +71,10 @@ export default {
         </button>
       </div>
 
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header flex items-center justify-between gap-3">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Préstamos activos</h3>
-          <span class="text-[11px] text-stone-500"><i aria-hidden="true" class="fas fa-circle-info mr-1"></i>Máx. ${this.param('max_prestamos_por_lector')} por lector</span>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Préstamos activos</h3>
+          <span class="text-[11px] text-stone-500 dark:text-stone-400"><i aria-hidden="true" class="fas fa-circle-info mr-1"></i>Máx. ${this.param('max_prestamos_por_lector')} por lector</span>
         </div>
         <div class="flex flex-col gap-4 p-4">
             <div id="prestamos-tbody" class="flex flex-col gap-4">
@@ -81,23 +82,23 @@ export default {
               const estado = this._estadoPrestamo(l.fecha_devolucion_esperada);
               const sinContacto = !l.lectores?.email && this.formatPhone(l.lectores?.telefono).length < 11;
               const colorFecha = estado.clave === 'vencido' ? 'text-rose-700 font-bold'
-                : estado.clave === 'porVencer' ? 'text-amber-700 font-bold' : 'text-stone-600';
+                : estado.clave === 'porVencer' ? 'text-amber-700 font-bold' : 'text-stone-600 dark:text-stone-300';
               return html`
-              <tr class="border-t border-stone-200">
-                <td class="px-4 py-3 font-bold text-stone-800">${l.libros?.titulo}</td>
-                <td class="px-4 py-3 text-stone-600">
+              <tr class="border-t border-stone-200 dark:border-stone-700">
+                <td class="px-4 py-3 font-bold text-stone-800 dark:text-stone-200">${l.libros?.titulo}</td>
+                <td class="px-4 py-3 text-stone-600 dark:text-stone-300">
                   <div>${l.lectores?.nombre}</div>
-                  <div class="text-[11px] text-stone-500 font-mono">${l.lectores?.rut || ''}</div>
+                  <div class="text-[11px] text-stone-500 dark:text-stone-400 font-mono">${l.lectores?.rut || ''}</div>
                 </td>
                 <td class="px-4 py-3 ${colorFecha}">
                   <div>${this._fechaLegible(l.fecha_devolucion_esperada)}</div>
                   ${estado.clave === 'vencido'
                     ? html`<span class="stamp stamp-danger mt-1"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> ${estado.etiqueta}</span>`
-                    : html`<div class="text-[11px] font-medium ${estado.clave === 'porVencer' ? 'text-amber-700' : 'text-stone-500'}">${estado.etiqueta}</div>`}
+                    : html`<div class="text-[11px] font-medium ${estado.clave === 'porVencer' ? 'text-amber-700' : 'text-stone-500 dark:text-stone-400'}">${estado.etiqueta}</div>`}
                 </td>
                 <td class="px-4 py-3 text-right whitespace-nowrap space-x-3">
                   ${estado.clave !== 'alDia' ? html`
-                    <button class="notify-loan-btn font-bold ${sinContacto ? 'text-stone-500' : 'text-patrimonio-madera'}" data-id="${l.id}"
+                    <button class="notify-loan-btn font-bold ${sinContacto ? 'text-stone-500 dark:text-stone-400' : 'text-patrimonio-madera'}" data-id="${l.id}"
                       title="${sinContacto ? 'Sin datos de contacto' : 'Enviar aviso al lector'}">
                       <i aria-hidden="true" class="fas fa-bell"></i> Avisar
                     </button>` : ''}
@@ -109,7 +110,7 @@ export default {
                   <button class="return-loan-btn text-patrimonio-bosque font-bold" data-id="${l.id}">Devolver</button>
                 </td>
               </tr>
-            `; }) : html`<tr><td colspan="4" class="px-4 py-8 text-center text-stone-500">${
+            `; }) : html`<tr><td colspan="4" class="px-4 py-8 text-center text-stone-500 dark:text-stone-400">${
               filtro === 'vencidos' ? 'No hay préstamos atrasados.'
               : filtro === 'porVencer' ? 'No hay préstamos por vencer.'
               : 'No hay préstamos activos.'}</td></tr>`}
@@ -194,12 +195,12 @@ export default {
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
       overlay.innerHTML = html`
-        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh]">
           <div class="p-6 pb-4">
-            <h3 class="font-serif text-lg font-bold text-stone-900">Aviso Cierre General</h3>
-            <p class="text-xs text-stone-500 mt-0.5">${prestamos.length} ${prestamos.length === 1 ? 'lector' : 'lectores'} con libros en su poder. Solicita devoluci�n masiva por cierre o vacaciones.</p>
+            <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Aviso Cierre General</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">${prestamos.length} ${prestamos.length === 1 ? 'lector' : 'lectores'} con libros en su poder. Solicita devoluci�n masiva por cierre o vacaciones.</p>
           </div>
-          <div class="overflow-y-auto px-6 divide-y divide-stone-200 border-t border-stone-200">
+          <div class="overflow-y-auto px-6 divide-y divide-stone-200 border-t border-stone-200 dark:border-stone-700">
             ${prestamos.map(l => {
               const tel = l.lectores?.telefono;
               const nombre = l.lectores?.nombre || 'Lector';
@@ -210,19 +211,19 @@ export default {
               return html`
                 <div class="py-3 flex items-center justify-between gap-3">
                   <div class="min-w-0">
-                    <p class="font-bold text-sm text-stone-800 truncate">${nombre}</p>
-                    <p class="text-xs text-stone-500 truncate" title="${titulo}">${titulo}</p>
+                    <p class="font-bold text-sm text-stone-800 dark:text-stone-200 truncate">${nombre}</p>
+                    <p class="text-xs text-stone-500 dark:text-stone-400 truncate" title="${titulo}">${titulo}</p>
                   </div>
                   ${tel
-                    ? html`<a href="${enlace}" target="_blank" rel="noopener noreferrer" class="btn-secundario shrink-0 border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"><i aria-hidden="true" class="fab fa-whatsapp text-emerald-600 mr-1"></i> WhatsApp</a>`
+                    ? html`<a href="${enlace}" target="_blank" rel="noopener noreferrer" class="btn-secundario shrink-0 border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"><i aria-hidden="true" class="fab fa-whatsapp text-emerald-600 mr-1"></i> WhatsApp</a>`
                     : html`<span class="text-[10px] text-stone-400 font-bold uppercase tracking-widest shrink-0">Sin tel.</span>`
                   }
                 </div>
               `;
             }).join('')}
           </div>
-          <div class="p-4 border-t border-stone-200 text-right bg-stone-50 rounded-b-2xl shrink-0">
-            <button data-action="cerrar" class="px-5 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-200">Cerrar</button>
+          <div class="p-4 border-t border-stone-200 dark:border-stone-700 text-right bg-stone-50 dark:bg-stone-800/50 rounded-b-2xl shrink-0">
+            <button data-action="cerrar" class="px-5 py-2.5 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-200">Cerrar</button>
           </div>
         </div>
       `.toString();
@@ -236,19 +237,19 @@ export default {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
     overlay.innerHTML = html`
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh]">
+      <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh]">
         <div class="p-6 pb-4">
-          <h3 class="font-serif text-lg font-bold text-stone-900">Avisos pendientes</h3>
-          <p class="text-xs text-stone-500 mt-0.5">${prestamos.length} ${prestamos.length === 1 ? 'lector' : 'lectores'} con devoluciones atrasadas o próximas. Envía los avisos uno por uno.</p>
+          <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Avisos pendientes</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">${prestamos.length} ${prestamos.length === 1 ? 'lector' : 'lectores'} con devoluciones atrasadas o próximas. Envía los avisos uno por uno.</p>
         </div>
-        <div class="overflow-y-auto px-6 divide-y divide-stone-200 border-t border-stone-200">
+        <div class="overflow-y-auto px-6 divide-y divide-stone-200 border-t border-stone-200 dark:border-stone-700">
           ${prestamos.map(l => {
             const estado = this._estadoPrestamo(l.fecha_devolucion_esperada);
             return html`
             <div class="py-3 flex items-center justify-between gap-3">
               <div class="min-w-0">
-                <p class="font-bold text-stone-800 text-sm truncate">${l.lectores?.nombre}</p>
-                <p class="text-xs text-stone-500 truncate">${l.libros?.titulo}</p>
+                <p class="font-bold text-stone-800 dark:text-stone-200 text-sm truncate">${l.lectores?.nombre}</p>
+                <p class="text-xs text-stone-500 dark:text-stone-400 truncate">${l.libros?.titulo}</p>
                 <p class="text-[11px] font-bold ${estado.clave === 'vencido' ? 'text-rose-700' : 'text-amber-700'}">${estado.etiqueta}</p>
               </div>
               <button data-notify-id="${l.id}" class="btn-secundario shrink-0 bg-patrimonio-madera text-white px-3 py-1.5 rounded-lg text-xs font-bold">
@@ -257,8 +258,8 @@ export default {
             </div>`;
           })}
         </div>
-        <div class="p-6 pt-4 flex justify-end border-t border-stone-200">
-          <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
+        <div class="p-6 pt-4 flex justify-end border-t border-stone-200 dark:border-stone-700">
+          <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cerrar</button>
         </div>
       </div>
     `.toString();
@@ -282,16 +283,16 @@ export default {
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
       overlay.innerHTML = `
-        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-          <h3 class="font-serif text-lg font-bold text-stone-900">${escapeHtml(titulo)}</h3>
-          <p class="text-xs text-stone-500">Busca al lector por nombre o RUT. O escribe un RUT nuevo para registrarlo.</p>
+        <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">${escapeHtml(titulo)}</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400">Busca al lector por nombre o RUT. O escribe un RUT nuevo para registrarlo.</p>
           <div class="relative">
-            <i aria-hidden="true" class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-stone-500"></i>
-            <input id="lector-search-input" autocomplete="off" class="w-full pl-9 pr-3 py-2.5 border border-stone-300 rounded-lg focus:ring-1 focus:ring-patrimonio-lago focus:border-patrimonio-lago text-sm" placeholder="Ej: María Pérez o 12345678-5">
+            <i aria-hidden="true" class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400"></i>
+            <input id="lector-search-input" autocomplete="off" class="w-full pl-9 pr-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-lg focus:ring-1 focus:ring-patrimonio-lago focus:border-patrimonio-lago text-sm" placeholder="Ej: María Pérez o 12345678-5">
           </div>
           <div id="lector-search-results" class="max-h-48 overflow-y-auto space-y-1 mt-2"></div>
-          <div class="flex justify-end gap-2 pt-2 border-t border-stone-200 mt-4">
-            <button id="lector-search-cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+          <div class="flex justify-end gap-2 pt-2 border-t border-stone-200 dark:border-stone-700 mt-4">
+            <button id="lector-search-cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
             <button id="lector-search-confirm" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium" disabled>Continuar</button>
           </div>
         </div>
@@ -349,16 +350,16 @@ export default {
           return;
         }
         timer = setTimeout(async () => {
-          resultsContainer.innerHTML = '<p class="text-xs text-stone-500 p-2"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Buscando...</p>';
+          resultsContainer.innerHTML = '<p class="text-xs text-stone-500 dark:text-stone-400 p-2"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Buscando...</p>';
           try {
             const res = await LectorRepository.obtenerLectores(q, 0, 5);
             if (res.lectores.length === 0) {
-              resultsContainer.innerHTML = '<p class="text-xs text-stone-500 p-2">Ningún lector coincide. Escriba el RUT completo para registrarlo como nuevo.</p>';
+              resultsContainer.innerHTML = '<p class="text-xs text-stone-500 dark:text-stone-400 p-2">Ningún lector coincide. Escriba el RUT completo para registrarlo como nuevo.</p>';
             } else {
               resultsContainer.innerHTML = res.lectores.map(l => `
-                <button type="button" data-rut="${l.rut}" data-nombre="${escapeHtml(l.nombre)}" class="w-full text-left px-3 py-2 rounded-lg border border-transparent hover:bg-stone-50 hover:border-stone-200 focus:bg-stone-50 focus:border-stone-200 focus:outline-none transition-colors">
-                  <p class="text-sm font-medium text-stone-800">${escapeHtml(l.nombre)}</p>
-                  <p class="text-[11px] font-mono text-stone-500">${l.rut}</p>
+                <button type="button" data-rut="${l.rut}" data-nombre="${escapeHtml(l.nombre)}" class="w-full text-left px-3 py-2 rounded-lg border border-transparent hover:bg-stone-50 dark:bg-stone-800/50 hover:border-stone-200 dark:border-stone-700 focus:bg-stone-50 dark:bg-stone-800/50 focus:border-stone-200 dark:border-stone-700 focus:outline-none transition-colors">
+                  <p class="text-sm font-medium text-stone-800 dark:text-stone-200">${escapeHtml(l.nombre)}</p>
+                  <p class="text-[11px] font-mono text-stone-500 dark:text-stone-400">${l.rut}</p>
                 </button>
               `).join('');
               
@@ -422,12 +423,12 @@ export default {
       cuerpo = html`
         <div class="bg-patrimonio-lago/5 border border-patrimonio-lago/20 rounded-xl p-4 text-center">
           <i aria-hidden="true" class="fas fa-user-plus text-2xl text-patrimonio-lago mb-2"></i>
-          <p class="font-bold text-stone-800">Lector nuevo</p>
-          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${rut}</span> no está registrado.</p>
-          <p class="text-xs text-stone-500 mt-2">Regístralo para poder prestarle libros.</p>
+          <p class="font-bold text-stone-800 dark:text-stone-200">Lector nuevo</p>
+          <p class="text-sm text-stone-600 dark:text-stone-300 mt-1">El RUT <span class="font-mono font-bold">${rut}</span> no está registrado.</p>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-2">Regístralo para poder prestarle libros.</p>
         </div>`;
       acciones = html`
-        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
         <button data-action="registrar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar lector</button>`;
     } else if (!estado.puede_prestar) {
       // Impedido
@@ -438,8 +439,8 @@ export default {
         </div>
         ${this._resumenLector(estado)}`;
       acciones = html`
-        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
-        <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cerrar</button>
+        <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
     } else {
       // Todo en orden
       cuerpo = html`
@@ -449,13 +450,13 @@ export default {
         </div>
         ${this._resumenLector(estado)}`;
       acciones = html`
-        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
         <button data-action="prestar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Confirmar préstamo</button>`;
     }
 
     overlay.innerHTML = html`
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-        <h3 class="font-serif text-lg font-bold text-stone-900">Situación del lector</h3>
+      <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Situación del lector</h3>
         ${cuerpo}
         <div class="flex justify-end gap-3 pt-1 flex-wrap">${acciones}</div>
       </div>`.toString();
@@ -505,19 +506,19 @@ export default {
 
   // Resumen numérico de la situación de un lector
   _resumenLector(estado) {
-    const dato = (etiqueta, valor, color = 'text-stone-900') => html`
+    const dato = (etiqueta, valor, color = 'text-stone-900 dark:text-stone-100') => html`
       <div class="text-center">
         <p class="font-serif font-bold text-2xl ${color}">${valor}</p>
-        <p class="text-[10px] uppercase tracking-widest text-stone-500 mt-0.5">${etiqueta}</p>
+        <p class="text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mt-0.5">${etiqueta}</p>
       </div>`;
     return html`
-      <div class="grid grid-cols-3 gap-2 border border-stone-200 rounded-xl py-3">
+      <div class="grid grid-cols-3 gap-2 border border-stone-200 dark:border-stone-700 rounded-xl py-3">
         ${dato('Activos', estado.prestamos_activos ?? 0)}
-        ${dato('Atrasados', estado.prestamos_atrasados ?? 0, (estado.prestamos_atrasados ?? 0) > 0 ? 'text-rose-700' : 'text-stone-900')}
+        ${dato('Atrasados', estado.prestamos_atrasados ?? 0, (estado.prestamos_atrasados ?? 0) > 0 ? 'text-rose-700' : 'text-stone-900 dark:text-stone-100')}
         ${dato('Máximo', this.param('max_prestamos_por_lector'))}
       </div>
       ${estado.email || estado.telefono ? html`
-        <p class="text-[11px] text-stone-500 text-center">
+        <p class="text-[11px] text-stone-500 dark:text-stone-400 text-center">
           ${estado.email ? estado.email : ''}${estado.email && estado.telefono ? ' · ' : ''}${estado.telefono ? estado.telefono : ''}
         </p>` : ''}`;
   },
@@ -527,36 +528,36 @@ export default {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
     overlay.innerHTML = html`
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <div>
-          <h3 class="font-serif text-lg font-bold text-stone-900">Registrar lector nuevo</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Todos los datos son obligatorios.</p>
+          <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Registrar lector nuevo</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Todos los datos son obligatorios.</p>
         </div>
         <div class="space-y-3">
           <div>
-            <label for="new-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
+            <label for="new-user-id" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">RUT</label>
             <input id="new-user-id" value="${rut}" readonly
-              class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm font-mono text-stone-600" />
+              class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-stone-50 dark:bg-stone-800/50 text-sm font-mono text-stone-600 dark:text-stone-300" />
           </div>
           <div>
-            <label for="new-user-name" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Nombre completo</label>
+            <label for="new-user-name" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Nombre completo</label>
             <input id="new-user-name" placeholder="María Antileo Huenchumán"
-              class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
           <div>
-            <label for="new-user-phone" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Teléfono</label>
+            <label for="new-user-phone" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Teléfono</label>
             <input id="new-user-phone" type="tel" placeholder="9 1234 5678"
-              class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
           <div>
-            <label for="new-user-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Correo</label>
+            <label for="new-user-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Correo</label>
             <input id="new-user-email" type="email" placeholder="nombre@correo.cl"
-              class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
         ${crudo(this._bloqueConsentimiento('new'))}
         <div class="flex justify-end gap-3 pt-1">
-          <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+          <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
           <button data-action="save" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar y continuar</button>
         </div>
       </div>`.toString();
@@ -642,12 +643,12 @@ export default {
       cuerpo = html`
         <div class="bg-patrimonio-lago/5 border border-patrimonio-lago/20 rounded-xl p-4 text-center">
           <i aria-hidden="true" class="fas fa-user-plus text-2xl text-patrimonio-lago mb-2"></i>
-          <p class="font-bold text-stone-800">Lector nuevo</p>
-          <p class="text-sm text-stone-600 mt-1">El RUT <span class="font-mono font-bold">${rut}</span> no está registrado.</p>
-          <p class="text-xs text-stone-500 mt-2">Regístralo para poder reservarle un libro.</p>
+          <p class="font-bold text-stone-800 dark:text-stone-200">Lector nuevo</p>
+          <p class="text-sm text-stone-600 dark:text-stone-300 mt-1">El RUT <span class="font-mono font-bold">${rut}</span> no está registrado.</p>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-2">Regístralo para poder reservarle un libro.</p>
         </div>`;
       acciones = html`
-        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
         <button data-action="registrar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Registrar lector</button>`;
     } else if (!estado.puede_prestar) {
       cuerpo = html`
@@ -657,8 +658,8 @@ export default {
         </div>
         ${this._resumenLector(estado)}`;
       acciones = html`
-        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
-        <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cerrar</button>
+        <button data-action="ver-prestamos" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">Ver sus préstamos</button>`;
     } else {
       cuerpo = html`
         <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
@@ -667,13 +668,13 @@ export default {
         </div>
         ${this._resumenLector(estado)}`;
       acciones = html`
-        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+        <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
         <button data-action="reservar" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Confirmar reserva</button>`;
     }
 
     overlay.innerHTML = html`
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-        <h3 class="font-serif text-lg font-bold text-stone-900">Situación del lector</h3>
+      <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Situación del lector</h3>
         ${cuerpo}
         <div class="flex justify-end gap-3 pt-1 flex-wrap">${acciones}</div>
       </div>`.toString();
@@ -725,10 +726,10 @@ export default {
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
       overlay.innerHTML = html`
-        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
           <div>
-            <h3 class="font-serif text-lg font-bold text-stone-900">${estado.nombre || 'Lector'}</h3>
-            <p class="text-xs font-mono text-stone-500">${estado.rut || rut}</p>
+            <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">${estado.nombre || 'Lector'}</h3>
+            <p class="text-xs font-mono text-stone-500 dark:text-stone-400">${estado.rut || rut}</p>
           </div>
           ${!estado.puede_prestar ? html`
             <div class="bg-rose-50 border border-rose-200 rounded-xl p-3">
@@ -739,7 +740,7 @@ export default {
             </div>`}
           ${this._resumenLector(estado)}
           <div class="flex justify-end pt-1">
-            <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cerrar</button>
+            <button data-action="close" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cerrar</button>
           </div>
         </div>`.toString();
       document.body.appendChild(overlay);

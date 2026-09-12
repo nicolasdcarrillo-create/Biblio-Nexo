@@ -12,8 +12,8 @@ export default {
     if (!container) return;
 
     if (this.currentUserRole !== 'admin') {
-      container.innerHTML = `<div class="catalog-card bg-patrimonio-card rounded-2xl border border-stone-300 p-6 max-w-md">
-        <p class="text-sm text-stone-600"><i aria-hidden="true" class="fas fa-lock mr-1.5"></i>Esta sección es solo para administradores.</p>
+      container.innerHTML = `<div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl border border-stone-300 dark:border-stone-600 p-6 max-w-md">
+        <p class="text-sm text-stone-600 dark:text-stone-300"><i aria-hidden="true" class="fas fa-lock mr-1.5"></i>Esta sección es solo para administradores.</p>
       </div>`;
       return;
     }
@@ -22,7 +22,7 @@ export default {
     const boton = (clave, texto, icono) => html`
       <button data-admin-tab="${clave}" class="admin-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-bold border transition ${
         pestana === clave ? 'bg-patrimonio-lago text-white border-patrimonio-lago'
-                          : 'bg-white text-stone-600 border-stone-300 hover:border-patrimonio-lago'
+                          : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-300 dark:border-stone-600 hover:border-patrimonio-lago'
       }"><i aria-hidden="true" class="fas ${icono} mr-1"></i>${texto}</button>`;
 
     container.innerHTML = html`
@@ -62,8 +62,8 @@ export default {
     try {
       await (pintores[pestana] || pintores.inventario)();
     } catch (err) {
-      panel.innerHTML = html`<div class="catalog-card bg-patrimonio-card rounded-2xl border border-stone-300 p-6">
-        <p class="text-sm text-stone-600">${err.message || 'No se pudo cargar la sección.'}</p></div>`;
+      panel.innerHTML = html`<div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl border border-stone-300 dark:border-stone-600 p-6">
+        <p class="text-sm text-stone-600 dark:text-stone-300">${err.message || 'No se pudo cargar la sección.'}</p></div>`;
     }
   },
 
@@ -77,22 +77,22 @@ export default {
 
     if (filas.length === 0) {
       panel.innerHTML = `
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 text-center">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-6 text-center">
           <i aria-hidden="true" class="fas fa-circle-check text-3xl text-patrimonio-bosque mb-3"></i>
-          <p class="font-serif font-semibold text-lg text-stone-900">El inventario cuadra</p>
-          <p class="text-sm text-stone-500 mt-1">En todos los libros, los ejemplares disponibles más los prestados coinciden con el total registrado.</p>
+          <p class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">El inventario cuadra</p>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mt-1">En todos los libros, los ejemplares disponibles más los prestados coinciden con el total registrado.</p>
         </div>`;
       return;
     }
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">${filas.length} libro${filas.length === 1 ? '' : 's'} con inventario descuadrado</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Los ejemplares disponibles más los prestados no coinciden con el total. Corregir recalcula las disponibles a partir de los préstamos reales.</p>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">${filas.length} libro${filas.length === 1 ? '' : 's'} con inventario descuadrado</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Los ejemplares disponibles más los prestados no coinciden con el total. Corregir recalcula las disponibles a partir de los préstamos reales.</p>
         </div>
         <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+          <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
             <tr>
               <th class="text-left px-4 py-3">Libro</th>
               <th class="text-center px-4 py-3">Total</th>
@@ -104,10 +104,10 @@ export default {
           </thead>
           <tbody>
             ${filas.map(f => html`
-              <tr class="border-t border-stone-200">
+              <tr class="border-t border-stone-200 dark:border-stone-700">
                 <td class="px-4 py-3">
-                  <div class="font-bold text-stone-800">${f.titulo}</div>
-                  <div class="text-[11px] font-mono text-stone-500">${f.isbn || 'sin ISBN'}</div>
+                  <div class="font-bold text-stone-800 dark:text-stone-200">${f.titulo}</div>
+                  <div class="text-[11px] font-mono text-stone-500 dark:text-stone-400">${f.isbn || 'sin ISBN'}</div>
                 </td>
                 <td class="px-4 py-3 text-center tabular-nums">${f.copias_totales}</td>
                 <td class="px-4 py-3 text-center tabular-nums ${f.stock < 0 ? 'text-rose-700 font-bold' : ''}">${f.stock}</td>
@@ -152,25 +152,25 @@ export default {
 
     if (filas.length === 0) {
       panel.innerHTML = html`
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 text-center">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-6 text-center">
           <i aria-hidden="true" class="fas fa-circle-check text-3xl text-patrimonio-bosque mb-3"></i>
-          <p class="font-serif font-semibold text-lg text-stone-900">No hay reservas pendientes</p>
-          <p class="text-sm text-stone-500 mt-1">Nadie está esperando un libro en este momento.</p>
+          <p class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">No hay reservas pendientes</p>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mt-1">Nadie está esperando un libro en este momento.</p>
         </div>`;
       return;
     }
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">${filas.length} reserva${filas.length === 1 ? '' : 's'} vigente${filas.length === 1 ? '' : 's'}</h3>
-          <p class="text-xs text-stone-500 mt-0.5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">${filas.length} reserva${filas.length === 1 ? '' : 's'} vigente${filas.length === 1 ? '' : 's'}</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
             "Apartado" significa que el ejemplar ya está separado, físicamente en la biblioteca, esperando que lo
             retiren antes del plazo. "En fila" todavía no tiene un ejemplar propio: espera a que se devuelva uno.
           </p>
         </div>
         <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+          <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
             <tr>
               <th class="text-left px-4 py-3">Libro</th>
               <th class="text-left px-4 py-3">Lector</th>
@@ -180,22 +180,22 @@ export default {
           </thead>
           <tbody>
             ${filas.map(f => html`
-              <tr class="border-t border-stone-200">
+              <tr class="border-t border-stone-200 dark:border-stone-700">
                 <td class="px-4 py-3">
-                  <div class="font-bold text-stone-800">${f.libro_titulo || 'Sin título'}</div>
-                  <div class="text-[11px] font-mono text-stone-500">${f.libro_isbn || 'sin ISBN'}</div>
+                  <div class="font-bold text-stone-800 dark:text-stone-200">${f.libro_titulo || 'Sin título'}</div>
+                  <div class="text-[11px] font-mono text-stone-500 dark:text-stone-400">${f.libro_isbn || 'sin ISBN'}</div>
                 </td>
                 <td class="px-4 py-3">
-                  <div class="text-stone-800">${f.lector_nombre}</div>
-                  <div class="text-[11px] font-mono text-stone-500">${f.lector_rut}</div>
+                  <div class="text-stone-800 dark:text-stone-200">${f.lector_nombre}</div>
+                  <div class="text-[11px] font-mono text-stone-500 dark:text-stone-400">${f.lector_rut}</div>
                 </td>
                 <td class="px-4 py-3 text-center">
                   ${f.estado === 'apartada' ? html`
                     <span class="stamp stamp-success !rotate-0">Apartado</span>
-                    <div class="text-[11px] text-stone-500 mt-1">Retirar antes del ${this._fechaHoraLegible(f.vence_apartado_en)}</div>`
+                    <div class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Retirar antes del ${this._fechaHoraLegible(f.vence_apartado_en)}</div>`
                   : html`
                     <span class="stamp stamp-info !rotate-0">En fila</span>
-                    <div class="text-[11px] text-stone-500 mt-1">Posición ${f.posicion_en_fila}</div>`}
+                    <div class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Posición ${f.posicion_en_fila}</div>`}
                 </td>
                 <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
                   ${f.estado === 'apartada' ? html`
@@ -255,15 +255,15 @@ export default {
     }
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Lectores bloqueados</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Solo bloqueos administrativos. Los lectores con libros atrasados quedan suspendidos automáticamente y se liberan al devolver, sin aparecer en esta lista.</p>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Lectores bloqueados</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Solo bloqueos administrativos. Los lectores con libros atrasados quedan suspendidos automáticamente y se liberan al devolver, sin aparecer en esta lista.</p>
         </div>
         ${filas.length === 0
-          ? html`<p class="px-4 py-8 text-center text-sm text-stone-500">Ningún lector tiene bloqueo administrativo.</p>`
+          ? html`<p class="px-4 py-8 text-center text-sm text-stone-500 dark:text-stone-400">Ningún lector tiene bloqueo administrativo.</p>`
           : html`<table class="w-full text-sm">
-              <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+              <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
                 <tr>
                   <th class="text-left px-4 py-3">Lector</th>
                   <th class="text-left px-4 py-3">Motivo</th>
@@ -273,13 +273,13 @@ export default {
               </thead>
               <tbody>
                 ${filas.map(l => html`
-                  <tr class="border-t border-stone-200">
+                  <tr class="border-t border-stone-200 dark:border-stone-700">
                     <td class="px-4 py-3">
-                      <div class="font-bold text-stone-800">${l.nombre}</div>
-                      <div class="text-[11px] font-mono text-stone-500">${l.rut}</div>
+                      <div class="font-bold text-stone-800 dark:text-stone-200">${l.nombre}</div>
+                      <div class="text-[11px] font-mono text-stone-500 dark:text-stone-400">${l.rut}</div>
                     </td>
-                    <td class="px-4 py-3 text-stone-600">${l.motivo_bloqueo || '—'}</td>
-                    <td class="px-4 py-3 text-stone-500 text-xs">${l.bloqueado_en ? this._fechaLegible(l.bloqueado_en.split('T')[0]) : '—'}</td>
+                    <td class="px-4 py-3 text-stone-600 dark:text-stone-300">${l.motivo_bloqueo || '—'}</td>
+                    <td class="px-4 py-3 text-stone-500 dark:text-stone-400 text-xs">${l.bloqueado_en ? this._fechaLegible(l.bloqueado_en.split('T')[0]) : '—'}</td>
                     <td class="px-4 py-3 text-right">
                       <button class="unblock-btn btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold" data-id="${l.id}">Desbloquear</button>
                     </td>
@@ -288,16 +288,16 @@ export default {
             </table>`}
       </div>
 
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mt-4 p-5 max-w-lg">
-        <h3 class="font-serif font-semibold text-lg text-stone-900 mb-3">Bloquear un lector</h3>
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mt-4 p-5 max-w-lg">
+        <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-3">Bloquear un lector</h3>
         <div class="space-y-3">
           <div>
-            <label for="block-rut" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT</label>
-            <input id="block-rut" placeholder="12345678-5" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm font-mono focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            <label for="block-rut" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">RUT</label>
+            <input id="block-rut" placeholder="12345678-5" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm font-mono focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
           <div>
-            <label for="block-reason" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Motivo</label>
-            <input id="block-reason" placeholder="Pérdida de ejemplar sin reposición" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            <label for="block-reason" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Motivo</label>
+            <input id="block-reason" placeholder="Pérdida de ejemplar sin reposición" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
           <button id="block-btn" class="btn-madera text-white font-medium rounded-xl shadow px-4 py-2.5 text-sm w-full">Bloquear lector</button>
         </div>
@@ -356,13 +356,13 @@ export default {
     }
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Personal con acceso</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Invita cuentas nuevas más abajo y asigna el rol de cada una aquí. El nombre y el cargo los completa cada persona en su propio perfil.</p>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Personal con acceso</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Invita cuentas nuevas más abajo y asigna el rol de cada una aquí. El nombre y el cargo los completa cada persona en su propio perfil.</p>
         </div>
         <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+          <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
             <tr>
               <th class="text-left px-4 py-3">Persona</th>
               <th class="text-left px-4 py-3">Rol</th>
@@ -373,20 +373,20 @@ export default {
           </thead>
           <tbody>
             ${filas.map(u => html`
-              <tr class="border-t border-stone-200">
+              <tr class="border-t border-stone-200 dark:border-stone-700">
                 <td class="px-4 py-3">
-                  <div class="font-bold text-stone-800">${u.nombre || 'Sin nombre en su perfil'}</div>
-                  <div class="text-xs text-stone-500">${u.email}</div>
-                  ${u.cargo ? html`<div class="text-[11px] text-stone-500 italic">${u.cargo}</div>` : ''}
+                  <div class="font-bold text-stone-800 dark:text-stone-200">${u.nombre || 'Sin nombre en su perfil'}</div>
+                  <div class="text-xs text-stone-500 dark:text-stone-400">${u.email}</div>
+                  ${u.cargo ? html`<div class="text-[11px] text-stone-500 dark:text-stone-400 italic">${u.cargo}</div>` : ''}
                 </td>
                 <td class="px-4 py-3">
                   <span class="stamp ${u.rol === 'admin' ? 'stamp-danger' : 'stamp-info'} !rotate-0">
                     <i aria-hidden="true" class="fas ${u.rol === 'admin' ? 'fa-user-shield' : 'fa-user'}"></i> ${u.rol}
                   </span>
                 </td>
-                <td class="px-4 py-3 text-stone-500 text-xs">${u.ultimo_acceso ? this._fechaLegible(u.ultimo_acceso.split('T')[0]) : 'Nunca'}</td>
+                <td class="px-4 py-3 text-stone-500 dark:text-stone-400 text-xs">${u.ultimo_acceso ? this._fechaLegible(u.ultimo_acceso.split('T')[0]) : 'Nunca'}</td>
                 <td class="px-4 py-3 text-right">
-                  <button class="role-btn btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold"
+                  <button class="role-btn btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold"
                     data-id="${u.usuario_id}" data-rol="${u.rol === 'admin' ? 'librero' : 'admin'}">
                     ${u.rol === 'admin' ? 'Librero' : 'Administrador'}
                   </button>
@@ -402,20 +402,20 @@ export default {
         </table>
       </div>
 
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mt-4 p-5 max-w-lg">
-        <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Invitar personal nuevo</h3>
-        <p class="text-xs text-stone-500 mb-3">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mt-4 p-5 max-w-lg">
+        <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Invitar personal nuevo</h3>
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
           Manda una invitación por correo con el rol ya asignado. La persona la acepta, crea su contraseña y
           queda con acceso de inmediato — sin pasar por el panel de Supabase.
         </p>
         <div class="space-y-3">
           <div>
-            <label for="invite-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Correo</label>
-            <input id="invite-email" type="email" placeholder="nombre@ejemplo.cl" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+            <label for="invite-email" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Correo</label>
+            <input id="invite-email" type="email" placeholder="nombre@ejemplo.cl" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
           <div>
-            <label for="invite-rol" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Rol</label>
-            <select id="invite-rol" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">
+            <label for="invite-rol" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Rol</label>
+            <select id="invite-rol" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago">
               <option value="librero">Librero</option>
               <option value="admin">Administrador</option>
             </select>
@@ -501,25 +501,25 @@ export default {
 
     if (filas.length === 0) {
       panel.innerHTML = html`
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-lg">
-          <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Enlaces de escaneo remoto</h3>
-          <p class="text-sm text-stone-600">Nadie ha generado un enlace todavía. Se crean desde Mesón, con el botón
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-6 max-w-lg">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Enlaces de escaneo remoto</h3>
+          <p class="text-sm text-stone-600 dark:text-stone-300">Nadie ha generado un enlace todavía. Se crean desde Mesón, con el botón
             «Escanear desde el celular».</p>
         </div>`;
       return;
     }
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Enlaces de escaneo remoto</h3>
-          <p class="text-xs text-stone-500 mt-0.5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Enlaces de escaneo remoto</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
             Cada uno permite agregar o reponer libros sin iniciar sesión, hasta que vence o se revoca. Se generan
             desde Mesón, con el botón «Escanear desde el celular». Los últimos 200, del más nuevo al más antiguo.
           </p>
         </div>
         <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+          <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
             <tr>
               <th class="text-left px-4 py-3">Generado por</th>
               <th class="text-left px-4 py-3">Vence</th>
@@ -530,21 +530,21 @@ export default {
           </thead>
           <tbody>
             ${filas.map(e => html`
-              <tr class="border-t border-stone-200">
+              <tr class="border-t border-stone-200 dark:border-stone-700">
                 <td class="px-4 py-3">
-                  <div class="text-xs text-stone-500">${e.creado_por_email || 'Cuenta eliminada'}</div>
-                  <div class="text-[11px] text-stone-500">${this._fechaHoraLegible(e.creado_en)}</div>
+                  <div class="text-xs text-stone-500 dark:text-stone-400">${e.creado_por_email || 'Cuenta eliminada'}</div>
+                  <div class="text-[11px] text-stone-500 dark:text-stone-400">${this._fechaHoraLegible(e.creado_en)}</div>
                 </td>
-                <td class="px-4 py-3 text-stone-600 text-xs">${this._fechaHoraLegible(e.expira_en)}</td>
+                <td class="px-4 py-3 text-stone-600 dark:text-stone-300 text-xs">${this._fechaHoraLegible(e.expira_en)}</td>
                 <td class="px-4 py-3">
                   ${e.vigente
                     ? '<span class="stamp stamp-success !rotate-0"><i aria-hidden="true" class="fas fa-check"></i> Vigente</span>'
                     : e.revocado
                       ? '<span class="stamp stamp-danger !rotate-0"><i aria-hidden="true" class="fas fa-ban"></i> Revocado</span>'
-                      : '<span class="stamp !rotate-0 bg-stone-200 text-stone-600"><i aria-hidden="true" class="fas fa-clock"></i> Vencido</span>'}
+                      : '<span class="stamp !rotate-0 bg-stone-200 text-stone-600 dark:text-stone-300"><i aria-hidden="true" class="fas fa-clock"></i> Vencido</span>'}
                 </td>
-                <td class="px-4 py-3 text-stone-600 text-xs">
-                  ${e.usos}${e.ultimo_uso_en ? html`<div class="text-[11px] text-stone-500">último: ${this._fechaHoraLegible(e.ultimo_uso_en)}</div>` : ''}
+                <td class="px-4 py-3 text-stone-600 dark:text-stone-300 text-xs">
+                  ${e.usos}${e.ultimo_uso_en ? html`<div class="text-[11px] text-stone-500 dark:text-stone-400">último: ${this._fechaHoraLegible(e.ultimo_uso_en)}</div>` : ''}
                 </td>
                 <td class="px-4 py-3 text-right">
                   ${e.vigente ? html`
@@ -592,24 +592,24 @@ export default {
 
     if (filas.length === 0) {
       panel.innerHTML = html`
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 max-w-lg">
-          <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Libros eliminados</h3>
-          <p class="text-sm text-stone-600">Ningún libro eliminado del catálogo está pendiente de restaurar.</p>
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-6 max-w-lg">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Libros eliminados</h3>
+          <p class="text-sm text-stone-600 dark:text-stone-300">Ningún libro eliminado del catálogo está pendiente de restaurar.</p>
         </div>`;
       return;
     }
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Libros eliminados</h3>
-          <p class="text-xs text-stone-500 mt-0.5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Libros eliminados</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
             Se pueden restaurar tal como quedaron justo antes de eliminarse — título, autor, ejemplares y todo su
             historial de préstamos, reenganchado.
           </p>
         </div>
         <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+          <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
             <tr>
               <th class="text-left px-4 py-3">Libro</th>
               <th class="text-center px-4 py-3">Ejemplares</th>
@@ -619,16 +619,16 @@ export default {
           </thead>
           <tbody>
             ${filas.map(f => html`
-              <tr class="border-t border-stone-200">
+              <tr class="border-t border-stone-200 dark:border-stone-700">
                 <td class="px-4 py-3">
-                  <div class="font-bold text-stone-800">${f.titulo || 'Sin título'}</div>
-                  <div class="text-xs text-stone-500">${f.autor || ''}</div>
-                  <div class="text-[11px] font-mono text-stone-500">${f.isbn || 'sin ISBN'}</div>
+                  <div class="font-bold text-stone-800 dark:text-stone-200">${f.titulo || 'Sin título'}</div>
+                  <div class="text-xs text-stone-500 dark:text-stone-400">${f.autor || ''}</div>
+                  <div class="text-[11px] font-mono text-stone-500 dark:text-stone-400">${f.isbn || 'sin ISBN'}</div>
                 </td>
                 <td class="px-4 py-3 text-center tabular-nums">${f.copias_totales ?? '—'}</td>
-                <td class="px-4 py-3 text-stone-500 text-xs">
+                <td class="px-4 py-3 text-stone-500 dark:text-stone-400 text-xs">
                   ${this._fechaHoraLegible(f.eliminado_en)}
-                  ${f.eliminado_por ? html`<div class="text-[11px] text-stone-500">${f.eliminado_por}</div>` : ''}
+                  ${f.eliminado_por ? html`<div class="text-[11px] text-stone-500 dark:text-stone-400">${f.eliminado_por}</div>` : ''}
                 </td>
                 <td class="px-4 py-3 text-right">
                   <button class="restore-book-btn btn-secundario bg-patrimonio-bosque text-white px-3 py-1.5 rounded-lg text-xs font-bold" data-id="${f.libro_id}">Restaurar</button>
@@ -675,15 +675,15 @@ export default {
     })[a] || String(a ?? ''));
 
     panel.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Últimos movimientos</h3>
-          <p class="text-xs text-stone-500 mt-0.5">Se registra automáticamente en la base de datos, incluso si alguien escribe directo en las tablas.</p>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Últimos movimientos</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Se registra automáticamente en la base de datos, incluso si alguien escribe directo en las tablas.</p>
         </div>
         ${filas.length === 0
-          ? html`<p class="px-4 py-8 text-center text-sm text-stone-500">Todavía no hay movimientos registrados.</p>`
+          ? html`<p class="px-4 py-8 text-center text-sm text-stone-500 dark:text-stone-400">Todavía no hay movimientos registrados.</p>`
           : html`<table class="w-full text-sm">
-              <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+              <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
                 <tr>
                   <th class="text-left px-4 py-3">Cuándo</th>
                   <th class="text-left px-4 py-3">Quién</th>
@@ -693,13 +693,13 @@ export default {
               </thead>
               <tbody>
                 ${filas.map(f => html`
-                  <tr class="border-t border-stone-200">
-                    <td class="px-4 py-3 text-stone-500 text-xs whitespace-nowrap">
+                  <tr class="border-t border-stone-200 dark:border-stone-700">
+                    <td class="px-4 py-3 text-stone-500 dark:text-stone-400 text-xs whitespace-nowrap">
                       ${new Date(f.created_at).toLocaleString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' })}
                     </td>
                     <td class="px-4 py-3 text-stone-700 text-xs">${f.usuario_email || 'sistema'}</td>
                     <td class="px-4 py-3">${accion(f.accion)}</td>
-                    <td class="px-4 py-3 text-stone-500 text-xs">${f.tabla} <span class="text-stone-300">#${f.registro_id || '?'}</span></td>
+                    <td class="px-4 py-3 text-stone-500 dark:text-stone-400 text-xs">${f.tabla} <span class="text-stone-300">#${f.registro_id || '?'}</span></td>
                   </tr>`)}
               </tbody>
             </table>`}
@@ -728,21 +728,21 @@ export default {
       <div class="space-y-4">
 
         <!-- Respaldo automático -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border ${ultimoRespaldo && !ultimoRespaldo.ok ? 'border-rose-300' : 'border-stone-300'} overflow-hidden">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border ${ultimoRespaldo && !ultimoRespaldo.ok ? 'border-rose-300' : 'border-stone-300 dark:border-stone-600'} overflow-hidden">
           <div class="catalog-card-header">
-            <h3 class="font-serif font-semibold text-lg text-stone-900">Respaldo automático</h3>
-            <p class="text-xs text-stone-500 mt-0.5">
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Respaldo automático</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
               Una tarea programada (pg_cron) corre todos los días a las 03:00-04:00, hora de Chile, y sube una
               copia completa de los datos a un almacenamiento privado, sin que nadie tenga que apretar un botón.
             </p>
           </div>
           ${respaldos.length === 0 ? html`
-            <p class="px-4 py-6 text-center text-sm text-stone-500">
+            <p class="px-4 py-6 text-center text-sm text-stone-500 dark:text-stone-400">
               Todavía no hay ninguna corrida registrada. Si la migración
-              <code class="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">018_respaldo_automatico.sql</code>
+              <code class="bg-stone-100 dark:bg-stone-700 px-1.5 py-0.5 rounded text-xs font-mono">018_respaldo_automatico.sql</code>
               recién se aplicó, la primera corrida real llega en la próxima ventana programada.
             </p>` : html`
-            <div class="px-4 py-3 border-b border-stone-200 ${ultimoRespaldo.ok ? 'bg-patrimonio-bosque/5' : 'bg-rose-50'}">
+            <div class="px-4 py-3 border-b border-stone-200 dark:border-stone-700 ${ultimoRespaldo.ok ? 'bg-patrimonio-bosque/5' : 'bg-rose-50'}">
               <p class="text-sm font-bold ${ultimoRespaldo.ok ? 'text-patrimonio-bosque' : 'text-rose-800'}">
                 <i aria-hidden="true" class="fas ${ultimoRespaldo.ok ? 'fa-circle-check' : 'fa-triangle-exclamation'} mr-1.5"></i>
                 Último respaldo: ${ultimoRespaldo.ok ? 'correcto' : 'falló'}, ${this._fechaLegible(ultimoRespaldo.ejecutado_en.split('T')[0])}
@@ -750,7 +750,7 @@ export default {
               ${!ultimoRespaldo.ok && ultimoRespaldo.mensaje ? html`<p class="text-xs text-rose-700 mt-1">${ultimoRespaldo.mensaje}</p>` : ''}
             </div>
             <table class="w-full text-sm">
-              <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+              <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
                 <tr>
                   <th class="text-left px-4 py-3">Fecha</th>
                   <th class="text-center px-4 py-3">Estado</th>
@@ -759,29 +759,29 @@ export default {
               </thead>
               <tbody>
                 ${respaldos.map(r => html`
-                  <tr class="border-t border-stone-200">
-                    <td class="px-4 py-3 text-stone-600 text-xs">${new Date(r.ejecutado_en).toLocaleString('es-CL')}</td>
+                  <tr class="border-t border-stone-200 dark:border-stone-700">
+                    <td class="px-4 py-3 text-stone-600 dark:text-stone-300 text-xs">${new Date(r.ejecutado_en).toLocaleString('es-CL')}</td>
                     <td class="px-4 py-3 text-center">${r.ok
                       ? crudo('<i aria-hidden="true" class="fas fa-circle-check text-patrimonio-bosque"></i>')
                       : crudo('<i aria-hidden="true" class="fas fa-circle-xmark text-rose-700"></i>')}</td>
-                    <td class="px-4 py-3 text-right text-stone-500 text-xs tabular-nums">${r.bytes ? `${(r.bytes / 1024).toFixed(1)} KB` : '—'}</td>
+                    <td class="px-4 py-3 text-right text-stone-500 dark:text-stone-400 text-xs tabular-nums">${r.bytes ? `${(r.bytes / 1024).toFixed(1)} KB` : '—'}</td>
                   </tr>`)}
               </tbody>
             </table>`}
         </div>
 
         <!-- Seguridad de acceso a los datos -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border ${problemas.length ? 'border-rose-300' : 'border-stone-300'} shadow-sm overflow-hidden">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border ${problemas.length ? 'border-rose-300' : 'border-stone-300 dark:border-stone-600'} shadow-sm overflow-hidden">
           <div class="catalog-card-header">
-            <h3 class="font-serif font-semibold text-lg text-stone-900">Protección de las tablas</h3>
-            <p class="text-xs text-stone-500 mt-0.5">Sin RLS, cualquiera con la clave pública puede leer y escribir desde la consola del navegador. Ocultar botones no protege nada.</p>
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Protección de las tablas</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Sin RLS, cualquiera con la clave pública puede leer y escribir desde la consola del navegador. Ocultar botones no protege nada.</p>
           </div>
           ${problemas.length ? html`
             <div class="bg-rose-50 border-b border-rose-200 px-4 py-3">
               <p class="text-sm font-bold text-rose-800"><i aria-hidden="true" class="fas fa-triangle-exclamation mr-1.5"></i>${problemas.length} tabla${problemas.length === 1 ? '' : 's'} sin protección adecuada</p>
             </div>` : ''}
           <table class="w-full text-sm">
-            <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+            <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
               <tr>
                 <th class="text-left px-4 py-3">Tabla</th>
                 <th class="text-center px-4 py-3">RLS</th>
@@ -791,13 +791,13 @@ export default {
             </thead>
             <tbody>
               ${rls.map(r => html`
-                <tr class="border-t border-stone-200">
+                <tr class="border-t border-stone-200 dark:border-stone-700">
                   <td class="px-4 py-3 font-mono text-stone-700">${r.tabla}</td>
                   <td class="px-4 py-3 text-center">${r.rls_activo
                     ? crudo('<i aria-hidden="true" class="fas fa-circle-check text-patrimonio-bosque"></i>')
                     : crudo('<i aria-hidden="true" class="fas fa-circle-xmark text-rose-700"></i>')}</td>
                   <td class="px-4 py-3 text-center tabular-nums">${r.politicas}</td>
-                  <td class="px-4 py-3 text-xs ${r.diagnostico === 'Correcto' ? 'text-stone-500' : 'text-rose-700 font-bold'}">${r.diagnostico}</td>
+                  <td class="px-4 py-3 text-xs ${r.diagnostico === 'Correcto' ? 'text-stone-500 dark:text-stone-400' : 'text-rose-700 font-bold'}">${r.diagnostico}</td>
                 </tr>`)}
             </tbody>
           </table>
@@ -805,17 +805,17 @@ export default {
 
         <!-- Circulación: comprueba que el personal pueda de verdad trabajar -->
         ${circulacion === null ? html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-amber-300 p-5">
-            <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Funciones de circulación</h3>
-            <p class="text-sm text-stone-600">
-              Falta ejecutar la migración <code class="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">008_perfiles_y_permisos_librero.sql</code>.
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-amber-300 p-5">
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Funciones de circulación</h3>
+            <p class="text-sm text-stone-600 dark:text-stone-300">
+              Falta ejecutar la migración <code class="bg-stone-100 dark:bg-stone-700 px-1.5 py-0.5 rounded text-xs font-mono">008_perfiles_y_permisos_librero.sql</code>.
               Hasta entonces no se puede comprobar si el personal con rol librero puede prestar y devolver libros.
             </p>
           </div>` : html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border ${rotas.length ? 'border-rose-300' : 'border-stone-300'} overflow-hidden">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border ${rotas.length ? 'border-rose-300' : 'border-stone-300 dark:border-stone-600'} overflow-hidden">
             <div class="catalog-card-header">
-              <h3 class="font-serif font-semibold text-lg text-stone-900">Funciones de circulación</h3>
-              <p class="text-xs text-stone-500 mt-0.5">
+              <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Funciones de circulación</h3>
+              <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                 Las funciones que escriben deben declararse SECURITY DEFINER. Si no, las mismas políticas RLS
                 que protegen las tablas bloquean la escritura, y un préstamo o una devolución pueden fallar
                 <span class="font-bold">sin mostrar ningún error</span>: la pantalla dice que se guardó y la base de datos no cambia.
@@ -826,7 +826,7 @@ export default {
                 <p class="text-sm font-bold text-rose-800"><i aria-hidden="true" class="fas fa-triangle-exclamation mr-1.5"></i>${rotas.length} función${rotas.length === 1 ? '' : 'es'} en riesgo: el rol librero no podrá operar</p>
               </div>` : ''}
             <table class="w-full text-sm">
-              <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
+              <thead class="bg-stone-50 dark:bg-stone-800/50 text-stone-500 dark:text-stone-400 uppercase text-[10px] font-black">
                 <tr>
                   <th class="text-left px-4 py-3">Función</th>
                   <th class="text-center px-4 py-3">Definer</th>
@@ -835,38 +835,38 @@ export default {
               </thead>
               <tbody>
                 ${circulacion.map(f => html`
-                  <tr class="border-t border-stone-200">
+                  <tr class="border-t border-stone-200 dark:border-stone-700">
                     <td class="px-4 py-3 font-mono text-stone-700">${f.funcion}</td>
                     <td class="px-4 py-3 text-center">${f.es_definer
                       ? crudo('<i aria-hidden="true" class="fas fa-circle-check text-patrimonio-bosque"></i>')
                       : crudo('<i aria-hidden="true" class="fas fa-circle-xmark text-rose-700"></i>')}</td>
-                    <td class="px-4 py-3 text-xs ${f.es_definer ? 'text-stone-500' : 'text-rose-700 font-bold'}">${f.diagnostico}</td>
+                    <td class="px-4 py-3 text-xs ${f.es_definer ? 'text-stone-500 dark:text-stone-400' : 'text-rose-700 font-bold'}">${f.diagnostico}</td>
                   </tr>`)}
               </tbody>
             </table>
           </div>`}
 
         <!-- Derechos del titular -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Derechos del titular</h3>
-          <p class="text-xs text-stone-500 mt-0.5 mb-4">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Derechos del titular</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5 mb-4">
             La Ley 21.719 rige desde el 1 de diciembre de 2026. Un lector puede pedir acceder a sus datos,
             recibirlos en formato reutilizable o solicitar su eliminación. Deja constancia de cada solicitud.
           </p>
           <div class="space-y-3 max-w-md">
             <div>
-              <label for="arco-rut" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">RUT del solicitante</label>
-              <input id="arco-rut" placeholder="12345678-5" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm font-mono focus:outline-none focus:border-patrimonio-lago" />
+              <label for="arco-rut" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">RUT del solicitante</label>
+              <input id="arco-rut" placeholder="12345678-5" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm font-mono focus:outline-none focus:border-patrimonio-lago" />
             </div>
             <div class="flex flex-wrap gap-2">
-              <button id="arco-export-btn" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">
+              <button id="arco-export-btn" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">
                 <i aria-hidden="true" class="fas fa-download mr-1.5"></i> Entregar sus datos
               </button>
               <button id="arco-delete-btn" class="btn-secundario bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-xl text-sm font-medium">
                 <i aria-hidden="true" class="fas fa-user-slash mr-1.5"></i> Suprimir datos
               </button>
             </div>
-            <p class="text-[11px] text-stone-500">
+            <p class="text-[11px] text-stone-500 dark:text-stone-400">
               La supresión borra nombre, RUT y contacto, y conserva el registro estadístico del préstamo sin
               vincularlo a una persona. Es la forma de cumplir el derecho de supresión sin perder la constancia
               de gestión que exige la Ley 20.285 de Transparencia.
@@ -875,32 +875,32 @@ export default {
         </div>
 
         <!-- Conservación -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Plazo de conservación</h3>
-          <p class="text-xs text-stone-500 mt-0.5 mb-4">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Plazo de conservación</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5 mb-4">
             No se pueden conservar datos identificables más tiempo del necesario para la finalidad declarada.
             Esta acción anonimiza a los lectores sin actividad en el plazo configurado.
           </p>
-          <button id="purge-btn" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">
+          <button id="purge-btn" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-4 py-2 rounded-xl text-sm font-medium">
             <i aria-hidden="true" class="fas fa-broom mr-1.5"></i> Ejecutar purga por antigüedad
           </button>
         </div>
 
         <!-- Evidencia de incidentes -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Evidencia para reporte de incidente</h3>
-          <p class="text-xs text-stone-500 mt-0.5 mb-4">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Evidencia para reporte de incidente</h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5 mb-4">
             La Ley 21.663 obliga a las municipalidades a dar alerta temprana en 3 horas e informe inicial en 72.
             Esto extrae la actividad del período para adjuntar al reporte al CSIRT Nacional.
           </p>
           <div class="flex flex-wrap gap-2 items-end">
             <div>
-              <label for="ev-desde" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Desde</label>
-              <input id="ev-desde" type="date" class="px-3 py-2 border border-stone-300 rounded-md bg-white text-sm" />
+              <label for="ev-desde" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Desde</label>
+              <input id="ev-desde" type="date" class="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm" />
             </div>
             <div>
-              <label for="ev-hasta" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Hasta</label>
-              <input id="ev-hasta" type="date" class="px-3 py-2 border border-stone-300 rounded-md bg-white text-sm" />
+              <label for="ev-hasta" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Hasta</label>
+              <input id="ev-hasta" type="date" class="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm" />
             </div>
             <button id="ev-btn" class="btn-madera text-white px-4 py-2 rounded-xl text-sm font-medium">
               <i aria-hidden="true" class="fas fa-file-shield mr-1.5"></i> Extraer evidencia
@@ -909,27 +909,27 @@ export default {
         </div>
 
         <!-- Parámetros -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-hidden">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-hidden">
           <div class="catalog-card-header">
-            <h3 class="font-serif font-semibold text-lg text-stone-900">Parámetros del sistema</h3>
-            <p class="text-xs text-stone-500 mt-0.5">Definidos en la base de datos. La interfaz los lee de aquí, así que no pueden quedar desincronizados.</p>
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Parámetros del sistema</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Definidos en la base de datos. La interfaz los lee de aquí, así que no pueden quedar desincronizados.</p>
           </div>
           <table class="w-full text-sm">
             <tbody>
               ${parametros.map(p => html`
-                <tr class="border-t border-stone-200">
+                <tr class="border-t border-stone-200 dark:border-stone-700">
                   <td class="px-4 py-3">
                     <div class="font-mono text-xs text-stone-700">${p.clave}</div>
-                    <div class="text-[11px] text-stone-500">${p.descripcion || ''}</div>
+                    <div class="text-[11px] text-stone-500 dark:text-stone-400">${p.descripcion || ''}</div>
                   </td>
                   <td class="px-4 py-3 w-32">
-                    <input class="param-input w-full px-2 py-1.5 border border-stone-300 rounded-md bg-white text-sm tabular-nums"
+                    <input class="param-input w-full px-2 py-1.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm tabular-nums"
                       data-clave="${p.clave}" value="${p.valor}" />
                   </td>
                 </tr>`)}
             </tbody>
           </table>
-          <div class="px-4 py-3 border-t border-stone-200 bg-stone-50/60 flex justify-end">
+          <div class="px-4 py-3 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50/60 flex justify-end">
             <button id="save-params-btn" class="btn-madera text-white px-4 py-2 rounded-xl text-sm font-medium">Guardar parámetros</button>
           </div>
         </div>
@@ -1067,10 +1067,10 @@ export default {
       ? new Date(iso).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
       : '—';
 
-    const tarjeta = (etiqueta, valor, color = 'text-stone-900') => html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
+    const tarjeta = (etiqueta, valor, color = 'text-stone-900 dark:text-stone-100') => html`
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
         <p class="font-serif font-semibold text-4xl ${color}">${valor}</p>
-        <p class="text-xs text-stone-500 font-bold uppercase tracking-wide mt-1">${etiqueta}</p>
+        <p class="text-xs text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wide mt-1">${etiqueta}</p>
       </div>`;
 
     // Deriva de funciones: lo que habría delatado el fallo del librero al momento
@@ -1080,14 +1080,14 @@ export default {
       <div class="space-y-4">
 
         ${definiciones === null ? html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-amber-300 p-5">
-            <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Definiciones de funciones</h3>
-            <p class="text-sm text-stone-600">
-              Falta ejecutar la migración <code class="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">010_consolidacion.sql</code>.
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-amber-300 p-5">
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Definiciones de funciones</h3>
+            <p class="text-sm text-stone-600 dark:text-stone-300">
+              Falta ejecutar la migración <code class="bg-stone-100 dark:bg-stone-700 px-1.5 py-0.5 rounded text-xs font-mono">010_consolidacion.sql</code>.
               Sin ella no se puede comprobar si alguna función quedó fuera de norma.
             </p>
           </div>` : derivas.length ? html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-rose-300 overflow-hidden">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-rose-300 overflow-hidden">
             <div class="bg-rose-50 border-b border-rose-200 px-4 py-3">
               <p class="text-sm font-bold text-rose-800">
                 <i aria-hidden="true" class="fas fa-triangle-exclamation mr-1.5"></i>${derivas.length} función${derivas.length === 1 ? '' : 'es'} fuera de norma
@@ -1099,51 +1099,51 @@ export default {
             <div class="divide-y divide-stone-200">
               ${derivas.map(d => html`
                 <div class="px-4 py-3">
-                  <p class="text-sm font-bold text-stone-800 font-mono">${d.nombre}
+                  <p class="text-sm font-bold text-stone-800 dark:text-stone-200 font-mono">${d.nombre}
                     <span class="stamp stamp-danger !rotate-0 !text-[9px] !py-0.5 !px-1.5 ml-1">${d.estado}</span>
                   </p>
-                  <p class="text-xs text-stone-600 mt-1">${d.diagnostico}</p>
+                  <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">${d.diagnostico}</p>
                 </div>`)}
             </div>
           </div>` : html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 px-4 py-3 flex items-center gap-3">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 px-4 py-3 flex items-center gap-3">
             <i aria-hidden="true" class="fas fa-circle-check text-patrimonio-bosque text-lg"></i>
             <div>
-              <p class="text-sm font-bold text-stone-800">Las ${definiciones.length} funciones coinciden con la migración 010</p>
-              <p class="text-xs text-stone-500">Ninguna perdió su nivel de acceso ni quedó duplicada.</p>
+              <p class="text-sm font-bold text-stone-800 dark:text-stone-200">Las ${definiciones.length} funciones coinciden con la migración 010</p>
+              <p class="text-xs text-stone-500 dark:text-stone-400">Ninguna perdió su nivel de acceso ni quedó duplicada.</p>
             </div>
           </div>`}
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          ${tarjeta('Sin revisar', resumen.sin_revisar ?? 0, (resumen.sin_revisar ?? 0) > 0 ? 'text-rose-700' : 'text-stone-900')}
-          ${tarjeta('Últimas 24 horas', resumen.ultimas_24h ?? 0, (resumen.ultimas_24h ?? 0) > 0 ? 'text-amber-700' : 'text-stone-900')}
+          ${tarjeta('Sin revisar', resumen.sin_revisar ?? 0, (resumen.sin_revisar ?? 0) > 0 ? 'text-rose-700' : 'text-stone-900 dark:text-stone-100')}
+          ${tarjeta('Últimas 24 horas', resumen.ultimas_24h ?? 0, (resumen.ultimas_24h ?? 0) > 0 ? 'text-amber-700' : 'text-stone-900 dark:text-stone-100')}
           ${tarjeta('Total registrado', resumen.total ?? 0)}
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-            <p class="font-serif font-semibold text-lg text-stone-900 leading-tight">${fechaHora(resumen.mas_reciente)}</p>
-            <p class="text-xs text-stone-500 font-bold uppercase tracking-wide mt-1">Más reciente</p>
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+            <p class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 leading-tight">${fechaHora(resumen.mas_reciente)}</p>
+            <p class="text-xs text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wide mt-1">Más reciente</p>
           </div>
         </div>
 
         ${(resumen.total ?? 0) === 0 ? html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-8 text-center">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-8 text-center">
             <i aria-hidden="true" class="fas fa-circle-check text-3xl text-patrimonio-bosque mb-3"></i>
-            <p class="font-serif font-semibold text-lg text-stone-900">Sin fallos registrados</p>
-            <p class="text-xs text-stone-500 mt-1 max-w-md mx-auto">
+            <p class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Sin fallos registrados</p>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-md mx-auto">
               Desde que se activó el registro no se ha capturado ningún error. Si acabas de ejecutar la
               migración 009, esto es lo esperable: la bitácora empieza vacía.
             </p>
           </div>` : html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-hidden">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-hidden">
             <div class="catalog-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h3 class="font-serif font-semibold text-lg text-stone-900">Últimos fallos</h3>
-                <p class="text-xs text-stone-500 mt-0.5">
+                <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Últimos fallos</h3>
+                <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                   Nada de esto sale del proyecto: se guarda en tu propia base de datos. Los RUT, correos y
                   teléfonos se reemplazan antes de registrar.
                 </p>
               </div>
               <div class="flex gap-2 shrink-0">
-                <button id="marcar-todos-btn" class="btn-secundario border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold">
+                <button id="marcar-todos-btn" class="btn-secundario border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold">
                   <i aria-hidden="true" class="fas fa-check-double mr-1"></i> Marcar revisados
                 </button>
                 <button id="purgar-errores-btn" class="btn-secundario border border-rose-200 bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg text-xs font-bold">
@@ -1156,7 +1156,7 @@ export default {
                 <div class="px-4 py-3 ${e.visto ? 'opacity-60' : ''}">
                   <div class="flex items-start justify-between gap-3 flex-wrap">
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm font-bold text-stone-800 break-words">${e.mensaje}</p>
+                      <p class="text-sm font-bold text-stone-800 dark:text-stone-200 break-words">${e.mensaje}</p>
                       <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
                         <span class="stamp ${e.origen === 'js' ? 'stamp-danger' : 'stamp-info'} !rotate-0 !text-[9px] !py-0.5 !px-1.5">
                           ${e.origen === 'js' ? 'fallo del navegador' : 'operación'}
@@ -1164,7 +1164,7 @@ export default {
                         ${e.vista ? html`<span class="stamp stamp-success !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-window-maximize"></i> ${e.vista}</span>` : ''}
                         ${e.repeticiones > 1 ? html`<span class="stamp stamp-danger !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-repeat"></i> ${e.repeticiones} veces</span>` : ''}
                       </div>
-                      <p class="text-[11px] text-stone-500 mt-1.5">
+                      <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1.5">
                         ${fechaHora(e.ocurrido_en)}
                         ${e.usuario_email ? ' · ' + e.usuario_email : ''}
                         ${e.navegador ? ' · ' + e.navegador : ''}
@@ -1172,11 +1172,11 @@ export default {
                       ${e.detalle ? html`
                         <details class="mt-1.5">
                           <summary class="text-[11px] text-patrimonio-lago cursor-pointer font-bold">Ver detalle técnico</summary>
-                          <pre class="mt-1 bg-stone-50 border border-stone-200 rounded-lg p-2 text-[10px] font-mono overflow-x-auto whitespace-pre-wrap text-stone-600">${e.detalle}</pre>
+                          <pre class="mt-1 bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-lg p-2 text-[10px] font-mono overflow-x-auto whitespace-pre-wrap text-stone-600 dark:text-stone-300">${e.detalle}</pre>
                         </details>` : ''}
                     </div>
                     ${!e.visto ? html`
-                      <button data-visto="${e.id}" class="btn-secundario shrink-0 border border-stone-300 bg-white text-stone-600 px-2.5 py-1 rounded-lg text-[11px] font-bold" title="Marcar como revisado">
+                      <button data-visto="${e.id}" class="btn-secundario shrink-0 border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 px-2.5 py-1 rounded-lg text-[11px] font-bold" title="Marcar como revisado">
                         <i aria-hidden="true" class="fas fa-check"></i>
                       </button>` : ''}
                   </div>
@@ -1184,9 +1184,9 @@ export default {
             </div>
           </div>`}
 
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-          <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Qué se registra y qué no</h3>
-          <p class="text-xs text-stone-600 leading-relaxed">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Qué se registra y qué no</h3>
+          <p class="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
             Se guarda el mensaje del fallo, la vista donde ocurrió, el correo de quien tenía la sesión y el
             navegador. <span class="font-bold">No</span> se guarda el contenido de la pantalla ni ningún dato de
             un lector: los RUT, correos y teléfonos que pudieran aparecer en un mensaje se reemplazan antes de

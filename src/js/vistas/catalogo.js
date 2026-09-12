@@ -33,45 +33,45 @@ export default {
     }
 
     container.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 mb-6">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mb-6">
         <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Agregar libro</h3>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Agregar libro</h3>
         </div>
         <form id="add-book-form" class="grid grid-cols-2 md:grid-cols-6 gap-3 p-5 items-end">
           <div class="col-span-2 md:col-span-1">
-            <label for="new-book-isbn" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">ISBN</label>
-            <input id="new-book-isbn" aria-label="ISBN del libro" placeholder="978..." class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+            <label for="new-book-isbn" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">ISBN</label>
+            <input id="new-book-isbn" aria-label="ISBN del libro" placeholder="978..." class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           </div>
           <div class="col-span-2">
-            <label for="new-book-title" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Título</label>
-            <input id="new-book-title" aria-label="Título del libro" placeholder="Cien años de soledad" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+            <label for="new-book-title" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Título</label>
+            <input id="new-book-title" aria-label="Título del libro" placeholder="Cien años de soledad" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           </div>
           <div class="col-span-2">
-            <label for="new-book-author" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Autor</label>
-            <input id="new-book-author" aria-label="Autor del libro" placeholder="Gabriel García Márquez" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+            <label for="new-book-author" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Autor</label>
+            <input id="new-book-author" aria-label="Autor del libro" placeholder="Gabriel García Márquez" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           </div>
           <div>
-            <label for="new-book-genre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Género</label>
-            <input id="new-book-genre" aria-label="Género del libro" placeholder="Opcional" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+            <label for="new-book-genre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Género</label>
+            <input id="new-book-genre" aria-label="Género del libro" placeholder="Opcional" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           </div>
           <div>
-            <label for="new-book-location" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Ubicación</label>
-            <input id="new-book-location" aria-label="Ubicación en la biblioteca" placeholder="Estante 3" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+            <label for="new-book-location" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Ubicación</label>
+            <input id="new-book-location" aria-label="Ubicación en la biblioteca" placeholder="Estante 3" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           </div>
           <div>
-            <label for="new-book-qty" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Ejemplares</label>
-            <input id="new-book-qty" aria-label="Cantidad de ejemplares" type="number" min="1" value="1" placeholder="1" class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
+            <label for="new-book-qty" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Ejemplares</label>
+            <input id="new-book-qty" aria-label="Cantidad de ejemplares" type="number" min="1" value="1" placeholder="1" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           </div>
           <button id="add-book-submit-btn" type="submit" class="btn-madera col-span-2 md:col-span-1 text-white font-sans font-medium rounded-xl shadow py-2 text-sm w-full h-[38px] flex items-center justify-center">Agregar</button>
         </form>
       </div>
-      <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 overflow-x-auto">
+      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="catalog-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h3 class="font-serif font-semibold text-lg text-stone-900">Catálogo de libros</h3>
+          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Catálogo de libros</h3>
           <div class="relative sm:w-64">
-            <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-xs"></i>
+            <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400 text-xs"></i>
             <input id="catalog-search-input" aria-label="Buscar en el catálogo por título, autor o ISBN" type="text" placeholder="Buscar por título, autor o ISBN..." value="${this.catalogSearch || ''}"
-              class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 rounded-md bg-white focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+              class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
         <div id="catalog-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(libros)}</div>
@@ -148,16 +148,16 @@ export default {
   // refrescar solo el <tbody> cuando se busca, sin recrear todo el formulario.
   _renderBookRows(books) {
     if (!books.length) {
-      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500">Sin libros que coincidan con la búsqueda.</td></tr>`;
+      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500 dark:text-stone-400">Sin libros que coincidan con la búsqueda.</td></tr>`;
     }
     return html`${books.map(b => html`
-      <tr class="border-t border-stone-200">
+      <tr class="border-t border-stone-200 dark:border-stone-700">
         <td class="px-4 py-3">
           <div class="flex items-start gap-3">
             ${crudo(this._portadaHtml(b))}
             <div class="min-w-0">
-              <div class="font-bold text-stone-800">${b.titulo}</div>
-              <div class="text-xs text-stone-500">${b.autor}</div>
+              <div class="font-bold text-stone-800 dark:text-stone-200">${b.titulo}</div>
+              <div class="text-xs text-stone-500 dark:text-stone-400">${b.autor}</div>
               ${(b.genero || b.ubicacion) ? html`
                 <div class="flex flex-wrap gap-1 mt-1">
                   ${b.genero ? html`<span class="stamp stamp-info !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-tag"></i> ${b.genero}</span>` : ''}
@@ -166,16 +166,16 @@ export default {
             </div>
           </div>
         </td>
-        <td class="px-4 py-3 text-stone-500">${b.isbn}</td>
+        <td class="px-4 py-3 text-stone-500 dark:text-stone-400">${b.isbn}</td>
         <td class="px-4 py-3 text-center">
-          <span class="${b.stock === 0 ? 'text-rose-600 font-bold' : b.stock <= 1 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}">${b.stock}</span><span class="text-stone-500 font-normal"> / ${b.copias_totales ?? b.stock}</span>
+          <span class="${b.stock === 0 ? 'text-rose-600 font-bold' : b.stock <= 1 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}">${b.stock}</span><span class="text-stone-500 dark:text-stone-400 font-normal"> / ${b.copias_totales ?? b.stock}</span>
         </td>
         <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
           ${b.stock > 0
             ? html`<button class="loan-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Prestar</button>`
             : html`<button class="reserve-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Reservar</button>`}
           ${this.currentUserRole === 'admin' ? html`
-            <button class="edit-book-btn text-stone-500 hover:text-patrimonio-madera font-bold" data-id="${b.id}">Editar</button>
+            <button class="edit-book-btn text-stone-500 dark:text-stone-400 hover:text-patrimonio-madera font-bold" data-id="${b.id}">Editar</button>
             <button class="delete-book-btn text-rose-700 font-bold" data-id="${b.id}">Eliminar</button>` : ''}
         </td>
       </tr>
@@ -226,14 +226,14 @@ export default {
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
     const campo = (id, etiqueta, valor, extra = '') => html`
       <div>
-        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">${etiqueta}</label>
+        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">${etiqueta}</label>
         <input id="${id}" value="${valor ?? ''}" ${crudo(extra)}
-          class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+          class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
       </div>`;
 
     overlay.innerHTML = html`
-      <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
-        <h3 class="font-serif text-lg font-bold text-stone-900">Editar libro</h3>
+      <div class="bg-patrimonio-card dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+        <h3 class="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">Editar libro</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           ${campo('edit-book-title', 'Título', libro.titulo)}
           ${campo('edit-book-author', 'Autor', libro.autor)}
@@ -242,23 +242,23 @@ export default {
           ${campo('edit-book-genre', 'Género', libro.genero)}
           ${campo('edit-book-location', 'Ubicación', libro.ubicacion)}
         </div>
-        <p class="text-[11px] text-stone-500 -mt-1">
+        <p class="text-[11px] text-stone-500 dark:text-stone-400 -mt-1">
           Escribe cuántos ejemplares tiene la biblioteca en total. El sistema calcula solo cuántos están
           disponibles según los préstamos activos${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0) > 0
             ? html` (ahora hay ${(libro.copias_totales ?? libro.stock) - (libro.stock ?? 0)} prestado(s))` : ''}.
         </p>
         <div>
           ${campo('edit-book-plazo', 'Plazo de préstamo propio (días, opcional)', libro.dias_prestamo_override, 'type="number" min="0" placeholder="Usa el plazo general"')}
-          <p class="text-[11px] text-stone-500 mt-1">
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
             Déjalo vacío para usar el plazo general del sistema. Escribe <span class="font-mono">0</span> para
             material de referencia que no circula (no se puede prestar). Cualquier otro número reemplaza el
             plazo general solo para este libro.
           </p>
         </div>
         ${campo('edit-book-cover', 'URL de portada (opcional)', libro.portada_url, 'placeholder="https://..."')}
-        <p class="text-[11px] text-stone-500">Usa este campo para las obras locales y patrimoniales, que no aparecen en catálogos internacionales.</p>
+        <p class="text-[11px] text-stone-500 dark:text-stone-400">Usa este campo para las obras locales y patrimoniales, que no aparecen en catálogos internacionales.</p>
         <div class="flex justify-end gap-3 pt-1">
-          <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100">Cancelar</button>
+          <button data-action="cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:bg-stone-700">Cancelar</button>
           <button data-action="save" class="btn-madera text-white px-5 py-2 rounded-xl text-sm font-medium">Guardar cambios</button>
         </div>
       </div>`.toString();

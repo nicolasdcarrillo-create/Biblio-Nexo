@@ -658,3 +658,9 @@ textarea:focus-visible,
 .toggle-switch-input:checked + .toggle-switch-bg .toggle-switch-knob {
     transform: translateX(100%);
 }
+
+
+html.dark {
+  background-color: #0c0a09;
+  color-scheme: dark;
+}

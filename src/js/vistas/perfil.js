@@ -78,39 +78,39 @@ export default {
 
     const campo = (id, etiqueta, valor, extra = '', ayuda = '') => html`
       <div>
-        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">${etiqueta}</label>
+        <label for="${id}" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">${etiqueta}</label>
         <input id="${id}" value="${valor ?? ''}" ${crudo(extra)}
-          class="w-full px-3 py-2 border border-stone-300 rounded-md bg-white text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
-        ${ayuda ? html`<p class="text-[11px] text-stone-500 mt-1">${ayuda}</p>` : ''}
+          class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-sm focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+        ${ayuda ? html`<p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">${ayuda}</p>` : ''}
       </div>`;
 
     container.innerHTML = html`
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
 
         <!-- Tarjeta de identificación -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-6 text-center h-fit">
+        <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-6 text-center h-fit">
           <div class="w-20 h-20 rounded-full bg-patrimonio-madera text-white font-serif font-bold text-3xl flex items-center justify-center mx-auto mb-3">${inicial}</div>
-          <p class="font-serif font-semibold text-lg text-stone-900 leading-tight">${perfil.nombre || 'Sin nombre registrado'}</p>
-          <p class="text-xs text-stone-500 mt-0.5 break-all">${perfil.email || ''}</p>
+          <p class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 leading-tight">${perfil.nombre || 'Sin nombre registrado'}</p>
+          <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5 break-all">${perfil.email || ''}</p>
           <div class="mt-3">
             <span class="stamp ${perfil.rol === 'admin' ? 'stamp-info' : 'stamp-success'} !rotate-0">
               <i aria-hidden="true" class="fas ${perfil.rol === 'admin' ? 'fa-user-shield' : 'fa-user'}"></i> ${roleInfo.title}
             </span>
           </div>
-          ${perfil.cargo ? html`<p class="text-xs text-stone-600 mt-2">${perfil.cargo}</p>` : ''}
+          ${perfil.cargo ? html`<p class="text-xs text-stone-600 dark:text-stone-300 mt-2">${perfil.cargo}</p>` : ''}
 
-          <div class="border-t border-stone-200 mt-5 pt-4 space-y-2.5 text-left">
+          <div class="border-t border-stone-200 dark:border-stone-700 mt-5 pt-4 space-y-2.5 text-left">
             <div>
-              <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">Último acceso</p>
+              <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 dark:text-stone-400">Último acceso</p>
               <p class="text-xs text-stone-700">${fechaHora(perfil.ultimo_acceso)}</p>
             </div>
             <div>
-              <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">Cuenta creada</p>
+              <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 dark:text-stone-400">Cuenta creada</p>
               <p class="text-xs text-stone-700">${fechaHora(perfil.creado_en)}</p>
             </div>
             ${perfil.actualizado_en ? html`
               <div>
-                <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">Perfil actualizado</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-stone-500 dark:text-stone-400">Perfil actualizado</p>
                 <p class="text-xs text-stone-700">${fechaHora(perfil.actualizado_en)}</p>
               </div>` : ''}
           </div>
@@ -119,9 +119,9 @@ export default {
         <!-- Datos editables y contraseña -->
         <div class="lg:col-span-2 space-y-4">
 
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600">
             <div class="catalog-card-header">
-              <h3 class="font-serif font-semibold text-lg text-stone-900">Mis datos</h3>
+              <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Mis datos</h3>
             </div>
             <form id="perfil-form" class="p-5 space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -129,17 +129,17 @@ export default {
                 ${campo('perfil-cargo', 'Cargo', perfil.cargo, 'placeholder="Encargada de biblioteca"', 'Aparece junto a tu nombre en el menú.')}
                 ${campo('perfil-telefono', 'Teléfono de contacto', perfil.telefono, 'type="tel" placeholder="9 1234 5678"', 'Uso interno. No se muestra a los lectores.')}
                 <div>
-                  <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Correo</label>
+                  <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Correo</label>
                   <input value="${perfil.email || ''}" readonly
-                    class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm text-stone-500" />
-                  <p class="text-[11px] text-stone-500 mt-1">Es la identidad de tu cuenta. Solo puede cambiarla un administrador desde Supabase.</p>
+                    class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-stone-50 dark:bg-stone-800/50 text-sm text-stone-500 dark:text-stone-400" />
+                  <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">Es la identidad de tu cuenta. Solo puede cambiarla un administrador desde Supabase.</p>
                 </div>
               </div>
               <div>
-                <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 mb-1 block">Rol</label>
+                <label class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Rol</label>
                 <input value="${roleInfo.title}" readonly
-                  class="w-full px-3 py-2 border border-stone-300 rounded-md bg-stone-50 text-sm text-stone-500" />
-                <p class="text-[11px] text-stone-500 mt-1">
+                  class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-stone-50 dark:bg-stone-800/50 text-sm text-stone-500 dark:text-stone-400" />
+                <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
                   Solo un administrador puede cambiar roles, desde Administración → Personal.
                   Tampoco puede hacerlo desde aquí quien tenga el rol: sería concederse permisos a sí mismo.
                 </p>
@@ -150,12 +150,12 @@ export default {
             </form>
           </div>
 
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600">
             <div class="catalog-card-header">
-              <h3 class="font-serif font-semibold text-lg text-stone-900">Cambiar contraseña</h3>
+              <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Cambiar contraseña</h3>
             </div>
             <form id="password-form" class="p-5 space-y-4">
-              <p class="text-xs text-stone-500">
+              <p class="text-xs text-stone-500 dark:text-stone-400">
                 Se pide la contraseña actual a propósito: el computador del mesón queda desatendido, y sin ese
                 paso cualquiera podría apropiarse de la cuenta abierta.
               </p>
@@ -164,7 +164,7 @@ export default {
                 ${campo('pass-nueva', 'Contraseña nueva', '', 'type="password" autocomplete="new-password" required minlength="12"')}
                 ${campo('pass-repetir', 'Repetir la nueva', '', 'type="password" autocomplete="new-password" required minlength="12"')}
               </div>
-              <p class="text-[11px] text-stone-500">
+              <p class="text-[11px] text-stone-500 dark:text-stone-400">
                 Mínimo 12 caracteres. Es un sistema del Estado que trata datos personales de vecinos.
               </p>
               <div class="flex justify-end">
@@ -173,23 +173,23 @@ export default {
             </form>
           </div>
 
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-            <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Tamaño de letra</h3>
-            <p class="text-xs text-stone-500 mb-3">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Tamaño de letra</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
               Agranda el texto de toda la aplicación. Queda guardado en este equipo.
             </p>
             <div class="flex items-center gap-3 max-w-xs">
               <button id="fuente-menos-btn" type="button" aria-label="Reducir tamaño de letra"
-                class="w-11 h-11 shrink-0 rounded-xl border border-stone-300 bg-white hover:border-patrimonio-lago text-stone-700 font-serif font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed">A-</button>
-              <span id="fuente-nivel-texto" class="text-sm text-stone-600 font-bold flex-1 text-center"></span>
+                class="w-11 h-11 shrink-0 rounded-xl border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 hover:border-patrimonio-lago text-stone-700 font-serif font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed">A-</button>
+              <span id="fuente-nivel-texto" class="text-sm text-stone-600 dark:text-stone-300 font-bold flex-1 text-center"></span>
               <button id="fuente-mas-btn" type="button" aria-label="Aumentar tamaño de letra"
-                class="w-11 h-11 shrink-0 rounded-xl border border-stone-300 bg-white hover:border-patrimonio-lago text-stone-700 font-serif font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed">A+</button>
+                class="w-11 h-11 shrink-0 rounded-xl border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 hover:border-patrimonio-lago text-stone-700 font-serif font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed">A+</button>
             </div>
           </div>
 
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
-            <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Sesión</h3>
-            <p class="text-xs text-stone-500 mb-3">
+          <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 p-5">
+            <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Sesión</h3>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
               La sesión se cierra sola tras 20 minutos sin actividad. También puedes cerrarla ahora.
             </p>
             <button id="perfil-logout-btn" class="border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 px-4 py-2 rounded-xl text-sm font-bold transition">

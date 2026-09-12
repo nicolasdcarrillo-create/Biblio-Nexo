@@ -125,19 +125,7 @@ export default {
               class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 rounded-md bg-white focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
-        <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
-            <tr>
-              <th class="text-left px-4 py-3">Lector</th>
-              <th class="text-left px-4 py-3">RUT</th>
-              <th class="text-left px-4 py-3">Contacto</th>
-              <th class="text-right px-4 py-3">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${this._renderUserRows(users)}
-          </tbody>
-        </table>
+        <div id="users-tbody" class="flex flex-col gap-4 p-4">${this._renderUserRows(users)}</div>
         <div id="users-pagination">${crudo(this._paginacionHtml(this.userPage, total, porPagina, 'user-page-btn'))}</div>
       </div>
     `;

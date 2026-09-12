@@ -75,16 +75,8 @@ export default {
           <h3 class="font-serif font-semibold text-lg text-stone-900">Préstamos activos</h3>
           <span class="text-[11px] text-stone-500"><i aria-hidden="true" class="fas fa-circle-info mr-1"></i>Máx. ${this.param('max_prestamos_por_lector')} por lector</span>
         </div>
-        <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
-            <tr>
-              <th class="text-left px-4 py-3">Libro</th>
-              <th class="text-left px-4 py-3">Lector</th>
-              <th class="text-left px-4 py-3">Devolución</th>
-              <th class="text-right px-4 py-3">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
+        <div class="flex flex-col gap-4 p-4">
+            <div id="prestamos-tbody" class="flex flex-col gap-4">
             ${visibles.length ? visibles.map(l => {
               const estado = this._estadoPrestamo(l.fecha_devolucion_esperada);
               const sinContacto = !l.lectores?.email && this.formatPhone(l.lectores?.telefono).length < 11;

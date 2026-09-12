@@ -14,7 +14,7 @@
 // no le importa en qué archivo se declaró `foo`.
 
 import { LibroRepository } from '../repositorios/LibroRepository.js';
-import { html, crudo } from '../modules/utilidades.js';
+import { html, crudo, escapeHtml } from '../modules/utilidades.js';
 
 export default {
   async renderCatalog() {
@@ -74,17 +74,7 @@ export default {
               class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 rounded-md bg-white focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
-        <table class="w-full text-sm">
-          <thead class="bg-stone-50 text-stone-500 uppercase text-[10px] font-black">
-            <tr>
-              <th class="text-left px-4 py-3">Obra</th>
-              <th class="text-left px-4 py-3">ISBN</th>
-              <th class="text-center px-4 py-3">Ejemplares</th>
-              <th class="text-right px-4 py-3">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="catalog-tbody">${this._renderBookRows(libros)}</tbody>
-        </table>
+        <div id="catalog-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(libros)}</div>
         <div id="catalog-pagination">${crudo(this._paginacionHtml(this.bookPage, total, porPagina, 'catalog-page-btn'))}</div>
       </div>
     `;

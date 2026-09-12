@@ -569,9 +569,9 @@ class UIManager {
     return portadaUrl(libro);
   }
 
-  _portadaHtml(libro) {
-    return portadaHtml(libro);
-  }
+  _portadaHtml(libro, clases = 'w-10 h-14') {
+      return portadaHtml(libro, clases);
+    }
 
   _vigilarPortadas() {
     vigilarPortadas();

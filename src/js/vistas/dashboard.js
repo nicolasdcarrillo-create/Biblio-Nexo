@@ -81,7 +81,7 @@ on conflict (id) do update set rol = 'admin';</pre>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         ${cards.map(c => html`
-          <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
+          <div class="bg-white rounded-[2rem] shadow-soft-xl border border-stone-200/60 p-6 transition-all hover:shadow-soft-2xl hover:border-patrimonio-lago/20">
             <i aria-hidden="true" class="fas ${c.icon} ${c.color} text-xl mb-2"></i>
             <p class="font-serif font-semibold text-4xl text-stone-900">${c.value}</p>
             <p class="text-xs text-stone-500 font-bold uppercase tracking-wide mt-1">${c.label}</p>
@@ -91,7 +91,7 @@ on conflict (id) do update set rol = 'admin';</pre>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <!-- Anillo 1: dónde están físicamente las copias en este momento -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
+        <div class="bg-white rounded-[2rem] shadow-soft-xl border border-stone-200/60 p-6 transition-all hover:shadow-soft-2xl hover:border-patrimonio-lago/20">
           <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Estado del fondo</h3>
           <p class="text-xs text-stone-500 mb-4">Dónde están las copias ahora mismo.</p>
           <div class="relative h-44 mb-3">
@@ -102,7 +102,7 @@ on conflict (id) do update set rol = 'admin';</pre>
         </div>
 
         <!-- Anillo 2: cómo se comportan los préstamos históricos -->
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
+        <div class="bg-white rounded-[2rem] shadow-soft-xl border border-stone-200/60 p-6 transition-all hover:shadow-soft-2xl hover:border-patrimonio-lago/20">
           <h3 class="font-serif font-semibold text-lg text-stone-900 mb-1">Préstamos</h3>
           <p class="text-xs text-stone-500 mb-4">Devueltos, al día y atrasados.</p>
           <div class="relative h-44 mb-3">
@@ -112,7 +112,7 @@ on conflict (id) do update set rol = 'admin';</pre>
           <div id="prestamos-legend" class="divide-y divide-stone-100"></div>
         </div>
 
-        <div class="catalog-card bg-patrimonio-card rounded-2xl shadow-sm border border-stone-300 p-5">
+        <div class="bg-white rounded-[2rem] shadow-soft-xl border border-stone-200/60 p-6 transition-all hover:shadow-soft-2xl hover:border-patrimonio-lago/20">
           <h3 class="font-serif font-semibold text-lg text-stone-900 mb-4">Accesos rápidos</h3>
           <div class="space-y-2">
             ${quickActions.map(a => html`

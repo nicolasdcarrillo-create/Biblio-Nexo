@@ -50,13 +50,13 @@ export default {
            <div class="bg-patrimonio-card rounded-3xl shadow-soft-xl border border-stone-200 p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
                <div class="absolute -top-24 -right-24 w-64 h-64 bg-patrimonio-lago/5 rounded-full blur-3xl pointer-events-none"></div>
 
-               <h3 class="font-serif font-bold text-3xl text-stone-900 mb-2">Mes�n de Circulaci�n</h3>
-               <p class="text-sm text-stone-500 mb-8 max-w-sm">Escanee un libro o ingrese el c�digo manualmente para registrar pr�stamos y devoluciones.</p>
+               <h3 class="font-serif font-bold text-3xl text-stone-900 mb-2">Mesón de Circulación</h3>
+               <p class="text-sm text-stone-500 mb-8 max-w-sm">Escanee un libro o ingrese el código manualmente para registrar préstamos y devoluciones.</p>
                
                <div class="w-full max-w-md flex flex-col gap-4">
                   <div class="relative">
                     <i aria-hidden="true" class="fas fa-barcode absolute left-5 top-1/2 -translate-y-1/2 text-xl text-stone-400"></i>
-                    <input id="manual-scan-input" aria-label="Escribir el c�digo del libro" placeholder="Ingrese el ISBN..." class="w-full pl-12 pr-4 py-4 bg-white border-2 border-stone-200 rounded-2xl text-lg font-bold text-stone-800 placeholder-stone-400 focus:border-patrimonio-lago focus:ring-4 focus:ring-patrimonio-lago/10 transition-all shadow-sm outline-none" autocomplete="off" />
+                    <input id="manual-scan-input" aria-label="Escribir el código del libro" placeholder="Ingrese el ISBN..." class="w-full pl-12 pr-4 py-4 bg-white border-2 border-stone-200 rounded-2xl text-lg font-bold text-stone-800 placeholder-stone-400 focus:border-patrimonio-lago focus:ring-4 focus:ring-patrimonio-lago/10 transition-all shadow-sm outline-none" autocomplete="off" />
                   </div>
                   
                   <button id="manual-scan-btn" class="w-full bg-patrimonio-lago hover:bg-[#14303c] text-white font-bold rounded-2xl shadow-lg shadow-patrimonio-lago/20 px-6 py-4 text-base transition-all active:scale-95 flex items-center justify-center gap-2">
@@ -65,7 +65,7 @@ export default {
                </div>
 
                <div class="mt-8 pt-6 border-t border-stone-100 w-full flex flex-wrap items-center justify-between gap-4">
-                  <label class="flex items-center gap-3 cursor-pointer group" title="Si est� activo, al escanear un libro prestado se devuelve inmediatamente.">
+                  <label class="flex items-center gap-3 cursor-pointer group" title="Si está activo, al escanear un libro prestado se devuelve inmediatamente.">
                     <div class="relative">
                       <input type="checkbox" id="fast-return-toggle" class="sr-only toggle-switch-input">
                       <div class="block bg-stone-200 w-12 h-7 rounded-full transition-colors duration-300 ease-in-out toggle-switch-bg group-hover:bg-stone-300">
@@ -74,7 +74,7 @@ export default {
                       </div>
                     </div>
                     <div class="flex flex-col text-left">
-                       <span class="text-sm font-bold text-stone-800 leading-none">Devoluci�n r�pida</span>
+                       <span class="text-sm font-bold text-stone-800 leading-none">Devolución rápida</span>
                        <span class="text-[10px] text-stone-500 uppercase tracking-wider font-bold mt-1">Escaneo continuo</span>
                     </div>
                   </label>
@@ -556,8 +556,8 @@ export default {
       </div>`;
   },
 
-  _bindFichaCirculacion(resultEl, resultado, codigo) {
-    const recargar = () => this._mostrarResultadoEscaneo?.(codigo);
+  _bindFichaCirculacion(resultEl, resultado, código) {
+    const recargar = () => this._mostrarResultadoEscaneo?.(código);
 
     resultEl.querySelectorAll('[data-entregar-reserva]').forEach(btn => {
       btn.addEventListener('click', async () => {

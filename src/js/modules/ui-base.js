@@ -1248,7 +1248,7 @@ class UIManager {
     const momento = this._momentoDelDia();
 
     document.body.innerHTML = `
-      <div id="login-screen" class="h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
+      <div id="login-screen" class="h-screen w-full flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-500">
 
         <!-- Escena viva del Lago Ranco: cielo, sol/luna y cordillera cambian con la hora real -->
         <div id="login-scene" class="momento-${momento}" aria-hidden="true">
@@ -1267,55 +1267,63 @@ class UIManager {
           </svg>
         </div>
 
+        <!-- Botón modo oscuro flotante -->
+        <button class="dark-mode-toggle absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 dark:bg-black/30 backdrop-blur-md text-stone-800 dark:text-stone-100 border border-white/30 dark:border-white/10 hover:bg-white/30 dark:hover:bg-black/50 transition-all shadow-sm" title="Alternar modo oscuro">
+          <i class="dark-mode-icon fas fa-moon transition-transform duration-300"></i>
+        </button>
+
         <!-- Tarjeta de vidrio esmerilado: flota sobre el paisaje en vez de cortarlo -->
-        <div class="glass-panel relative z-10 w-full max-w-md rounded-2xl shadow-2xl p-8 md:p-9">
+        <div class="glass-panel relative z-10 w-full max-w-md rounded-[2rem] shadow-2xl p-8 md:p-9 transition-colors duration-500">
           <div class="flex items-center gap-2 mb-1">
-            <i aria-hidden="true" class="fas fa-book text-patrimonio-madera"></i>
+            <i aria-hidden="true" class="fas fa-book text-patrimonio-madera text-xl"></i>
             <h1 class="font-serif font-semibold text-2xl leading-tight text-stone-900 dark:text-stone-100">Biblio<span class="text-patrimonio-madera">Nexo</span></h1>
           </div>
-          <p class="text-[11px] text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wide">Municipalidad de Futrono · Región de Los Ríos</p>
-          <p class="text-[11px] text-stone-500 dark:text-stone-400 italic font-serif mt-1.5">“Futronhue” — lugar de humo, a orillas del Lago Ranco.</p>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wide mt-1">Municipalidad de Futrono · Región de Los Ríos</p>
+          <p class="text-[11px] text-stone-500 dark:text-stone-400/80 italic font-serif mt-1.5">“Futronhue” — lugar de humo, a orillas del Lago Ranco.</p>
 
-          <div class="h-px bg-stone-300/70 my-5"></div>
+          <div class="h-px bg-stone-300/50 dark:bg-stone-600/50 my-5 transition-colors duration-500"></div>
 
           <h2 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100 mb-1">Iniciar sesión</h2>
-          <p class="text-xs text-stone-600 dark:text-stone-300 mb-5">Acceso de personal — ingresa con tu cuenta institucional.</p>
+          <p class="text-xs text-stone-600 dark:text-stone-400 mb-5">Acceso de personal — ingresa con tu cuenta institucional.</p>
 
           <form id="login-form" class="space-y-4">
             <div>
-              <label for="email-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Correo</label>
+              <label for="email-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-400 mb-1 block">Correo</label>
               <input id="email-input" type="email" placeholder="nombre@futrono.cl" autocomplete="username"
-                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-4 py-3 border border-stone-300/50 dark:border-stone-600/50 rounded-xl bg-white/70 dark:bg-stone-950/50 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-2 focus:ring-patrimonio-lago/30 transition-all placeholder:text-stone-400 dark:placeholder:text-stone-500 backdrop-blur-sm" />
             </div>
             <div>
               <div class="flex justify-between items-center mb-1">
-                <label for="password-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 block">Contraseña</label>
-                <button type="button" id="forgot-password-btn" class="text-[11px] font-bold text-patrimonio-lago hover:underline">¿Olvidaste tu contraseña?</button>
+                <label for="password-input" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-400 block">Contraseña</label>
+                <button type="button" id="forgot-password-btn" class="text-[11px] font-bold text-patrimonio-lago dark:text-patrimonio-lago hover:underline transition-colors">¿Olvidaste tu contraseña?</button>
               </div>
               <input id="password-input" type="password" placeholder="••••••••" autocomplete="current-password"
-                class="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800/90 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
+                class="w-full px-4 py-3 border border-stone-300/50 dark:border-stone-600/50 rounded-xl bg-white/70 dark:bg-stone-950/50 text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-patrimonio-lago focus:ring-2 focus:ring-patrimonio-lago/30 transition-all placeholder:text-stone-400 dark:placeholder:text-stone-500 backdrop-blur-sm" />
             </div>
-            <button type="submit" class="btn-madera w-full text-white font-sans font-medium rounded-xl shadow py-2.5 text-sm">
+            <button type="submit" class="btn-madera w-full text-white font-sans font-bold rounded-xl shadow-lg py-3 text-sm mt-2 transform hover:-translate-y-0.5 transition-all">
               Ingresar <i aria-hidden="true" class="fas fa-arrow-right ml-1"></i>
             </button>
           </form>
 
           <div class="flex items-center gap-3 my-5">
-            <div class="flex-1 h-px bg-stone-300/70"></div>
+            <div class="flex-1 h-px bg-stone-300/50 dark:bg-stone-600/50 transition-colors duration-500"></div>
             <span class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">o</span>
-            <div class="flex-1 h-px bg-stone-300/70"></div>
+            <div class="flex-1 h-px bg-stone-300/50 dark:bg-stone-600/50 transition-colors duration-500"></div>
           </div>
 
-          <button id="google-login-btn" type="button" class="btn-secundario w-full flex items-center justify-center gap-2.5 border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800/70 hover:bg-white dark:bg-stone-800 text-stone-700 font-medium rounded-xl py-2.5 text-sm">
-            <i aria-hidden="true" class="fa-brands fa-google text-[15px]"></i> Continuar con Google
+          <button id="google-login-btn" type="button" class="btn-secundario w-full flex items-center justify-center gap-2.5 border border-stone-300 dark:border-stone-600 bg-white/50 dark:bg-stone-800/50 hover:bg-white dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 font-bold rounded-xl py-3 text-sm transition-all backdrop-blur-sm shadow-sm hover:shadow">
+            <i aria-hidden="true" class="fa-brands fa-google text-[16px]"></i> Continuar con Google
           </button>
 
-          <p style="text-align:center; margin-top:16px;"><a href="/privacidad.html" class="text-[11px] font-bold text-stone-500 dark:text-stone-400 hover:underline">Política de privacidad y términos</a></p>
+          <p style="text-align:center; margin-top:20px;">
+            <a href="/privacidad.html" class="text-[11px] font-bold text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 hover:underline transition-colors">Política de privacidad y términos</a>
+          </p>
         </div>
       </div>
       <div id="toast-container" role="status" aria-live="polite" aria-atomic="false" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
     `;
     this.initLoginForm();
+    this._initDarkMode(); // Iniciar modo oscuro también en la pantalla de login!
 
     document.getElementById('google-login-btn').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
@@ -1349,38 +1357,58 @@ class UIManager {
 
   
     _initDarkMode() {
-      const toggle = document.getElementById('dark-mode-toggle');
-      const icon = document.getElementById('dark-mode-icon');
-      if (!toggle) return;
+    let isDark = false;
+    try {
+      isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) {}
+    
+    // Agregamos transiciones fluidas al body si no las tiene
+    if (!document.body.classList.contains('transition-colors')) {
+      document.body.classList.add('transition-colors', 'duration-500');
+    }
 
-      let isDark = false;
-      try {
-        isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      } catch (e) {}
+    const applyTheme = (dark) => {
+      if (dark) {
+        document.documentElement.classList.add('dark');
+        try { localStorage.setItem('theme', 'dark'); } catch(e) {}
+      } else {
+        document.documentElement.classList.remove('dark');
+        try { localStorage.setItem('theme', 'light'); } catch(e) {}
+      }
       
-      const applyTheme = (dark) => {
-        if (dark) {
-          document.documentElement.classList.add('dark');
-          icon.classList.replace('fa-moon', 'fa-sun');
-          try { localStorage.setItem('theme', 'dark'); } catch(e) {}
-        } else {
-          document.documentElement.classList.remove('dark');
-          icon.classList.replace('fa-sun', 'fa-moon');
-          try { localStorage.setItem('theme', 'light'); } catch(e) {}
+      // Update all toggles on the page
+      document.querySelectorAll('.dark-mode-toggle').forEach(btn => {
+        const icon = btn.querySelector('.dark-mode-icon');
+        if (icon) {
+          // Animación simple girando el ícono
+          icon.style.transform = 'rotate(180deg)';
+          setTimeout(() => {
+            if (dark) icon.classList.replace('fa-moon', 'fa-sun');
+            else icon.classList.replace('fa-sun', 'fa-moon');
+            icon.style.transform = 'rotate(0deg)';
+          }, 150);
         }
-      };
+      });
+    };
 
-      applyTheme(isDark);
+    applyTheme(isDark);
 
-      toggle.addEventListener('click', () => {
+    // Bind all toggles
+    document.querySelectorAll('.dark-mode-toggle').forEach(btn => {
+      // Remove previous listener if any by cloning (simple way to ensure no duplicates in dynamic renders)
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      
+      newBtn.addEventListener('click', () => {
         const currentlyDark = document.documentElement.classList.contains('dark');
         applyTheme(!currentlyDark);
       });
-    }
+    });
+  }
 
     async renderShell(user) {
     document.body.innerHTML = `
-      <div class="h-screen w-full flex bg-patrimonio-base dark:bg-stone-950 overflow-hidden">
+      <div class="h-screen w-full flex bg-patrimonio-base dark:bg-stone-950 overflow-hidden transition-colors duration-500">
 
         <!-- Fondo oscuro para cerrar el menú lateral en móvil -->
         <div id="sidebar-overlay" class="hidden fixed inset-0 bg-patrimonio-lago/40 backdrop-blur-sm z-40 transition-opacity"></div>
@@ -1404,7 +1432,7 @@ class UIManager {
                Ahora es un botón, porque es el lugar donde uno espera pinchar
                para ver y editar sus propios datos. -->
           <div class="border-t border-white/10 p-4 flex items-center gap-3">
-            <button id="dark-mode-toggle" title="Alternar modo oscuro" class="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition shrink-0"><i id="dark-mode-icon" class="fas fa-moon"></i></button>
+            <button class="dark-mode-toggle w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition shrink-0" title="Alternar modo oscuro"><i class="dark-mode-icon class="fas fa-moon"></i></button>
               <button id="perfil-btn" title="Ver y editar mi perfil"
               class="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg -m-1 p-1 hover:bg-white dark:bg-stone-800/10 transition">
               <span id="current-user-initial" class="w-9 h-9 rounded-full bg-patrimonio-madera flex items-center justify-center font-black text-sm shrink-0 text-white"></span>

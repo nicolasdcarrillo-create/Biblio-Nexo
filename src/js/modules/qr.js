@@ -17,7 +17,9 @@ function cargarLibreria() {
         // Extensión .js (no .mjs) a propósito: import() no depende de la
         // extensión para tratarlo como módulo, y así se evita depender de
         // que el servidor sirva .mjs con el tipo MIME correcto.
-        promesaLibreria = import(/* @vite-ignore */ '/vendor/js/qrcode.min.js').then(m => m.default);
+        const esNode = typeof process !== 'undefined' && process.versions && process.versions.node;
+        const ruta = esNode ? '../../../public/vendor/js/qrcode.min.js' : '/vendor/js/qrcode.min.js';
+        promesaLibreria = import(/* @vite-ignore */ ruta).then(m => m.default);
     }
     return promesaLibreria;
 }

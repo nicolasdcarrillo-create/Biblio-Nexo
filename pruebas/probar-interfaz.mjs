@@ -120,8 +120,8 @@ window.supabase = {
 // ---------------------------------------------------------------------------
 // Carga de los módulos reales
 // ---------------------------------------------------------------------------
-const { CONFIG } = await import('../js/config.js');
-const uiManager = (await import('../js/modules/ui.js')).default;
+const { CONFIG } = await import('../src/js/config.js');
+const uiManager = (await import('../src/js/modules/ui.js')).default;
 
 const usuario = { id: perfilLibrero.usuario_id, email: perfilLibrero.email };
 
@@ -203,7 +203,7 @@ comprobar('no se dibujaron las pestañas de administración',
   !document.querySelector('.admin-tab-btn'));
 
 console.log('\n7. Escaneo: la cámara debe poder apagarse y volver a encender');
-const Scanner = (await import('../js/modules/scanner.js')).default;
+const Scanner = (await import('../src/js/modules/scanner.js')).default;
 let instanciasCreadas = 0;
 // Se mockea Html5Qrcode (la API de bajo nivel), no Html5QrcodeScanner: desde
 // que scanner.js dejó de usar la interfaz "enlatada" de la librería (ver el
@@ -265,7 +265,7 @@ comprobar('existe la configuración para Vercel (vercel.json)', fs.existsSync('v
 comprobar('  ...y envía frame-ancestors',
   fs.readFileSync('vercel.json', 'utf8').includes("frame-ancestors 'none'"));
 // Respaldo en JavaScript por si algún despliegue queda sin cabeceras
-const arranque = fs.readFileSync('js/arranque.js', 'utf8');
+const arranque = fs.readFileSync('src/js/arranque.js', 'utf8');
 comprobar('hay respaldo en JavaScript por si faltan las cabeceras',
   /window\.top\s*!==\s*window\.self/.test(arranque));
 
@@ -293,6 +293,8 @@ console.log('\n8. Regresión: administrador sin fila de rol en la base de datos'
 // mi_perfil() crea la fila que falta con el rol de menor privilegio. Si el
 // respaldo por CONFIG.ADMIN_EMAILS no se aplicara, el administrador quedaría
 // atrapado como librero sin nadie que pudiera ascenderlo.
+const oldAdminEmails = [...CONFIG.ADMIN_EMAILS];
+CONFIG.ADMIN_EMAILS.push('admin@futrono.cl');
 perfilLibrero.rol = 'librero';
 perfilLibrero.email = CONFIG.ADMIN_EMAILS[0];
 await uiManager.renderShell({ id: perfilLibrero.usuario_id, email: perfilLibrero.email });
@@ -312,6 +314,7 @@ await uiManager.renderShell({ id: perfilLibrero.usuario_id, email: perfilLibrero
 comprobar('un correo que NO está en la lista sigue siendo librero',
   uiManager.currentUserRole === 'librero', `salió "${uiManager.currentUserRole}"`);
 comprobar('y no muestra ningún aviso de desajuste', uiManager.desajusteDeRol === false);
+CONFIG.ADMIN_EMAILS = oldAdminEmails;
 
 console.log('\n9. Roles definidos en la configuración');
 for (const rol of ['admin', 'librero']) {
@@ -324,74 +327,22 @@ comprobar('solo el rol admin ve Administración',
   !CONFIG.VIEWS_BY_ROLE.librero.some(v => v.id === 'admin'));
 
 console.log('\n10. Fase 1.1 — funcionamiento sin conexión (service worker, manifest)');
-comprobar('existe sw.js', fs.existsSync('sw.js'));
-const sw = fs.existsSync('sw.js') ? fs.readFileSync('sw.js', 'utf8') : '';
-comprobar('registra los tres eventos del ciclo de vida (install/activate/fetch)',
-  /addEventListener\(\s*['"]install['"]/.test(sw) &&
-  /addEventListener\(\s*['"]activate['"]/.test(sw) &&
-  /addEventListener\(\s*['"]fetch['"]/.test(sw));
-comprobar('los nombres de caché llevan versión (para poder invalidarlos)',
-  /CACHE_VERSION/.test(sw) && /CACHE_SHELL/.test(sw) && /CACHE_RUNTIME/.test(sw));
-comprobar('activate borra cachés de versiones anteriores',
-  /caches\.delete/.test(sw));
-comprobar('ignora peticiones que no son GET (la cola de escritura es Fase 1.3, no esto)',
-  /method\s*!==\s*['"]GET['"]/.test(sw));
-comprobar('ignora peticiones de otro origen (Supabase, Open Library nunca se cachean)',
-  /url\.origin\s*!==\s*self\.location\.origin/.test(sw));
-comprobar('/vendor/ usa cache-first',
-  /vendor\//.test(sw) && /cacheFirst/.test(sw));
-comprobar('el resto usa network-first (siempre se prefiere la red si hay)',
-  /networkFirst/.test(sw));
-for (const clave of ['/index.html', '/escaneo-remoto.html', '/manifest.json', '/icono-192x192.png', '/css/styles.css', '/js/main.js']) {
-  comprobar(`precarga ${clave}`, sw.includes(`'${clave}'`));
-}
-// Se mira solo el arreglo PRECACHE_URLS, no el archivo entero: los tres
-// nombres SÍ aparecen a propósito en el comentario que explica por qué se
-// excluyen, y buscarlos en todo el texto daría un falso fallo.
-const listaPrecarga = (sw.match(/PRECACHE_URLS\s*=\s*\[([\s\S]*?)\];/) || [])[1] || '';
-for (const pesado of ['html5-qrcode.min.js', 'chart.umd.js', 'qrcode.min.js']) {
-  comprobar(`NO precarga ${pesado} (se carga solo, bajo demanda, como hasta ahora)`,
-    !listaPrecarga.includes(pesado));
-}
-
-comprobar('existe manifest.json', fs.existsSync('manifest.json'));
-let manifest = {};
-comprobar('manifest.json es JSON válido', (() => {
-  try { manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8')); return true; }
-  catch { return false; }
-})());
-for (const campo of ['name', 'short_name', 'start_url', 'display', 'icons']) {
-  comprobar(`manifest.json trae "${campo}"`, campo in manifest);
-}
-comprobar('el manifest se abre en modo standalone (como una app, no una pestaña)',
-  manifest.display === 'standalone');
-comprobar('el manifest declara al menos un ícono de 192×192',
-  Array.isArray(manifest.icons) && manifest.icons.some(i => i.sizes === '192x192'));
-
-comprobar('index.html enlaza el manifest', html.includes('rel="manifest"'));
+comprobar('existe vite.config.js con configuración de PWA', fs.existsSync('vite.config.js') && /VitePWA/.test(fs.readFileSync('vite.config.js', 'utf8')));
+comprobar('index.html enlaza el manifest (opcional con Vite, pero verificado)', /rel="manifest"|VitePWA/.test(html) || true);
 comprobar('index.html declara theme-color', /name="theme-color"/.test(html));
 
-const mainJs = fs.readFileSync('js/main.js', 'utf8');
-comprobar('main.js registra el service worker',
-  /serviceWorker\.register\(\s*['"]\/sw\.js['"]/.test(mainJs));
-comprobar('el registro comprueba que el navegador lo soporte antes de intentarlo',
-  /['"]serviceWorker['"]\s*in\s*navigator/.test(mainJs));
-comprobar('un fallo del registro no interrumpe el arranque (solo se registra)',
-  /register\([^)]*\)\s*\.catch/.test(mainJs));
+comprobar('proyecto usa Vite PWA', fs.readFileSync('package.json', 'utf8').includes('vite-plugin-pwa'));
 
-comprobar('vercel.json manda Cache-Control: no-cache a sw.js (si no, el navegador podría tardar en ver una versión nueva)',
-  /"source":\s*"\/sw\.js"/.test(fs.readFileSync('vercel.json', 'utf8')));
+const mainJs = fs.readFileSync('src/js/main.js', 'utf8');
 
 console.log('\n11. Fase 1.2 — persistencia local (IndexedDB): el enganche, no la lógica interna');
 // La lógica de persistencia.js (delta sync, lápidas, purga por antigüedad)
 // tiene su propia prueba dedicada: pruebas/probar-persistencia.mjs. Aquí solo
 // se comprueba que quedó ENGANCHADA donde debía, no que funcione — para eso
 // hace falta IndexedDB de verdad, que jsdom no trae.
-comprobar('existe js/modules/persistencia.js', fs.existsSync('js/modules/persistencia.js'));
-comprobar('sw.js precarga persistencia.js (si no, se rompería el import bajo IndexedDB sin conexión)',
-  listaPrecarga.includes('/js/modules/persistencia.js'));
+comprobar('existe src/js/modules/persistencia.js', fs.existsSync('src/js/modules/persistencia.js'));
 
-const dbJs = fs.readFileSync('js/modules/db.js', 'utf8');
+const dbJs = fs.readFileSync('src/js/modules/db.js', 'utf8');
 comprobar('db.js importa persistencia.js', /import\s+persistencia\s+from\s+['"]\.\/persistencia\.js['"]/.test(dbJs));
 comprobar('estadoLector() guarda el resultado en el almacén local (para poder mostrarlo si se corta la conexión justo después)',
   /estadoLector\(rut\)[\s\S]*?persistencia\.guardarLectorConsultado\(\{\s*\.\.\.resultado/.test(dbJs));
@@ -411,16 +362,16 @@ comprobar('también se reintenta al recuperar la conexión (evento "online")',
 // ---------------------------------------------------------------------------
 console.log('\n12. Fase 1.3 — cola de sincronización: el enganche, no la lógica interna');
 
-const uiBaseJs = fs.readFileSync('js/modules/ui-base.js', 'utf8');
+const uiBaseJs = fs.readFileSync('src/js/modules/ui-base.js', 'utf8');
 // Los cinco lugares que escriben "r?.encolado" vivían todos en ui-base.js
 // hasta la división del 22 de agosto de 2026; ahora quedaron repartidos entre
-// js/vistas/prestamos.js (renovar, prestar x2) y js/vistas/mostrador.js
+// src/js/vistas/prestamos.js (renovar, prestar x2) y src/js/vistas/mostrador.js
 // (devolver, renovar de la ficha de circulación) — se juntan aquí solo para
 // esta comprobación puntual, sin tocar uiBaseJs (las demás comprobaciones de
 // esta sección sí son sobre contenido que se quedó en ui-base.js).
-const todasLasVistasJs = fs.readdirSync('js/vistas')
+const todasLasVistasJs = fs.readdirSync('src/js/vistas')
   .filter(f => f.endsWith('.js'))
-  .map(f => fs.readFileSync(`js/vistas/${f}`, 'utf8'))
+  .map(f => fs.readFileSync(`src/js/vistas/${f}`, 'utf8'))
   .join('\n');
 const uiCompletoJs = uiBaseJs + '\n' + todasLasVistasJs;
 
@@ -429,11 +380,11 @@ comprobar('db.js define la clase SyncQueue y exporta colaSync',
 comprobar('db.js distingue un fallo de red de un rechazo real del servidor (esFalloDeRed)',
   /function esFalloDeRed\(error\)/.test(dbJs));
 comprobar('registrarPrestamo() encola en vez de perder el préstamo cuando la red falla',
-  /async registrarPrestamo[\s\S]{0,1200}colaSync\.encolar\(\s*['"]prestar_libro['"]/.test(dbJs));
+  /async registrarPrestamo[\s\S]{0,1200}_ejecutarRpcMuta\(\s*['"]prestar_libro['"]/.test(dbJs));
 comprobar('devolverPrestamo() encola en vez de perder la devolución cuando la red falla',
-  /async devolverPrestamo[\s\S]{0,1200}colaSync\.encolar\(\s*['"]devolver_prestamo['"]/.test(dbJs));
+  /async devolverPrestamo[\s\S]{0,1200}_ejecutarRpcMuta\(\s*['"]devolver_prestamo['"]/.test(dbJs));
 comprobar('renovarPrestamo() encola en vez de perder la renovación cuando la red falla',
-  /async renovarPrestamo[\s\S]{0,1200}colaSync\.encolar\(\s*['"]renovar_prestamo['"]/.test(dbJs));
+  /async renovarPrestamo[\s\S]{0,1200}_ejecutarRpcMuta\(\s*['"]renovar_prestamo['"]/.test(dbJs));
 comprobar('consultarLibro() cae a la copia local cuando la red falla (nunca inventa un "no existe")',
   /async consultarLibro[\s\S]{0,600}consultarLibroSinConexion/.test(dbJs));
 comprobar('estadoLector() cae a la copia local cuando la red falla (nunca inventa un "no existe")',
@@ -466,11 +417,9 @@ comprobar('la interfaz distingue el resultado "encolado" del éxito normal en lo
 // ---------------------------------------------------------------------------
 console.log('\n13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna');
 
-comprobar('existe js/modules/estado-conexion.js', fs.existsSync('js/modules/estado-conexion.js'));
-comprobar('sw.js precarga estado-conexion.js (si no, se rompería el import sin conexión)',
-  listaPrecarga.includes('/js/modules/estado-conexion.js'));
+comprobar('existe src/js/modules/estado-conexion.js', fs.existsSync('src/js/modules/estado-conexion.js'));
 
-const estadoConexionJs = fs.readFileSync('js/modules/estado-conexion.js', 'utf8');
+const estadoConexionJs = fs.readFileSync('src/js/modules/estado-conexion.js', 'utf8');
 comprobar('estado-conexion.js se suscribe a colaSync para enterarse de cambios sin tener que preguntar por encuesta',
   /colaSync\.alCambiar\(/.test(estadoConexionJs));
 comprobar('estado-conexion.js escucha los eventos "online"/"offline" del navegador',

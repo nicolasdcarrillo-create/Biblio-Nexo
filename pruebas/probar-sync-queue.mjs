@@ -185,9 +185,9 @@ globalThis.window.supabase = { createClient: () => clienteFalso };
 // Módulos bajo prueba (importados recién ahora: supabase-init.js lee
 // window.supabase al importarse, así que el mock tiene que existir antes).
 // ---------------------------------------------------------------------------
-const { default: persistencia } = await import('../js/modules/persistencia.js');
-const { default: registroErrores } = await import('../js/modules/errores.js');
-const { db, colaSync } = await import('../js/modules/db.js');
+const { default: persistencia } = await import('../src/js/modules/persistencia.js');
+const { default: registroErrores } = await import('../src/js/modules/errores.js');
+const { db, colaSync } = await import('../src/js/modules/db.js');
 
 // Se reemplaza por un espía: así se puede comprobar que un rechazo real (o
 // varios fallos de red seguidos) deja un aviso VISIBLE, sin depender de que

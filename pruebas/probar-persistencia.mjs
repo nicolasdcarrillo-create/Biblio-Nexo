@@ -95,7 +95,7 @@ globalThis.window.supabase = {
     })
 };
 
-const { default: persistencia } = await import('../js/modules/persistencia.js');
+const { default: persistencia } = await import('../src/js/modules/persistencia.js');
 
 // ---------------------------------------------------------------------------
 // 1. Catálogo: replicación completa y delta por actualizado_en

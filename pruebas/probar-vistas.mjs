@@ -291,7 +291,7 @@ try {
 
 fs.cpSync(RAIZ, tmp, { recursive: true });
 // Se reemplaza el cliente real por el simulado
-fs.writeFileSync(path.join(tmp, 'js/supabase-init.js'),
+fs.writeFileSync(path.join(tmp, 'src/js/supabase-init.js'),
   `export const supabase = globalThis.__supabaseFalso;`);
 globalThis.__supabaseFalso = supabaseFalso;
 
@@ -299,12 +299,12 @@ globalThis.__supabaseFalso = supabaseFalso;
 // cruda como "C:\...\db.js" se interpreta como URL con esquema "c:" y falla.
 const importDesdeTmp = ruta => import(pathToFileURL(path.join(tmp, ruta)));
 
-const { db } = await importDesdeTmp('js/modules/db.js');
-const uiModule = await importDesdeTmp('js/modules/ui.js');
+const { db } = await importDesdeTmp('src/js/modules/db.js');
+const uiModule = await importDesdeTmp('src/js/modules/ui.js');
 const ui = uiModule.default;
-const { buscarPorIsbnExterno } = await importDesdeTmp('js/modules/libros-externos.js');
-const { generarSvgQr } = await importDesdeTmp('js/modules/qr.js');
-const { CONFIG } = await importDesdeTmp('js/config.js');
+const { buscarPorIsbnExterno } = await importDesdeTmp('src/js/modules/libros-externos.js');
+const { generarSvgQr } = await importDesdeTmp('src/js/modules/qr.js');
+const { CONFIG } = await importDesdeTmp('src/js/config.js');
 
 // ---------------------------------------------------------------------------
 // Pruebas
@@ -372,7 +372,7 @@ await prueba('_portadaUrl devuelve null sin ISBN', () =>
 
 console.log('\n=== Seguridad ===');
 await prueba('escapeHtml neutraliza etiquetas en el catálogo', () => {
-  const html = ui._renderBookRows([LIBROS[3]]);
+  const html = ui._renderBookRows([LIBROS[3]]).toString();
   assert(!html.includes('<script>alert'), 'se coló un <script> sin escapar');
   assert(html.includes('&lt;script&gt;'), 'no se escapó el título');
 });
@@ -436,7 +436,7 @@ await prueba('los cuatro períodos de reporte se renderizan', async () => {
 });
 
 await prueba('el catálogo tolera una lista vacía', () => {
-  const html = ui._renderBookRows([]);
+  const html = ui._renderBookRows([]).toString();
   assert(html.includes('Sin libros'), 'falta el mensaje de lista vacía');
 });
 
@@ -813,7 +813,7 @@ await prueba('la vista advierte cuando una tabla no tiene RLS', async () => {
 });
 
 console.log('\n=== Zona horaria: pantalla y servidor deben coincidir ===');
-const { hoyEnChile } = await importDesdeTmp('js/modules/db.js');
+const { hoyEnChile } = await importDesdeTmp('src/js/modules/db.js');
 
 await prueba('_diasRestantes usa la fecha de Chile, no la del dispositivo', () => {
   const hoyCL = hoyEnChile();
@@ -867,7 +867,7 @@ await prueba('los avisos se anuncian al lector de pantalla', () => {
   // El contenedor vive en ui-base.js (constructor y navegación transversal),
   // no en ui.js: ese quedó reducido a ensamblar ui-base.js + js/vistas/*.js
   // cuando UIManager se repartió en varios archivos.
-  const fuente = fs.readFileSync(path.join(tmp, 'js/modules/ui-base.js'), 'utf8');
+  const fuente = fs.readFileSync(path.join(tmp, 'src/js/modules/ui-base.js'), 'utf8');
   const contenedores = fuente.match(/<div id="toast-container"[^>]*>/g) || [];
   assert(contenedores.length > 0, 'la aplicación no crea ningún contenedor de avisos');
   contenedores.forEach((c, i) => {

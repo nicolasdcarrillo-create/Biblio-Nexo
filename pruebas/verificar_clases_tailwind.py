@@ -132,7 +132,7 @@ def main():
     for archivo in archivos_css:
         print(f'  · {archivo.relative_to(RAIZ)}')
 
-    archivos_fuente = sorted((RAIZ / 'js').rglob('*.js')) + sorted(RAIZ.glob('*.html'))
+    archivos_fuente = sorted((RAIZ / 'src' / 'js').rglob('*.js')) + sorted(RAIZ.glob('*.html'))
     faltantes = {}  # clase -> set(archivo relativo)
     total_usadas = set()
 

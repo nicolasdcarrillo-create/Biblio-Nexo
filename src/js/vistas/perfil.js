@@ -1,7 +1,7 @@
 // Vista Mi perfil. Extraído mecánicamente de js/modules/ui.js (Fase 4).
 // Incluye el control de tamaño de letra (Fase 4, mantenibilidad/accesibilidad).
 import * as auth from '../modules/auth.js';
-import { db } from '../modules/db.js';
+import { UsuarioRepository } from '../repositorios/UsuarioRepository.js';
 import { CONFIG } from '../config.js';
 import { html, crudo } from '../modules/utilidades.js';
 import { CLAVE_ESCALA_FUENTE } from '../modules/ui-base.js';
@@ -54,7 +54,7 @@ export default {
 
     let perfil = null;
     try {
-      perfil = await db.miPerfil();
+      perfil = await UsuarioRepository.miPerfil();
     } catch (e) {
       console.warn('Perfil no disponible:', e.message);
     }
@@ -224,7 +224,7 @@ export default {
 
       boton.disabled = true;
       try {
-        await db.actualizarMiPerfil({
+        await UsuarioRepository.actualizarMiPerfil({
           nombre,
           telefono: telefonoBruto ? this.formatPhone(telefonoBruto) : null,
           cargo: document.getElementById('perfil-cargo').value.trim() || null

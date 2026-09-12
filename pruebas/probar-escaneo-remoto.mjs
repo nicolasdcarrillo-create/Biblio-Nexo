@@ -154,7 +154,7 @@ try {
 
 fs.cpSync(RAIZ, tmp, { recursive: true });
 const importDesdeTmp = ruta => import(pathToFileURL(path.join(tmp, ruta)));
-const { CONFIG } = await importDesdeTmp('js/config.js');
+const { CONFIG } = await importDesdeTmp('src/js/config.js');
 
 function crearDom(query) {
   const dom = new JSDOM(
@@ -192,7 +192,7 @@ console.log('\n=== Enlace inválido o faltante ===');
 await prueba('sin ?token= en la URL, muestra un error claro y no la cámara', async () => {
   crearDom('');
   mockFetch();
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
   const texto = document.getElementById('escaneo-remoto-app').textContent;
   assert(/Falta el código del enlace/.test(texto), `no avisó del token faltante: ${texto.slice(0, 150)}`);
@@ -202,7 +202,7 @@ await prueba('sin ?token= en la URL, muestra un error claro y no la cámara', as
 await prueba('con un token inventado, muestra el motivo que da el servidor', async () => {
   crearDom('?token=token-que-no-existe');
   mockFetch();
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
   const texto = document.getElementById('escaneo-remoto-app').textContent;
   assert(/Este enlace no es válido/.test(texto), `no mostró el motivo del servidor: ${texto.slice(0, 150)}`);
@@ -213,7 +213,7 @@ console.log('\n=== Enlace válido: escaneo y alta rápida ===');
 await prueba('con un token válido, muestra la pantalla de escaneo y cuándo vence', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch();
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
   assert(document.getElementById('er-start'), 'no ofreció iniciar la cámara');
   assert(document.getElementById('er-manual'), 'no ofreció la entrada manual del ISBN');
@@ -230,7 +230,7 @@ await prueba('escanear un ISBN que ya existe muestra que ya está en el catálog
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch();
   circulacionLibroExistente = []; // nadie lo tiene, en este caso
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   const antesStock = libros.find(l => l.isbn === LIBRO_EXISTENTE.isbn).stock;
@@ -255,7 +255,7 @@ await prueba('escanear un ISBN que ya existe y está prestado muestra el nombre 
     tipo: 'prestamo', persona_nombre: 'Lector De Prueba', persona_rut: '11111111-1',
     prestamo_id: 1, prestamo_fecha_devolucion_esperada: '2026-09-01', prestamo_dias_restantes: 10
   }];
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   document.getElementById('er-manual').value = LIBRO_EXISTENTE.isbn;
@@ -274,7 +274,7 @@ await prueba('escanear un ISBN nuevo pide los datos, con ayuda de Open Library',
     openLibraryOk: true,
     openLibraryDatos: { 'ISBN:000000000X': { title: 'Libro Nuevo de Prueba', authors: [{ name: 'Autora de Prueba' }] } }
   });
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   document.getElementById('er-manual').value = '000000000X';
@@ -300,7 +300,7 @@ await prueba('escanear un ISBN nuevo pide los datos, con ayuda de Open Library',
 await prueba('un enlace que expira a mitad de sesión corta el escaneo con un aviso claro', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch();
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   // Se simula que el enlace vence justo después de abrir la página: la
@@ -340,7 +340,7 @@ await prueba('con permiso concedido, la cámara se enciende con un solo clic', a
     stop() { return Promise.resolve(); }
     clear() { return Promise.resolve(); }
   };
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   document.getElementById('er-start').click();
@@ -367,7 +367,7 @@ await prueba('si el navegador niega el permiso, avisa con un mensaje claro y dej
     stop() { return Promise.resolve(); }
     clear() { return Promise.resolve(); }
   };
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   document.getElementById('er-start').click();
@@ -390,7 +390,7 @@ await prueba('si no hay ninguna cámara en el dispositivo, lo dice explícitamen
     stop() { return Promise.resolve(); }
     clear() { return Promise.resolve(); }
   };
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   document.getElementById('er-start').click();
@@ -405,7 +405,7 @@ console.log('\n=== Lista de lo escaneado, con portada y "deshacer" (ítem 11) ==
 await prueba('escanear agrega el libro a la lista, con su portada de Open Library', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch({ openLibraryOk: false }); // sin depender de esa ruta para el título
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   // Un ISBN nuevo, no el de LIBRO_EXISTENTE: desde el 22 de agosto de 2026 un
@@ -434,7 +434,7 @@ await prueba('escanear agrega el libro a la lista, con su portada de Open Librar
 await prueba('«Deshacer» sobre un libro recién creado lo elimina del catálogo', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch({ openLibraryOk: false }); // sin ayuda de Open Library, para no depender de esa ruta acá
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   const isbnNuevo = '1111111111';
@@ -459,7 +459,7 @@ await prueba('«Deshacer» sobre un libro recién creado lo elimina del catálog
 await prueba('si «Deshacer» falla, el botón se reactiva y la fila no desaparece', async () => {
   crearDom(`?token=${ENLACE_VALIDO.token}`);
   mockFetch({ openLibraryOk: false });
-  const { iniciar } = await importDesdeTmp('js/escaneo-remoto.js');
+  const { iniciar } = await importDesdeTmp('src/js/escaneo-remoto.js');
   await iniciar();
 
   // Un ISBN nuevo, no el de LIBRO_EXISTENTE: por el mismo motivo que la

@@ -1,5 +1,6 @@
 import * as auth from './auth.js';
 import { db, hoyEnChile } from './db.js';
+import { UsuarioRepository } from '../repositorios/UsuarioRepository.js';
 import registroErrores from './errores.js';
 import { CONFIG } from '../config.js';
 import { escapeHtml, html } from './utilidades.js';
@@ -690,7 +691,7 @@ class UIManager {
    */
   async cargarParametros() {
     try {
-      const filas = await db.obtenerParametros();
+      const filas = await UsuarioRepository.obtenerParametros();
       if (filas) {
         this._parametros = Object.fromEntries(filas.map(f => [f.clave, f.valor]));
       }
@@ -806,7 +807,7 @@ class UIManager {
     // se cae al camino anterior, que solo consulta el rol.
     this._perfil = null;
     try {
-      this._perfil = await db.miPerfil();
+      this._perfil = await UsuarioRepository.miPerfil();
     } catch (e) {
       console.warn('No se pudo cargar el perfil:', e.message);
     }
@@ -1154,7 +1155,7 @@ class UIManager {
         await auth.actualizarPassword(p1);
 
         try {
-          await db.actualizarMiPerfil({ nombre, cargo: cargo || null, telefono: null });
+          await UsuarioRepository.actualizarMiPerfil({ nombre, cargo: cargo || null, telefono: null });
         } catch (errPerfil) {
           // La contraseña ya quedó puesta — la cuenta funciona. No hay que
           // dejar a la persona sin poder entrar solo porque el nombre no se

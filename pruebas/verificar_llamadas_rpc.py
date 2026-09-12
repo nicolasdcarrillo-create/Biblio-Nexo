@@ -47,7 +47,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 RAIZ = Path(__file__).resolve().parent.parent
 MIGRACIONES = RAIZ / 'supabase' / 'migrations'
-DIRECTORIOS_JS = [RAIZ / 'js']
+DIRECTORIOS_JS = [RAIZ / 'src' / 'js']
 
 VERDE, ROJO, AMARILLO, GRIS, FIN = '\033[32m', '\033[31m', '\033[33m', '\033[90m', '\033[0m'
 

@@ -50,10 +50,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const RAIZ_UI = path.dirname(fileURLToPath(import.meta.url));
 const archivosUi = [
-  path.join(RAIZ_UI, '../js/modules/ui-base.js'),
-  ...fs.readdirSync(path.join(RAIZ_UI, '../js/vistas'))
+  path.join(RAIZ_UI, '../src/js/modules/ui-base.js'),
+  ...fs.readdirSync(path.join(RAIZ_UI, '../src/js/vistas'))
     .filter(f => f.endsWith('.js'))
-    .map(f => path.join(RAIZ_UI, '../js/vistas', f))
+    .map(f => path.join(RAIZ_UI, '../src/js/vistas', f))
 ];
 const ui = archivosUi.map(f => fs.readFileSync(f, 'utf8')).join('\n');
 const prohibidos = [

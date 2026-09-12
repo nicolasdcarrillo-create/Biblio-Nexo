@@ -86,12 +86,12 @@ globalThis.window.supabase = { createClient: () => clienteFalso };
 // ---------------------------------------------------------------------------
 // Módulos bajo prueba
 // ---------------------------------------------------------------------------
-const { default: persistencia } = await import('../js/modules/persistencia.js');
-const { colaSync } = await import('../js/modules/db.js');
-const { default: registroErrores } = await import('../js/modules/errores.js');
+const { default: persistencia } = await import('../src/js/modules/persistencia.js');
+const { colaSync } = await import('../src/js/modules/db.js');
+const { default: registroErrores } = await import('../src/js/modules/errores.js');
 registroErrores.registrarOperacion = () => {}; // silenciado: no es lo que se prueba aquí
 
-const { default: estadoConexion } = await import('../js/modules/estado-conexion.js');
+const { default: estadoConexion } = await import('../src/js/modules/estado-conexion.js');
 
 async function vaciarCola() {
     const pendientes = await persistencia.listarOperacionesPendientes();

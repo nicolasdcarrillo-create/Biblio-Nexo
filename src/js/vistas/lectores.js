@@ -77,7 +77,7 @@ export default {
     // Si solo hay que actualizar la tabla (por búsqueda o paginación), 
     // no tocamos el formulario.
     if (soloTabla) {
-      const tbody = container.querySelector('tbody');
+      const tbody = container.querySelector('#users-tbody');
       if (tbody) {
         tbody.innerHTML = this._renderUserRows(users).toString();
         const pag = container.querySelector('#users-pagination');

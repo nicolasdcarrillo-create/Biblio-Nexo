@@ -95,7 +95,7 @@ export default {
                   <i aria-hidden="true" class="fas fa-book-open text-4xl text-stone-300"></i>
                 </div>
                 <p class="text-base font-bold text-stone-500 dark:text-stone-400">Esperando escaneo...</p>
-                <p class="text-sm mt-1">El resultado aparecer� aqu�.</p>
+                <p class="text-sm mt-1">El resultado aparecerá aquí.</p>
               </div>
            </div>
         </div>

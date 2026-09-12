@@ -84,32 +84,28 @@ export default {
               const colorFecha = estado.clave === 'vencido' ? 'text-rose-700 font-bold'
                 : estado.clave === 'porVencer' ? 'text-amber-700 font-bold' : 'text-stone-600 dark:text-stone-300';
               return html`
-              <tr class="border-t border-stone-200 dark:border-stone-700">
-                <td class="px-4 py-3 font-bold text-stone-800 dark:text-stone-200">${l.libros?.titulo}</td>
-                <td class="px-4 py-3 text-stone-600 dark:text-stone-300">
-                  <div>${l.lectores?.nombre}</div>
-                  <div class="text-[11px] text-stone-500 dark:text-stone-400 font-mono">${l.lectores?.rut || ''}</div>
-                </td>
-                <td class="px-4 py-3 ${colorFecha}">
-                  <div>${this._fechaLegible(l.fecha_devolucion_esperada)}</div>
-                  ${estado.clave === 'vencido'
-                    ? html`<span class="stamp stamp-danger mt-1"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> ${estado.etiqueta}</span>`
-                    : html`<div class="text-[11px] font-medium ${estado.clave === 'porVencer' ? 'text-amber-700' : 'text-stone-500 dark:text-stone-400'}">${estado.etiqueta}</div>`}
-                </td>
-                <td class="px-4 py-3 text-right whitespace-nowrap space-x-3">
-                  ${estado.clave !== 'alDia' ? html`
-                    <button class="notify-loan-btn font-bold ${sinContacto ? 'text-stone-500 dark:text-stone-400' : 'text-patrimonio-madera'}" data-id="${l.id}"
-                      title="${sinContacto ? 'Sin datos de contacto' : 'Enviar aviso al lector'}">
-                      <i aria-hidden="true" class="fas fa-bell"></i> Avisar
-                    </button>` : ''}
-                  ${estado.clave !== 'vencido' && (l.renovaciones ?? 0) < this.param('max_renovaciones') ? html`
-                    <button class="renew-loan-btn text-patrimonio-lago font-bold" data-id="${l.id}"
-                      title="Extiende 7 días. Quedan ${this.param('max_renovaciones') - (l.renovaciones ?? 0)}.">
-                      <i aria-hidden="true" class="fas fa-clock-rotate-left"></i> Renovar
-                    </button>` : ''}
-                  <button class="return-loan-btn text-patrimonio-bosque font-bold" data-id="${l.id}">Devolver</button>
-                </td>
-              </tr>
+              <div class="bg-white dark:bg-stone-900 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between border border-stone-200 dark:border-stone-700 shadow-sm hover:shadow-md transition gap-4">
+                  <div class="flex flex-col sm:flex-row gap-4 sm:items-center flex-1">
+                    <div class="flex-1">
+                      <div class="font-bold text-lg text-stone-800 dark:text-stone-200 leading-tight mb-1">${l.libros?.titulo}</div>
+                      <div class="text-sm text-stone-500 dark:text-stone-400 font-medium"><i class="fas fa-user mr-1.5 text-stone-400"></i>${l.lectores?.nombre} <span class="text-xs font-mono ml-1 text-stone-400">(${l.lectores?.rut || 'Sin RUT'})</span></div>
+                    </div>
+                    <div class="flex flex-col sm:items-end gap-1 shrink-0">
+                      <div class="text-sm font-bold ${colorFecha}">${this._fechaLegible(l.fecha_devolucion_esperada)}</div>
+                      <div class="text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded bg-stone-100 dark:bg-stone-800 ${colorFecha}">${estado.etiqueta}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 border-t sm:border-t-0 sm:border-l border-stone-100 dark:border-stone-800 pt-3 sm:pt-0 sm:pl-4 shrink-0">
+                    ${sinContacto
+                      ? html`<button class="btn-secundario w-8 h-8 flex items-center justify-center rounded bg-stone-100 dark:bg-stone-800 text-stone-400 cursor-not-allowed" disabled title="Lector sin correo ni teléfono"><i aria-hidden="true" class="fas fa-bell-slash"></i></button>`
+                      : html`<button class="notify-loan-btn btn-secundario w-8 h-8 flex items-center justify-center rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition" data-id="${l.id}" title="Avisar al lector"><i aria-hidden="true" class="fas fa-bell"></i></button>`
+                    }
+                    ${estado.renovable
+                      ? html`<button class="renew-loan-btn btn-secundario w-8 h-8 flex items-center justify-center rounded bg-patrimonio-lago/10 text-patrimonio-lago dark:text-patrimonio-lago hover:bg-patrimonio-lago/20 transition" data-id="${l.id}" title="Renovar préstamo"><i aria-hidden="true" class="fas fa-rotate-right"></i></button>`
+                      : ''}
+                    <button class="return-loan-btn text-xs bg-patrimonio-madera text-white px-4 py-1.5 rounded-lg hover:bg-[#a67c52] transition font-bold" data-id="${l.id}">Devuelto</button>
+                  </div>
+                </div>
             `; }) : html`<tr><td colspan="4" class="px-4 py-8 text-center text-stone-500 dark:text-stone-400">${
               filtro === 'vencidos' ? 'No hay préstamos atrasados.'
               : filtro === 'porVencer' ? 'No hay préstamos por vencer.'

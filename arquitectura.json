@@ -21,11 +21,11 @@
   ],
   "connections": [
     { "from": "users", "to": "pwa", "label": "Usa", "variant": "emphasis" },
-    { "from": "pwa", "to": "indexeddb", "label": "Offline-First", "variant": "dashed" },
-    { "from": "pwa", "to": "openlibrary", "label": "Consulta ISBN" },
-    { "from": "pwa", "to": "supabase_auth", "label": "Sesión" },
-    { "from": "pwa", "to": "supabase_db", "label": "Sincroniza", "variant": "emphasis" },
-    { "from": "pwa", "to": "supabase_functions", "label": "Llamadas RPC" }
+    { "from": "pwa", "to": "indexeddb", "label": "Offline-First", "variant": "dashed", "labelDy": 24 },
+    { "from": "pwa", "to": "openlibrary", "label": "Consulta ISBN", "labelDy": -24 },
+    { "from": "pwa", "to": "supabase_auth", "label": "Sesión", "labelDy": -24 },
+    { "from": "pwa", "to": "supabase_db", "label": "Sincroniza", "variant": "emphasis", "labelDy": 14 },
+    { "from": "pwa", "to": "supabase_functions", "label": "Llamadas RPC", "labelDy": 24 }
   ],
   "cards": [
     { "dot": "emerald", "title": "PWA Offline-First", "items": ["Funciona sin conexión a internet.", "Los cambios se guardan localmente y se encolan para sincronizarse automáticamente al recuperar la conexión."] },

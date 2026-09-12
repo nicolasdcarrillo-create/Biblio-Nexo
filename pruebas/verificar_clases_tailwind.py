@@ -116,7 +116,7 @@ def clases_usadas_en(texto):
 
 
 def main():
-    css_dirs = [RAIZ / 'vendor' / 'css', RAIZ / 'css']
+    css_dirs = [RAIZ / 'public' / 'vendor' / 'css', RAIZ / 'src' / 'assets' / 'css']
     archivos_css = sorted(
         f for d in css_dirs if d.is_dir() for f in d.glob('*.css')
     )

@@ -21,6 +21,18 @@ export const prestamos = {
      *
      * `filtro` puede ser 'todos', 'vencidos' o 'porVencer'.
      */
+    async obtenerTodosActivosSinPaginar() {
+        const { data, error } = await conTiempoLimite(
+            supabase
+                .from('prestamos')
+                .select('id, fecha_prestamo, fecha_devolucion_esperada, libros(titulo), lectores(nombre, rut, telefono)')
+                .is('fecha_devolucion_real', null)
+                .order('fecha_devolucion_esperada', { ascending: true })
+        );
+        if (error) throw new Error(error.message);
+        return data || [];
+    },
+
     async obtenerPrestamos(filtro = 'todos', pagina = 0, porPagina = 25, diasAviso = 3) {
         const hoy = hoyEnChile();
         const limite = new Date(`${hoy}T12:00:00`);

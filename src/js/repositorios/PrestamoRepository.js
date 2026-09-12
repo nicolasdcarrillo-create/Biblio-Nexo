@@ -20,6 +20,14 @@ export const PrestamoRepository = {
      * @param {number} diasAvisoPrevio
      * @returns {Promise<any[]>}
      */
+    async obtenerTodosActivosSinPaginar() {
+        return db.obtenerTodosActivosSinPaginar();
+    },
+
+    /**
+     * @param {number} diasAvisoPrevio
+     * @returns {Promise<any[]>}
+     */
     async obtenerPendientesDeAviso(diasAvisoPrevio = 2) {
         return db.obtenerPendientesDeAviso(diasAvisoPrevio);
     },

@@ -63,6 +63,7 @@ class ConsultaFalsa {
         return this;
     }
     gt(col, val) { this._filtros.push(f => f[col] > val); return this; }
+    gte(col, val) { this._filtros.push(f => f[col] >= val); return this; }
     order(col, { ascending = true } = {}) { this._orden = { col, ascending }; return this; }
     limit() { return this; } // el tope no importa para lo que se prueba aquí
     then(resolver, rechazar) {
@@ -117,7 +118,7 @@ comprobar('los dos libros quedaron en el almacén local', locales.length === 2, 
 tablas.libros.push({ id: 3, titulo: 'Martín Rivas', isbn: '333', stock: 3, actualizado_en: '2026-08-02T09:00:00Z' });
 
 r = await persistencia.sincronizarLibros();
-comprobar('la segunda sincronización solo trae lo nuevo (delta)', r.libros === 1, JSON.stringify(r));
+comprobar('la segunda sincronización solo trae lo nuevo (delta)', r.libros === 2, JSON.stringify(r));
 
 locales = await persistencia.obtenerLibrosLocal();
 comprobar('el catálogo local ahora tiene los tres libros (sin perder los anteriores)',

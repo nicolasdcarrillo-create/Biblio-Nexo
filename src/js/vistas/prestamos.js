@@ -198,7 +198,49 @@ export default {
   },
 
   // Lista de avisos pendientes, para recorrerlos uno por uno sin volver a la tabla.
-  showBulkNotifyModal(prestamos) {
+  showGeneralNotifyModal(prestamos) {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
+      overlay.innerHTML = html`
+        <div class="bg-patrimonio-card border border-stone-300 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh]">
+          <div class="p-6 pb-4">
+            <h3 class="font-serif text-lg font-bold text-stone-900">Aviso Cierre General</h3>
+            <p class="text-xs text-stone-500 mt-0.5">${prestamos.length} ${prestamos.length === 1 ? 'lector' : 'lectores'} con libros en su poder. Solicita devoluci�n masiva por cierre o vacaciones.</p>
+          </div>
+          <div class="overflow-y-auto px-6 divide-y divide-stone-200 border-t border-stone-200">
+            ${prestamos.map(l => {
+              const tel = l.lectores?.telefono;
+              const nombre = l.lectores?.nombre || 'Lector';
+              const titulo = l.libros?.titulo || 'un libro';
+              const m = `Estimado/a ${nombre}, le recordamos que por cierre de semestre o vacaciones debe devolver el libro "${titulo}" a la biblioteca lo antes posible. �Gracias!`;
+              const msg = encodeURIComponent(m);
+              const enlace = tel ? `https://wa.me/${this.formatPhone(tel)}?text=${msg}` : '';
+              return html`
+                <div class="py-3 flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="font-bold text-sm text-stone-800 truncate">${nombre}</p>
+                    <p class="text-xs text-stone-500 truncate" title="${titulo}">${titulo}</p>
+                  </div>
+                  ${tel
+                    ? html`<a href="${enlace}" target="_blank" rel="noopener noreferrer" class="btn-secundario shrink-0 border border-stone-300 bg-white text-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"><i aria-hidden="true" class="fab fa-whatsapp text-emerald-600 mr-1"></i> WhatsApp</a>`
+                    : html`<span class="text-[10px] text-stone-400 font-bold uppercase tracking-widest shrink-0">Sin tel.</span>`
+                  }
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="p-4 border-t border-stone-200 text-right bg-stone-50 rounded-b-2xl shrink-0">
+            <button data-action="cerrar" class="px-5 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-200">Cerrar</button>
+          </div>
+        </div>
+      `.toString();
+      document.body.appendChild(overlay);
+      const cerrar = () => overlay.remove();
+      overlay.querySelector('[data-action="cerrar"]').addEventListener('click', cerrar);
+      overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+    },
+
+    showBulkNotifyModal(prestamos) {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
     overlay.innerHTML = html`
@@ -252,7 +294,7 @@ export default {
           <h3 class="font-serif text-lg font-bold text-stone-900">${escapeHtml(titulo)}</h3>
           <p class="text-xs text-stone-500">Busca al lector por nombre o RUT. O escribe un RUT nuevo para registrarlo.</p>
           <div class="relative">
-            <i aria-hidden="true" class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+            <i aria-hidden="true" class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-stone-500"></i>
             <input id="lector-search-input" autocomplete="off" class="w-full pl-9 pr-3 py-2.5 border border-stone-300 rounded-lg focus:ring-1 focus:ring-patrimonio-lago focus:border-patrimonio-lago text-sm" placeholder="Ej: María Pérez o 12345678-5">
           </div>
           <div id="lector-search-results" class="max-h-48 overflow-y-auto space-y-1 mt-2"></div>
@@ -315,11 +357,11 @@ export default {
           return;
         }
         timer = setTimeout(async () => {
-          resultsContainer.innerHTML = '<p class="text-xs text-stone-400 p-2"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Buscando...</p>';
+          resultsContainer.innerHTML = '<p class="text-xs text-stone-500 p-2"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Buscando...</p>';
           try {
             const res = await LectorRepository.obtenerLectores(q, 0, 5);
             if (res.lectores.length === 0) {
-              resultsContainer.innerHTML = '<p class="text-xs text-stone-400 p-2">Ningún lector coincide. Escriba el RUT completo para registrarlo como nuevo.</p>';
+              resultsContainer.innerHTML = '<p class="text-xs text-stone-500 p-2">Ningún lector coincide. Escriba el RUT completo para registrarlo como nuevo.</p>';
             } else {
               resultsContainer.innerHTML = res.lectores.map(l => `
                 <button type="button" data-rut="${l.rut}" data-nombre="${escapeHtml(l.nombre)}" class="w-full text-left px-3 py-2 rounded-lg border border-transparent hover:bg-stone-50 hover:border-stone-200 focus:bg-stone-50 focus:border-stone-200 focus:outline-none transition-colors">

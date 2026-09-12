@@ -178,7 +178,7 @@ export default {
         </td>
         <td class="px-4 py-3 text-stone-500">${b.isbn}</td>
         <td class="px-4 py-3 text-center">
-          <span class="${b.stock === 0 ? 'text-rose-600 font-bold' : b.stock <= 1 ? 'text-amber-600 font-semibold' : 'text-emerald-700 font-semibold'}">${b.stock}</span><span class="text-stone-400 font-normal"> / ${b.copias_totales ?? b.stock}</span>
+          <span class="${b.stock === 0 ? 'text-rose-600 font-bold' : b.stock <= 1 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}">${b.stock}</span><span class="text-stone-500 font-normal"> / ${b.copias_totales ?? b.stock}</span>
         </td>
         <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
           ${b.stock > 0

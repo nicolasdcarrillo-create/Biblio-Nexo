@@ -60,8 +60,9 @@ export default {
           <input id="manual-scan-input" aria-label="Escribir el código del libro manualmente" placeholder="Ingrese el ISBN manualmente" class="flex-1 px-3 py-2 border border-stone-300 rounded-md bg-white focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
           <button id="manual-scan-btn" class="bg-patrimonio-lago hover:bg-[#14303c] text-white font-sans font-medium rounded-xl shadow px-4 py-2 text-sm transition-colors">Buscar</button>
         </div>
-        <div id="scan-result" class="mt-5">
-          <div class="text-center py-8 text-stone-400">
+        <label class="flex items-center gap-2 mt-3 cursor-pointer"><input type="checkbox" id="fast-return-toggle" class="rounded text-patrimonio-lago focus:ring-patrimonio-lago w-4 h-4 border-stone-300"><span class="text-sm text-stone-700 font-medium">Modo devoluci�n r�pida (escaneo continuo)</span></label>
+          <div id="scan-result" class="mt-5">
+          <div class="text-center py-8 text-stone-500">
             <i aria-hidden="true" class="fas fa-barcode text-4xl mb-3"></i>
             <p class="text-sm">Ingrese el ISBN o escanee un libro para ver su situación.</p>
           </div>
@@ -85,7 +86,28 @@ export default {
           await this._formularioAltaRapida(resultEl, code);
           return;
         }
-        const reservas = await ReservaRepository.listarReservas(resultado.libro?.id).catch(() => null);
+        const fastReturnToggle = document.getElementById('fast-return-toggle');
+          if (fastReturnToggle && fastReturnToggle.checked) {
+              const prestamoActivo = resultado.prestamos.find(p => !p.fecha_devolucion_real);
+              if (prestamoActivo) {
+                  try {
+                      await PrestamoRepository.devolverPrestamo(prestamoActivo.id);
+                      this.showToast('Devoluci�n r�pida exitosa.', 'success');
+                      resultEl.innerHTML = `<div class="text-center py-8 text-stone-500">
+                          <i aria-hidden="true" class="fas fa-check-circle text-4xl mb-3 text-emerald-600"></i>
+                          <p class="text-sm font-bold text-emerald-700">�Libro devuelto!</p>
+                          <p class="text-xs">Puede escanear el siguiente.</p>
+                      </div>`;
+                      return;
+                  } catch (e) {
+                      this.showToast(e.message || 'Error en devoluci�n r�pida', 'error');
+                  }
+              } else {
+                  this.showToast('Este libro no tiene pr�stamos activos.', 'warning');
+              }
+          }
+
+          const reservas = await ReservaRepository.listarReservas(resultado.libro?.id).catch(() => null);
         resultEl.innerHTML = this._fichaCirculacion(resultado, reservas);
         this._bindFichaCirculacion(resultEl, resultado, code);
       } catch (err) {
@@ -195,7 +217,7 @@ export default {
       if (autorInput && !autorInput.value.trim() && datos.autor) autorInput.value = datos.autor;
     } else {
       // UX5: Feedback cuando Open Library no encuentra el libro
-      if (avisoBuscando) avisoBuscando.innerHTML = '<i aria-hidden="true" class="fas fa-info-circle mr-1 text-stone-400"></i> No se encontraron datos automáticos. Llene los campos manualmente.';
+      if (avisoBuscando) avisoBuscando.innerHTML = '<i aria-hidden="true" class="fas fa-info-circle mr-1 text-stone-500"></i> No se encontraron datos automáticos. Llene los campos manualmente.';
     }
   },
 

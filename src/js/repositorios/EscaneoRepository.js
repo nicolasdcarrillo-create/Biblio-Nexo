@@ -18,7 +18,7 @@ export const EscaneoRepository = {
      */
     async revocarEnlaceEscaneo(id) {
         return db.revocarEnlaceEscaneo(id);
-    }
+    },
     async escucharEscaneos(nombreCanal, onMensaje) {
         const { supabase } = await import('../supabase-init.js');
         if (!supabase) return null;

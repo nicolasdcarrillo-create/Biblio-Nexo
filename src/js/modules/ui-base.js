@@ -1294,7 +1294,7 @@ class UIManager {
               <span class="font-serif font-semibold text-white text-lg block">
                 Biblio<span class="text-patrimonio-madera">Nexo</span>
               </span>
-              <span class="text-[9px] text-stone-400 font-bold uppercase tracking-widest">Futrono · Región de Los Ríos</span>
+              <span class="text-[9px] text-stone-500 font-bold uppercase tracking-widest">Futrono · Región de Los Ríos</span>
             </div>
           </div>
 
@@ -1309,7 +1309,7 @@ class UIManager {
               <span id="current-user-initial" class="w-9 h-9 rounded-full bg-patrimonio-madera flex items-center justify-center font-black text-sm shrink-0 text-white"></span>
               <span class="min-w-0 flex-1 block">
                 <span id="current-user-name" class="text-xs font-bold text-white leading-none truncate block"></span>
-                <span id="current-user-sub" class="text-[10px] text-stone-400 leading-none truncate block mt-0.5"></span>
+                <span id="current-user-sub" class="text-[10px] text-stone-500 leading-none truncate block mt-0.5"></span>
                 <span id="current-user-badge" class="stamp-onDark mt-1.5"></span>
               </span>
             </button>

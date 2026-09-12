@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-patrimonio-base: #F7F4EB;
   --color-patrimonio-card: #FFFFFF;

@@ -76,9 +76,9 @@ export default {
           </div>
         </div>
         <div class="flex flex-wrap gap-2 mt-1">
-          <button class="catalog-filter-btn px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!this.catalogFilter || this.catalogFilter === 'todos') ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900 shadow-md' : 'bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'}" data-filter="todos">Todos</button>
-          <button class="catalog-filter-btn px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'disponibles' ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-stone-900 shadow-md' : 'bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'}" data-filter="disponibles">En estante</button>
-          <button class="catalog-filter-btn px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'prestados' ? 'bg-amber-600 text-white dark:bg-amber-500 dark:text-stone-900 shadow-md' : 'bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'}" data-filter="prestados">Agotados</button>
+          <button class="catalog-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${(!this.catalogFilter || this.catalogFilter === 'todos') ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="todos">Todos</button>
+          <button class="catalog-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'disponibles' ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="disponibles">En estante</button>
+          <button class="catalog-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'prestados' ? 'bg-amber-600 text-white dark:bg-amber-500 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="prestados">Agotados</button>
         </div>
       </div>
         <div id="catalog-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(this._filtrarLibros(libros))}</div>
@@ -191,7 +191,7 @@ export default {
           
           <div class="flex flex-wrap gap-2 justify-end">
             ${b.stock > 0
-              ? html`<button class="loan-book-btn btn-secundario px-4 py-2 rounded-xl text-xs font-bold text-patrimonio-lago border border-stone-300 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 transition" data-id="${b.id}"><i aria-hidden="true" class="fas fa-hand-holding-hand mr-1"></i> Prestar</button>`
+              ? html`<button class="loan-book-btn bg-patrimonio-madera text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-md hover:bg-[#5E3214] transition-all hover:scale-105 active:scale-95" data-id="${b.id}"><i aria-hidden="true" class="fas fa-hand-holding-hand mr-1"></i> Prestar</button>`
               : html`<button class="reserve-book-btn btn-secundario px-4 py-2 rounded-xl text-xs font-bold text-patrimonio-lago border border-stone-300 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 transition" data-id="${b.id}"><i aria-hidden="true" class="fas fa-bookmark mr-1"></i> Reservar</button>`}
             
             ${this.currentUserRole === 'admin' ? html`

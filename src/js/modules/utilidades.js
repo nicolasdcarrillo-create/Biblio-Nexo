@@ -15,12 +15,13 @@
 export function conTiempoLimite(
     promesa,
     ms = 15000,
-    mensaje = 'La operación tardó demasiado en responder. Intente nuevamente; si el problema persiste, recargue la página.'
+    mensaje = 'La operaci\u00f3n tard\u00f3 demasiado en responder. Intente nuevamente; si el problema persiste, recargue la p\u00e1gina.'
 ) {
-    return Promise.race([
-        promesa,
-        new Promise((_, rechazar) => setTimeout(() => rechazar(new Error(mensaje)), ms))
-    ]);
+    let idTemporizador;
+    const temporizador = new Promise((_, rechazar) => {
+        idTemporizador = setTimeout(() => rechazar(new Error(mensaje)), ms);
+    });
+    return Promise.race([promesa, temporizador]).finally(() => clearTimeout(idTemporizador));
 }
 
 /**

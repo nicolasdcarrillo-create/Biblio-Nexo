@@ -552,8 +552,14 @@ export async function iniciar() {
     // cuenta de dejarla prendida y el celular no se calienta ni gasta
     // batería de más mientras el enlace sigue vigente.
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) Scanner.stop();
-    });
+    if (document.hidden) {
+        Scanner.stop();
+        const erCamara = document.getElementById('er-camara-encendida');
+        const erStart = document.getElementById('er-start');
+        if (erCamara) erCamara.classList.add('hidden');
+        if (erStart) erStart.classList.remove('hidden');
+    }
+});
 }
 
 document.addEventListener('DOMContentLoaded', () => {

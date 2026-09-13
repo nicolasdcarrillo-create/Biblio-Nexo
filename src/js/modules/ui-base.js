@@ -1552,12 +1552,15 @@ class UIManager {
       bellBtn.addEventListener('click', toggleNotifs);
       document.getElementById('notificaciones-close').addEventListener('click', toggleNotifs);
       
-      // Close when clicking outside
-      document.addEventListener('click', e => {
+      if (this._notifOutsideClickHandler) {
+        document.removeEventListener('click', this._notifOutsideClickHandler);
+      }
+      this._notifOutsideClickHandler = (e) => {
         if (!notifPanel.classList.contains('opacity-0') && !bellBtn.contains(e.target) && !notifPanel.contains(e.target)) {
           toggleNotifs();
         }
-      });
+      };
+      document.addEventListener('click', this._notifOutsideClickHandler);
     }
 
     const sidebar = document.getElementById('sidebar');

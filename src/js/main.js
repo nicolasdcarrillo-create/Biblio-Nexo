@@ -54,10 +54,6 @@ function esEnlaceDeInvitacion() {
     return hash.includes('type=invite');
 }
 
-/**
- * Registro del service worker (Fase 1.1 — funcionamiento sin conexión).
- *
- * Se registra recién después del evento `load`, no antes: así no compite por
 // El Service Worker ahora lo inyecta automáticamente vite-plugin-pwa
 
 // Cada cuánto se repite la sincronización en segundo plano mientras la

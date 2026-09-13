@@ -672,3 +672,31 @@ html.dark {
   background-color: #0c0a09;
   color-scheme: dark;
 }
+
+
+/* ==========================================
+   Animaciones Premium y Micro-interacciones
+   ========================================== */
+@keyframes fadeUpIn {
+    0% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+    animation: fadeUpIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+}
+
+
+.escaneo-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    /* Oscurece todo el video excepto el cuadro central */
+    background: radial-gradient(rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 70%);
+}
+.escaneo-marco__esquina {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    z-index: 20;
+}

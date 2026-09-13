@@ -111,6 +111,7 @@ function pintarMarco(contenedor) {
   contenedor.innerHTML = `
     <div class="escaneo-marco">
       <div id="reader-video" class="escaneo-marco__video"></div>
+      <div class="escaneo-overlay"></div>
       <div class="escaneo-marco__guia" aria-hidden="true">
         <span class="escaneo-marco__esquina escaneo-marco__esquina--tl"></span>
         <span class="escaneo-marco__esquina escaneo-marco__esquina--tr"></span>
@@ -118,6 +119,9 @@ function pintarMarco(contenedor) {
         <span class="escaneo-marco__esquina escaneo-marco__esquina--br"></span>
       </div>
       <div class="linea-escaneo" aria-hidden="true"></div>
+      <div class="absolute bottom-4 inset-x-0 text-center z-20">
+        <span class="bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full border border-white/20 shadow-lg">Apunta la cámara al código</span>
+      </div>
     </div>`;
 }
 
@@ -133,23 +137,46 @@ class ScannerManager {
         try {
             const Ctx = window.AudioContext || window.webkitAudioContext;
             if (!Ctx) return;
-            // Un solo contexto reutilizado: crear uno por lectura los agota.
-            this._audioCtx = this._audioCtx || new Ctx();
-            const ctx = this._audioCtx;
-            if (ctx.state === 'suspended') ctx.resume();
+            if (!this._audioCtx || this._audioCtx.state === 'closed') {
+                this._audioCtx = new Ctx();
+            }
+            if (this._audioCtx.state === 'suspended') {
+                this._audioCtx.resume();
+            }
 
-            const osc = ctx.createOscillator();
-            const vol = ctx.createGain();
+            const osc = this._audioCtx.createOscillator();
+            const gainNode = this._audioCtx.createGain();
+            
+            // Un sonido más premium y suave: dos tonos rápidos
             osc.type = 'sine';
-            osc.frequency.value = 880;
-            vol.gain.setValueAtTime(0.0001, ctx.currentTime);
-            vol.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01);
-            vol.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
-            osc.connect(vol).connect(ctx.destination);
+            osc.frequency.setValueAtTime(880, this._audioCtx.currentTime); // A5
+            osc.frequency.exponentialRampToValueAtTime(1760, this._audioCtx.currentTime + 0.1); // A6
+            
+            gainNode.gain.setValueAtTime(0, this._audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, this._audioCtx.currentTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, this._audioCtx.currentTime + 0.15);
+            
+            osc.connect(gainNode);
+            gainNode.connect(this._audioCtx.destination);
+            
             osc.start();
-            osc.stop(ctx.currentTime + 0.13);
-        } catch {
-            // El pitido es una comodidad, nunca un motivo para interrumpir la lectura
+            osc.stop(this._audioCtx.currentTime + 0.2);
+
+            // Efecto visual: borde verde
+            const guias = document.querySelectorAll('.escaneo-marco__esquina');
+            guias.forEach(g => {
+                g.style.borderColor = '#10b981'; // Emerald 500
+                g.style.boxShadow = '0 0 15px rgba(16, 185, 129, 0.8)';
+            });
+            setTimeout(() => {
+                guias.forEach(g => {
+                    g.style.borderColor = '';
+                    g.style.boxShadow = '';
+                });
+            }, 400);
+
+        } catch (e) {
+            console.error('No se pudo reproducir el sonido', e);
         }
     }
 

@@ -868,20 +868,63 @@ class UIManager {
   // que necesita en su trabajo diario.
   
     async _actualizarBadgeAtrasados() {
-      const badge = document.getElementById('badge-atrasados');
-      if (!badge) return;
-      try {
-        const { conteos } = await PrestamoRepository.obtenerPrestamos('todos', 0, 1, 0);
-        if (conteos.vencidos > 0) {
+    const badge = document.getElementById('badge-atrasados');
+    const badgeBell = document.getElementById('notificaciones-badge');
+    const panel = document.getElementById('notificaciones-lista');
+    try {
+      const { conteos } = await PrestamoRepository.obtenerPrestamos('todos', 0, 1, 0);
+      let count = 0;
+      let notifsHTML = '';
+      
+      if (conteos.vencidos > 0) {
+        if (badge) {
           badge.textContent = conteos.vencidos;
           badge.classList.remove('hidden');
-        } else {
-          badge.classList.add('hidden');
         }
-      } catch (e) {
-        badge.classList.add('hidden');
+        count += 1;
+        notifsHTML += `
+          <div class="p-4 flex items-start gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition cursor-pointer" onclick="document.querySelector('[data-view=\'loans\']').click()">
+            <div class="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 flex items-center justify-center shrink-0">
+              <i aria-hidden="true" class="fas fa-exclamation-triangle text-xs"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-stone-800 dark:text-stone-200">Préstamos vencidos</p>
+              <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Tienes ${conteos.vencidos} préstamo(s) fuera de plazo.</p>
+            </div>
+          </div>`;
+      } else {
+        if (badge) badge.classList.add('hidden');
       }
+
+      if (conteos.porVencer > 0) {
+        count += 1;
+        notifsHTML += `
+          <div class="p-4 flex items-start gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition cursor-pointer" onclick="document.querySelector('[data-view=\'loans\']').click()">
+            <div class="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center shrink-0">
+              <i aria-hidden="true" class="fas fa-clock text-xs"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-stone-800 dark:text-stone-200">Préstamos por vencer</p>
+              <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Hay ${conteos.porVencer} préstamo(s) que vencen pronto.</p>
+            </div>
+          </div>`;
+      }
+
+      if (count > 0) {
+        if (badgeBell) {
+          badgeBell.textContent = count;
+          badgeBell.classList.remove('hidden');
+        }
+        if (panel) panel.innerHTML = notifsHTML;
+      } else {
+        if (badgeBell) badgeBell.classList.add('hidden');
+        if (panel) panel.innerHTML = `<div class="p-6 text-center text-stone-500 text-sm"><i aria-hidden="true" class="fas fa-check-circle text-2xl text-emerald-500 mb-2 block"></i> Todo está al día.</div>`;
+      }
+    } catch (e) {
+      if (badge) badge.classList.add('hidden');
+      if (badgeBell) badgeBell.classList.add('hidden');
     }
+  }
 
     renderNavMenu() {
     const nav = document.getElementById('nav-menu');
@@ -1269,7 +1312,7 @@ class UIManager {
 
         <!-- Botón modo oscuro flotante -->
         <button class="dark-mode-toggle absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 dark:bg-black/30 backdrop-blur-md text-stone-800 dark:text-stone-100 border border-white/30 dark:border-white/10 hover:bg-white/30 dark:hover:bg-black/50 transition-all shadow-sm" title="Alternar modo oscuro">
-          <i class="dark-mode-icon fas fa-moon transition-transform duration-300"></i>
+          <i aria-hidden="true" class="dark-mode-icon fas fa-moon transition-transform duration-300"></i>
         </button>
 
         <!-- Tarjeta de vidrio esmerilado: flota sobre el paisaje en vez de cortarlo -->
@@ -1432,7 +1475,7 @@ class UIManager {
                Ahora es un botón, porque es el lugar donde uno espera pinchar
                para ver y editar sus propios datos. -->
           <div class="border-t border-white/10 p-4 flex items-center gap-3">
-            <button class="dark-mode-toggle w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition shrink-0" title="Alternar modo oscuro"><i class="dark-mode-icon class="fas fa-moon"></i></button>
+            <button class="dark-mode-toggle w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition shrink-0" title="Alternar modo oscuro"><i aria-hidden="true" class="dark-mode-icon fas fa-moon"></i></button>
               <button id="perfil-btn" title="Ver y editar mi perfil"
               class="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg -m-1 p-1 hover:bg-white dark:bg-stone-800/10 transition">
               <span id="current-user-initial" class="w-9 h-9 rounded-full bg-patrimonio-madera flex items-center justify-center font-black text-sm shrink-0 text-white"></span>
@@ -1458,7 +1501,29 @@ class UIManager {
             </button>
             <span class="w-1.5 h-4 bg-patrimonio-madera rounded-sm hidden sm:block"></span>
             <h2 id="page-title" class="font-serif font-semibold text-stone-800 dark:text-stone-200 text-base">Dashboard</h2>
-            <span id="estado-conexion" class="ml-auto shrink-0"></span>
+            <div class="ml-auto flex items-center gap-4 relative">
+              
+              <!-- Campana de notificaciones -->
+              <div class="relative">
+                <button id="notificaciones-btn" class="relative text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 transition-colors" title="Centro de notificaciones">
+                  <i aria-hidden="true" class="fas fa-bell text-[1.1rem]"></i>
+                  <span id="notificaciones-badge" class="absolute -top-1.5 -right-1.5 bg-rose-600 shadow text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full hidden">0</span>
+                </button>
+
+                <!-- Panel de notificaciones -->
+                <div id="notificaciones-panel" class="absolute right-0 mt-3 w-80 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-2xl opacity-0 invisible transition-all transform origin-top-right scale-95 z-50">
+                  <div class="p-4 border-b border-stone-100 dark:border-stone-800 flex justify-between items-center bg-stone-50/50 dark:bg-stone-800/20 rounded-t-2xl">
+                    <h3 class="font-bold text-stone-800 dark:text-stone-200">Notificaciones</h3>
+                    <button id="notificaciones-close" class="text-stone-400 hover:text-stone-600"><i aria-hidden="true" class="fas fa-times"></i></button>
+                  </div>
+                  <div id="notificaciones-lista" class="max-h-80 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800/50">
+                    <!-- Dinámico -->
+                  </div>
+                </div>
+              </div>
+
+              <span id="estado-conexion" class="shrink-0"></span>
+            </div>
           </div>
 
           <main id="views-container" tabindex="-1" aria-label="Contenido principal" class="flex-1 overflow-y-auto p-4 md:p-6"></main>
@@ -1470,6 +1535,30 @@ class UIManager {
     document.getElementById('logout-btn').addEventListener('click', () => auth.logout());
       this._initDarkMode();
     document.getElementById('perfil-btn').addEventListener('click', () => this.switchView('profile'));
+
+    const bellBtn = document.getElementById('notificaciones-btn');
+    const notifPanel = document.getElementById('notificaciones-panel');
+    if (bellBtn && notifPanel) {
+      const toggleNotifs = () => {
+        const isHidden = notifPanel.classList.contains('opacity-0');
+        if (isHidden) {
+          notifPanel.classList.remove('opacity-0', 'invisible', 'scale-95');
+          notifPanel.classList.add('opacity-100', 'scale-100');
+        } else {
+          notifPanel.classList.add('opacity-0', 'invisible', 'scale-95');
+          notifPanel.classList.remove('opacity-100', 'scale-100');
+        }
+      };
+      bellBtn.addEventListener('click', toggleNotifs);
+      document.getElementById('notificaciones-close').addEventListener('click', toggleNotifs);
+      
+      // Close when clicking outside
+      document.addEventListener('click', e => {
+        if (!notifPanel.classList.contains('opacity-0') && !bellBtn.contains(e.target) && !notifPanel.contains(e.target)) {
+          toggleNotifs();
+        }
+      });
+    }
 
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');

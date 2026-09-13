@@ -78,17 +78,17 @@ export default {
         </div>
         <div class="flex flex-col gap-4 p-4">
             <div id="prestamos-tbody" class="flex flex-col gap-4">
-            ${visibles.length ? visibles.map(l => {
+            ${visibles.length ? visibles.map((l, i) => {
               const estado = this._estadoPrestamo(l.fecha_devolucion_esperada);
               const sinContacto = !l.lectores?.email && this.formatPhone(l.lectores?.telefono).length < 11;
               const colorFecha = estado.clave === 'vencido' ? 'text-rose-700 font-bold'
                 : estado.clave === 'porVencer' ? 'text-amber-700 font-bold' : 'text-stone-600 dark:text-stone-300';
               return html`
-              <div class="bg-white dark:bg-stone-900 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between border border-stone-200 dark:border-stone-700 shadow-sm hover:shadow-md transition gap-4">
+              <div class="bg-white dark:bg-stone-900 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between border border-stone-200 dark:border-stone-700 shadow-sm hover:shadow-md transition gap-4 animate-fade-up" style="animation-delay: ${i * 0.05}s">
                   <div class="flex flex-col sm:flex-row gap-4 sm:items-center flex-1">
                     <div class="flex-1">
                       <div class="font-bold text-lg text-stone-800 dark:text-stone-200 leading-tight mb-1">${l.libros?.titulo}</div>
-                      <div class="text-sm text-stone-500 dark:text-stone-400 font-medium"><i class="fas fa-user mr-1.5 text-stone-400"></i>${l.lectores?.nombre} <span class="text-xs font-mono ml-1 text-stone-400">(${l.lectores?.rut || 'Sin RUT'})</span></div>
+                      <div class="text-sm text-stone-500 dark:text-stone-400 font-medium"><i aria-hidden="true" class="fas fa-user mr-1.5 text-stone-400"></i>${l.lectores?.nombre} <span class="text-xs font-mono ml-1 text-stone-400">(${l.lectores?.rut || 'Sin RUT'})</span></div>
                     </div>
                     <div class="flex flex-col sm:items-end gap-1 shrink-0">
                       <div class="text-sm font-bold ${colorFecha}">${this._fechaLegible(l.fecha_devolucion_esperada)}</div>

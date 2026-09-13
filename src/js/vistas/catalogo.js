@@ -66,7 +66,8 @@ export default {
         </form>
       </div>
       <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
-        <div class="catalog-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="catalog-card-header flex flex-col gap-3">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Catálogo de libros</h3>
           <div class="relative sm:w-64">
             <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400 text-xs"></i>
@@ -74,7 +75,13 @@ export default {
               class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
-        <div id="catalog-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(libros)}</div>
+        <div class="flex flex-wrap gap-2 mt-1">
+          <button class="catalog-filter-btn px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!this.catalogFilter || this.catalogFilter === 'todos') ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900 shadow-md' : 'bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'}" data-filter="todos">Todos</button>
+          <button class="catalog-filter-btn px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'disponibles' ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-stone-900 shadow-md' : 'bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'}" data-filter="disponibles">En estante</button>
+          <button class="catalog-filter-btn px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'prestados' ? 'bg-amber-600 text-white dark:bg-amber-500 dark:text-stone-900 shadow-md' : 'bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'}" data-filter="prestados">Agotados</button>
+        </div>
+      </div>
+        <div id="catalog-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(this._filtrarLibros(libros))}</div>
         <div id="catalog-pagination">${crudo(this._paginacionHtml(this.bookPage, total, porPagina, 'catalog-page-btn'))}</div>
       </div>
     `;
@@ -133,7 +140,7 @@ export default {
         if (this.currentView !== 'catalog' || !tbody) return;
         this._booksCache = resultados;
         // _renderBookRows siempre devuelve HtmlSeguro — llamar .toString() es suficiente
-        tbody.innerHTML = this._renderBookRows(resultados).toString();
+        tbody.innerHTML = this._renderBookRows(this._filtrarLibros(resultados)).toString();
         const paginacion = document.getElementById('catalog-pagination');
         if (paginacion) {
           paginacion.innerHTML = this._paginacionHtml(0, totalNuevo, porPagina, 'catalog-page-btn');
@@ -146,39 +153,54 @@ export default {
 
   // HTML de las filas del catálogo. Separado de renderCatalog para poder
   // refrescar solo el <tbody> cuando se busca, sin recrear todo el formulario.
+  
+  _filtrarLibros(libros) {
+    const f = this.catalogFilter || 'todos';
+    if (f === 'disponibles') return libros.filter(b => b.stock > 0);
+    if (f === 'prestados') return libros.filter(b => b.stock === 0);
+    return libros;
+  },
+
   _renderBookRows(books) {
     if (!books.length) {
-      return html`<tr><td colspan="4" class="px-4 py-6 text-center text-stone-500 dark:text-stone-400">Sin libros que coincidan con la búsqueda.</td></tr>`;
+      return html`<div class="px-4 py-6 text-center text-stone-500 dark:text-stone-400">Sin libros que coincidan con la búsqueda.</div>`;
     }
-    return html`${books.map(b => html`
-      <tr class="border-t border-stone-200 dark:border-stone-700">
-        <td class="px-4 py-3">
-          <div class="flex items-start gap-3">
-            ${crudo(this._portadaHtml(b))}
-            <div class="min-w-0">
-              <div class="font-bold text-stone-800 dark:text-stone-200">${b.titulo}</div>
-              <div class="text-xs text-stone-500 dark:text-stone-400">${b.autor}</div>
-              ${(b.genero || b.ubicacion) ? html`
-                <div class="flex flex-wrap gap-1 mt-1">
-                  ${b.genero ? html`<span class="stamp stamp-info !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-tag"></i> ${b.genero}</span>` : ''}
-                  ${b.ubicacion ? html`<span class="stamp stamp-success !rotate-0 !text-[9px] !py-0.5 !px-1.5"><i aria-hidden="true" class="fas fa-location-dot"></i> ${b.ubicacion}</span>` : ''}
-                </div>` : ''}
-            </div>
+    return html`${books.map((b, i) => html`
+      <div class="bg-white dark:bg-stone-800 rounded-2xl p-4 shadow-sm border border-stone-200 dark:border-stone-700 flex flex-col md:flex-row gap-4 items-start md:items-center animate-fade-up" style="animation-delay: ${i * 0.05}s">
+        
+        <div class="flex items-start gap-4 flex-1 min-w-0">
+          ${crudo(this._portadaHtml(b))}
+          <div class="min-w-0">
+            <h3 class="font-bold text-stone-900 dark:text-stone-100 text-lg truncate">${b.titulo}</h3>
+            <p class="text-sm text-stone-500 dark:text-stone-400 truncate">${b.autor}</p>
+            <div class="text-xs text-stone-400 dark:text-stone-500 mt-1 mb-2 font-mono">${b.isbn}</div>
+            ${(b.genero || b.ubicacion) ? html`
+              <div class="flex flex-wrap gap-2">
+                ${b.genero ? html`<span class="stamp stamp-info !rotate-0 !text-[10px] !py-0.5 !px-2"><i aria-hidden="true" class="fas fa-tag mr-1"></i> ${b.genero}</span>` : ''}
+                ${b.ubicacion ? html`<span class="stamp stamp-success !rotate-0 !text-[10px] !py-0.5 !px-2"><i aria-hidden="true" class="fas fa-location-dot mr-1"></i> ${b.ubicacion}</span>` : ''}
+              </div>` : ''}
           </div>
-        </td>
-        <td class="px-4 py-3 text-stone-500 dark:text-stone-400">${b.isbn}</td>
-        <td class="px-4 py-3 text-center">
-          <span class="${b.stock === 0 ? 'text-rose-600 font-bold' : b.stock <= 1 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}">${b.stock}</span><span class="text-stone-500 dark:text-stone-400 font-normal"> / ${b.copias_totales ?? b.stock}</span>
-        </td>
-        <td class="px-4 py-3 text-right whitespace-nowrap space-x-2">
-          ${b.stock > 0
-            ? html`<button class="loan-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Prestar</button>`
-            : html`<button class="reserve-book-btn text-patrimonio-lago font-bold" data-id="${b.id}">Reservar</button>`}
-          ${this.currentUserRole === 'admin' ? html`
-            <button class="edit-book-btn text-stone-500 dark:text-stone-400 hover:text-patrimonio-madera font-bold" data-id="${b.id}">Editar</button>
-            <button class="delete-book-btn text-rose-700 font-bold" data-id="${b.id}">Eliminar</button>` : ''}
-        </td>
-      </tr>
+        </div>
+
+        <div class="flex flex-col md:items-end gap-3 shrink-0">
+          <div class="text-center md:text-right">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-stone-400 block mb-0.5">Disponibles</span>
+            <span class="${b.stock === 0 ? 'text-rose-600' : b.stock <= 1 ? 'text-amber-600' : 'text-emerald-600'} font-black text-xl">${b.stock}</span>
+            <span class="text-stone-400 dark:text-stone-500 text-sm">/ ${b.copias_totales ?? b.stock}</span>
+          </div>
+          
+          <div class="flex flex-wrap gap-2 justify-end">
+            ${b.stock > 0
+              ? html`<button class="loan-book-btn btn-secundario px-4 py-2 rounded-xl text-xs font-bold text-patrimonio-lago border border-stone-300 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 transition" data-id="${b.id}"><i aria-hidden="true" class="fas fa-hand-holding-hand mr-1"></i> Prestar</button>`
+              : html`<button class="reserve-book-btn btn-secundario px-4 py-2 rounded-xl text-xs font-bold text-patrimonio-lago border border-stone-300 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 transition" data-id="${b.id}"><i aria-hidden="true" class="fas fa-bookmark mr-1"></i> Reservar</button>`}
+            
+            ${this.currentUserRole === 'admin' ? html`
+              <button class="edit-book-btn px-3 py-2 rounded-xl text-xs font-bold text-stone-500 hover:text-patrimonio-madera hover:bg-stone-100 dark:hover:bg-stone-700 transition" data-id="${b.id}"><i aria-hidden="true" class="fas fa-pen"></i></button>
+              <button class="delete-book-btn px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition" data-id="${b.id}"><i aria-hidden="true" class="fas fa-trash"></i></button>` : ''}
+          </div>
+        </div>
+
+      </div>
     `)}`;
   },
 

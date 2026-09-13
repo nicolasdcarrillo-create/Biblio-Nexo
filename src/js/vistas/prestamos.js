@@ -21,7 +21,7 @@
 import { PrestamoRepository } from '../repositorios/PrestamoRepository.js';
 import { LectorRepository } from '../repositorios/LectorRepository.js';
 import { ReservaRepository } from '../repositorios/ReservaRepository.js';
-import { html, crudo } from '../modules/utilidades.js';
+import { html, crudo, escapeHtml } from '../modules/utilidades.js';
 
 export default {
   async renderLoans() {

@@ -68,42 +68,6 @@ const total = totalCount || 0;
 
     this._booksCache = libros;
 
-    document.getElementById('add-book-form').addEventListener('submit', async e => {
-      e.preventDefault();
-      if (!this.validateBookForm(false)) return;
-      
-      const submitBtn = document.getElementById('add-book-submit-btn');
-      const originalText = submitBtn.innerHTML;
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Guardando...';
-      
-      try {
-        const r = await LibroRepository.agregarLibro({
-          isbn: document.getElementById('new-book-isbn').value.trim(),
-          titulo: document.getElementById('new-book-title').value.trim(),
-          autor: document.getElementById('new-book-author').value.trim(),
-          genero: document.getElementById('new-book-genre').value.trim(),
-          ubicacion: document.getElementById('new-book-location').value.trim(),
-          stock: Number(document.getElementById('new-book-qty').value || 1)
-        });
-        // Fase 1.3 (ampliación): sin conexión, db.js encola el alta en vez
-        // de lanzar — el libro ya aparece en el catálogo local (guardado
-        // optimista), pero conviene que la persona sepa que todavía no
-        // llegó al servidor.
-        this.showToast(r?.encolado ? r.mensaje : 'Libro agregado.', r?.encolado ? 'info' : 'success');
-        this.renderBibliomovil();
-      } catch (err) {
-        this.showToast(err.message || 'No se pudo agregar el libro.', 'error');
-      } finally {
-        // En caso de éxito, renderBibliomovil recarga todo el DOM, por lo que reestablecer el botón
-        // solo es visible en caso de error, pero es buena práctica.
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = originalText;
-        }
-      }
-    });
-
     this._bindCatalogRowEvents(container);
     this._bindPaginacion(container, '.bibliomovil-page-btn', p => { this.bookPage = p; this.renderBibliomovil(); });
 

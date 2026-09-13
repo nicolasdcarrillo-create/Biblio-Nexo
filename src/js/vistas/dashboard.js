@@ -1,6 +1,7 @@
 // Vista Dashboard. Extraído mecánicamente de js/modules/ui.js (Fase 4).
-import { DashboardRepository } from '../repositorios/DashboardRepository.js';
 import { CONFIG } from '../config.js';
+import { db } from '../modules/db.js';
+
 import { html } from '../modules/utilidades.js';
 
 export default {
@@ -9,9 +10,9 @@ export default {
     if (!container) return;
 
     // Llamada asíncrona a Supabase
-    const stats = await DashboardRepository.obtenerEstadisticas();
+    const stats = await db.obtenerEstadisticas();
     // UX12: Alerta de reservas apartadas por expirar
-    const reservasListas = await DashboardRepository.obtenerReservasApartadas();
+    const reservasListas = await db.obtenerReservasApartadas();
     
     // Si el usuario ya cambió de vista mientras esperábamos la respuesta, no pintamos nada
     if (this.currentView !== 'dashboard') return;

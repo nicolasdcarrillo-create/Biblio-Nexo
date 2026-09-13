@@ -19,12 +19,9 @@
 // (por ejemplo, `flujoPrestamo` y `showLectorModal`, que viven en
 // js/vistas/prestamos.js).
 
-import { LibroRepository } from '../repositorios/LibroRepository.js';
-import { ReservaRepository } from '../repositorios/ReservaRepository.js';
-import { EscaneoRepository } from '../repositorios/EscaneoRepository.js';
-import { PrestamoRepository } from '../repositorios/PrestamoRepository.js';
-import { LectorRepository } from '../repositorios/LectorRepository.js';
 import { escapeHtml, canalEscaneo } from '../modules/utilidades.js';
+import { db } from '../modules/db.js';
+
 import { buscarPorIsbnExterno } from '../modules/libros-externos.js';
 import { generarSvgQr } from '../modules/qr.js';
 
@@ -113,7 +110,7 @@ export default {
       resultEl.innerHTML = '<div class="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400"><i aria-hidden="true" class="fas fa-spinner fa-spin text-patrimonio-lago"></i> Consultando…</div>';
 
       try {
-        const resultado = await LibroRepository.consultarLibro(code);
+        const resultado = await db.consultarLibro(code);
         if (!resultado) {
           await this._formularioAltaRapida(resultEl, code);
           return;
@@ -123,7 +120,7 @@ export default {
               const prestamoActivo = resultado.prestamos.find(p => !p.fecha_devolucion_real);
               if (prestamoActivo) {
                   try {
-                      await PrestamoRepository.devolverPrestamo(prestamoActivo.id);
+                      await db.devolverPrestamo(prestamoActivo.id);
                       this.showToast('Devolución rápida exitosa.', 'success');
                       resultEl.innerHTML = `<div class="m-auto text-center py-12 text-stone-500 dark:text-stone-400">
                           <div class="w-24 h-24 mx-auto bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100 shadow-inner">
@@ -141,7 +138,7 @@ export default {
               }
           }
 
-          const reservas = await ReservaRepository.listarReservas(resultado.libro?.id).catch(() => null);
+          const reservas = await db.listarReservas(resultado.libro?.id).catch(() => null);
         resultEl.innerHTML = this._fichaCirculacion(resultado, reservas);
         this._bindFichaCirculacion(resultEl, resultado, code);
       } catch (err) {
@@ -219,7 +216,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const r = await LibroRepository.agregarLibro({
+        const r = await db.agregarLibro({
           isbn: document.getElementById('scan-new-book-isbn').value.trim(),
           titulo: document.getElementById('scan-new-book-title').value.trim(),
           autor: document.getElementById('scan-new-book-author').value.trim(),
@@ -319,7 +316,7 @@ export default {
     let modalCerrado = false; // BUG-10: Evita que el canal quede suscrito si el modal se cerró antes
 
     const desuscribirCanal = async () => {
-      if (canalRealtime) { await EscaneoRepository.detenerEscucha(canalRealtime); }
+      if (canalRealtime) { await db.detenerEscucha(canalRealtime); }
       canalRealtime = null;
     };
 
@@ -346,7 +343,7 @@ export default {
         // no suscribimos el canal.
         if (modalCerrado) return; 
 
-        canalRealtime = await EscaneoRepository.escucharEscaneos(nombre, ({ payload }) => {
+        canalRealtime = await db.escucharEscaneos(nombre, ({ payload }) => {
             this.showToast(`Escaneo remoto: ${payload?.titulo || payload?.isbn || 'libro'}`, 'info');
             if (payload?.isbn && payload.isbn === this._ultimoCodigoEscaneado && document.getElementById('scan-result')) {
               this._mostrarResultadoEscaneo?.(payload.isbn);
@@ -370,13 +367,13 @@ export default {
       // enlace válido abierto por esta ventana a la vez.
       desuscribirCanal();
       if (enlaceActual) {
-        try { await EscaneoRepository.revocarEnlaceEscaneo(enlaceActual.id); } catch (e) { /* best-effort */ }
+        try { await db.revocarEnlaceEscaneo(enlaceActual.id); } catch (e) { /* best-effort */ }
         enlaceActual = null;
       }
 
       const horas = Number(document.getElementById('qr-remoto-horas')?.value || 4);
       try {
-        enlaceActual = await EscaneoRepository.crearEnlaceEscaneo(horas);
+        enlaceActual = await db.crearEnlaceEscaneo(horas);
         if (!enlaceActual) throw new Error('El sistema no devolvió el enlace.');
       } catch (err) {
         cuerpo.innerHTML = `<p class="text-xs text-rose-700 py-6">${escapeHtml(err.message || 'No se pudo generar el enlace.')}</p>`;
@@ -409,7 +406,7 @@ export default {
         const boton = btn_e.currentTarget;
         boton.disabled = true;
         try {
-          await EscaneoRepository.revocarEnlaceEscaneo(enlaceActual.id);
+          await db.revocarEnlaceEscaneo(enlaceActual.id);
           enlaceActual = null;
           desuscribirCanal();
           this.showToast('Enlace revocado. Ya no sirve para agregar libros.', 'success');
@@ -434,7 +431,7 @@ export default {
   _fichaCirculacion({ libro, prestamos }, reservas) {
     const disponibles = libro.stock ?? 0;
     const hayDisponibles = disponibles > 0;
-    // reservas llega de ReservaRepository.listarReservas(libro.id): null si la migración
+    // reservas llega de db.listarReservas(libro.id): null si la migración
     // 022 no está aplicada (se omite la sección entera, sin romper la
     // ficha), [] si nadie espera este libro.
     const vigentes = (reservas || []).filter(r => r.estado === 'activa' || r.estado === 'apartada');
@@ -563,7 +560,7 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          await ReservaRepository.retirarReserva(btn.dataset.entregarReserva);
+          await db.retirarReserva(btn.dataset.entregarReserva);
           this.showToast('Reserva entregada. Se ha registrado el préstamo.', 'success');
           recargar();
         } catch (err) {
@@ -579,7 +576,7 @@ export default {
         try {
           // estadoLector devuelve objeto plano (nombre, email, telefono, etc.),
           // no un objeto anidado { lector: {...} }. Se mapea al formato que espera showNotifyReservaModal.
-          const datos = await LectorRepository.estadoLector(btn.dataset.rut);
+          const datos = await db.estadoLector(btn.dataset.rut);
           const lector = { nombre: datos.nombre, email: datos.email, telefono: datos.telefono };
           if (typeof this.showNotifyReservaModal === 'function') {
             this.showNotifyReservaModal(
@@ -606,7 +603,7 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const r = await PrestamoRepository.devolverPrestamo(btn.dataset.devolver);
+          const r = await db.devolverPrestamo(btn.dataset.devolver);
           if (r?.encolado) {
             this.showToast(r.mensaje, 'info');
           } else {
@@ -624,7 +621,7 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const r = await PrestamoRepository.renovarPrestamo(btn.dataset.renovar);
+          const r = await db.renovarPrestamo(btn.dataset.renovar);
           if (r?.encolado) {
             this.showToast(r.mensaje, 'info');
           } else {

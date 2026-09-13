@@ -1,4 +1,6 @@
 import { supabase } from '../supabase-init.js';
+import { db } from '../modules/db.js';
+
 // Vista Catálogo. Extraído de js/modules/ui-base.js el 22 de agosto de 2026
 // (división por vista, ver pendientes-checklist.md y
 // claude/plan-division-ui-base-2026-08-22.md). El bloque venía marcado
@@ -14,8 +16,7 @@ import { supabase } from '../supabase-init.js';
 // mezcla los métodos de todas las vistas en el mismo prototipo: `this.foo()`
 // no le importa en qué archivo se declaró `foo`.
 
-import { LibroRepository } from '../repositorios/LibroRepository.js';
-import { html, crudo, escapeHtml } from '../modules/utilidades.js';
+import { html, crudo } from '../modules/utilidades.js';
 
 export default {
   // Bibliomóvil overrides
@@ -169,7 +170,7 @@ const totalNuevo = resCount || 0;
         const ok = await this.showConfirm('¿Eliminar este libro? Esta acción no se puede deshacer.', { title: 'Eliminar libro', confirmText: 'Eliminar' });
         if (!ok) return;
         try {
-          await LibroRepository.eliminarLibro(btn.dataset.id);
+          await db.eliminarLibro(btn.dataset.id);
           this.showToast('Libro eliminado.', 'success');
           this.renderBibliomovil();
         } catch (err) {
@@ -254,7 +255,7 @@ const totalNuevo = resCount || 0;
       try {
         // Los datos descriptivos se actualizan directamente...
         const plazoTexto = document.getElementById('edit-book-plazo').value.trim();
-        await LibroRepository.actualizarLibro(libro.id, {
+        await db.actualizarLibro(libro.id, {
           titulo: document.getElementById('edit-book-title').value.trim(),
           autor: document.getElementById('edit-book-author').value.trim(),
           isbn: document.getElementById('edit-book-isbn').value.trim(),
@@ -270,7 +271,7 @@ const totalNuevo = resCount || 0;
         // directamente era lo que corrompía el inventario.
         const totalNuevo = Number(document.getElementById('edit-book-qty').value || 0);
         if (totalNuevo !== (libro.copias_totales ?? libro.stock)) {
-          await LibroRepository.ajustarCopias(libro.id, totalNuevo);
+          await db.ajustarCopias(libro.id, totalNuevo);
         }
 
         cerrar();

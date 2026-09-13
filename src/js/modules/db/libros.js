@@ -22,40 +22,51 @@ export const libros = {
      * Devuelve { libros, total }.
      */
     async obtenerLibros(busqueda = '', pagina = 0, porPagina = 25) {
+        if (!navigator.onLine) {
+            return await persistencia.buscarLibrosLocales(busqueda, pagina, porPagina);
+        }
+
         const desplazamiento = pagina * porPagina;
 
-        const { data, error } = await conTiempoLimite(supabase.rpc('buscar_libros', {
-            p_busqueda: busqueda || '',
-            p_limite: porPagina,
-            p_desplazamiento: desplazamiento
-        }), ESPERA);
+        try {
+            const { data, error } = await conTiempoLimite(supabase.rpc('buscar_libros', {
+                p_busqueda: busqueda || '',
+                p_limite: porPagina,
+                p_desplazamiento: desplazamiento
+            }), ESPERA);
 
-        if (!error) {
-            const libros = data || [];
-            return {
-                libros,
-                total: libros.length ? Number(libros[0].total_coincidencias) : 0
-            };
+            if (!error) {
+                const libros = data || [];
+                return {
+                    libros,
+                    total: libros.length ? Number(libros[0].total_coincidencias) : 0
+                };
+            }
+
+            // Respaldo: la migración 005 no se ha ejecutado todavía.
+            // 42883 = la función no existe; PGRST202 = PostgREST no la encuentra.
+            if (!esFuncionInexistente(error)) throw error;
+
+            let q = supabase
+                .from('libros')
+                .select('*', { count: 'exact' })
+                .order('titulo')
+                .range(desplazamiento, desplazamiento + porPagina - 1);
+
+            const limpia = limpiarBusqueda(busqueda);
+            if (limpia) {
+                q = q.or(`titulo.ilike.%${limpia}%,autor.ilike.%${limpia}%,isbn.ilike.%${limpia}%`);
+            }
+
+            const { data: filas, error: err2, count } = await conTiempoLimite(q, ESPERA);
+            if (err2) throw err2;
+            return { libros: filas || [], total: count || 0 };
+        } catch (err) {
+            if (err.message === 'Timeout' || String(err).includes('fetch') || !navigator.onLine) {
+                return await persistencia.buscarLibrosLocales(busqueda, pagina, porPagina);
+            }
+            throw err;
         }
-
-        // Respaldo: la migración 005 no se ha ejecutado todavía.
-        // 42883 = la función no existe; PGRST202 = PostgREST no la encuentra.
-        if (!esFuncionInexistente(error)) throw error;
-
-        let q = supabase
-            .from('libros')
-            .select('*', { count: 'exact' })
-            .order('titulo')
-            .range(desplazamiento, desplazamiento + porPagina - 1);
-
-        const limpia = limpiarBusqueda(busqueda);
-        if (limpia) {
-            q = q.or(`titulo.ilike.%${limpia}%,autor.ilike.%${limpia}%,isbn.ilike.%${limpia}%`);
-        }
-
-        const { data: filas, error: err2, count } = await conTiempoLimite(q, ESPERA);
-        if (err2) throw err2;
-        return { libros: filas || [], total: count || 0 };
     },
 
     async actualizarLibro(id, cambios) {

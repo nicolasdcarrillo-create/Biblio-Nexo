@@ -406,7 +406,7 @@ comprobar('la interfaz distingue el resultado "encolado" del éxito normal en lo
   'escriben (renovar, devolver x2, prestar x2, reservar, y las cuatro altas de libro/lector — la ' +
   'persona del mesón ve un aviso distinto, no un falso "listo"; algunas líneas usan r?.encolado dos ' +
   'veces, una para el mensaje y otra para el tipo de toast)',
-  (uiCompletoJs.match(/r\\?\\.encolado/g) || []).length > 8);
+  (uiCompletoJs.match(/r\?\.encolado/g) || []).length > 8);
 
 // ---------------------------------------------------------------------------
 // 13. Fase 1.4 — indicador de conexión: el enganche, no la lógica interna

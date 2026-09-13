@@ -9,8 +9,9 @@
 // (js/modules/ui.js) mezcla los métodos de todas las vistas en el mismo
 // prototipo: `this.foo()` no le importa en qué archivo se declaró `foo`.
 
-import { LectorRepository } from '../repositorios/LectorRepository.js';
 import { html, crudo } from '../modules/utilidades.js';
+import { db } from '../modules/db.js';
+
 
 export default {
   // UX-04: HTML de las filas de lectores. Separado para refrescar solo el tbody 
@@ -43,7 +44,7 @@ export default {
         const ok = await this.showConfirm('¿Eliminar este usuario? Esta acción no se puede deshacer.', { title: 'Eliminar lector', confirmText: 'Eliminar' });
         if (!ok) return;
         try {
-          await LectorRepository.eliminarLector(btn.dataset.id);
+          await db.eliminarLector(btn.dataset.id);
           this.showToast('Usuario eliminado.', 'success');
           this.renderUsers();
         } catch (err) {
@@ -65,7 +66,7 @@ export default {
     if (!container) return;
 
     const porPagina = this.param('filas_por_pagina');
-    const { lectores: users, total } = await LectorRepository.obtenerLectores(this.userSearch || '', this.userPage, porPagina);
+    const { lectores: users, total } = await db.obtenerLectores(this.userSearch || '', this.userPage, porPagina);
     if (this.currentView !== 'users') return;
 
     if (users.length === 0 && this.userPage > 0) {
@@ -155,7 +156,7 @@ export default {
       try {
         const consent = this._datosConsentimiento('new');
         if (!consent) return;
-        const r = await LectorRepository.agregarLector({
+        const r = await db.agregarLector({
           rut: this.formatRut(document.getElementById('new-user-id').value),
           nombre: document.getElementById('new-user-name').value.trim(),
           email: document.getElementById('new-user-email').value.trim().toLowerCase(),
@@ -264,13 +265,13 @@ export default {
         };
         if (esAdmin) {
           // Escritura directa: la política RLS de UPDATE sobre `lectores` la permite
-          await LectorRepository.actualizarLector(lector.id, {
+          await db.actualizarLector(lector.id, {
             ...datos,
             rut: this.formatRut(document.getElementById('edit-user-id').value)
           });
         } else {
           // Vía función controlada: solo toca nombre, correo y teléfono
-          await LectorRepository.actualizarContactoLector(lector.id, datos);
+          await db.actualizarContactoLector(lector.id, datos);
         }
         cerrar();
         this.showToast('Lector actualizado.', 'success');

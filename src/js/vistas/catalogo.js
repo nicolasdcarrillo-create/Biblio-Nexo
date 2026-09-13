@@ -13,8 +13,9 @@
 // mezcla los métodos de todas las vistas en el mismo prototipo: `this.foo()`
 // no le importa en qué archivo se declaró `foo`.
 
-import { LibroRepository } from '../repositorios/LibroRepository.js';
-import { html, crudo, escapeHtml } from '../modules/utilidades.js';
+import { html, crudo } from '../modules/utilidades.js';
+import { db } from '../modules/db.js';
+
 
 export default {
   async renderCatalog() {
@@ -22,7 +23,7 @@ export default {
     if (!container) return;
 
     const porPagina = this.param('filas_por_pagina');
-    const { libros, total } = await LibroRepository.obtenerLibros(this.catalogSearch || '', this.bookPage, porPagina);
+    const { libros, total } = await db.obtenerLibros(this.catalogSearch || '', this.bookPage, porPagina);
     // Si el usuario ya cambió de vista mientras esperábamos la respuesta, no pintamos nada
     if (this.currentView !== 'catalog') return;
 
@@ -98,7 +99,7 @@ export default {
       submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Guardando...';
       
       try {
-        const r = await LibroRepository.agregarLibro({
+        const r = await db.agregarLibro({
           isbn: document.getElementById('new-book-isbn').value.trim(),
           titulo: document.getElementById('new-book-title').value.trim(),
           autor: document.getElementById('new-book-author').value.trim(),
@@ -143,7 +144,7 @@ export default {
       this._catalogSearchTimer = setTimeout(async () => {
         this.catalogSearch = searchInput.value.trim();
         this.bookPage = 0;
-        const { libros: resultados, total: totalNuevo } = await LibroRepository.obtenerLibros(this.catalogSearch, 0, porPagina);
+        const { libros: resultados, total: totalNuevo } = await db.obtenerLibros(this.catalogSearch, 0, porPagina);
         const tbody = document.getElementById('catalog-tbody');
         if (this.currentView !== 'catalog' || !tbody) return;
         this._booksCache = resultados;
@@ -221,7 +222,7 @@ export default {
         const ok = await this.showConfirm('¿Eliminar este libro? Esta acción no se puede deshacer.', { title: 'Eliminar libro', confirmText: 'Eliminar' });
         if (!ok) return;
         try {
-          await LibroRepository.eliminarLibro(btn.dataset.id);
+          await db.eliminarLibro(btn.dataset.id);
           this.showToast('Libro eliminado.', 'success');
           this.renderCatalog();
         } catch (err) {
@@ -306,7 +307,7 @@ export default {
       try {
         // Los datos descriptivos se actualizan directamente...
         const plazoTexto = document.getElementById('edit-book-plazo').value.trim();
-        await LibroRepository.actualizarLibro(libro.id, {
+        await db.actualizarLibro(libro.id, {
           titulo: document.getElementById('edit-book-title').value.trim(),
           autor: document.getElementById('edit-book-author').value.trim(),
           isbn: document.getElementById('edit-book-isbn').value.trim(),
@@ -322,7 +323,7 @@ export default {
         // directamente era lo que corrompía el inventario.
         const totalNuevo = Number(document.getElementById('edit-book-qty').value || 0);
         if (totalNuevo !== (libro.copias_totales ?? libro.stock)) {
-          await LibroRepository.ajustarCopias(libro.id, totalNuevo);
+          await db.ajustarCopias(libro.id, totalNuevo);
         }
 
         cerrar();

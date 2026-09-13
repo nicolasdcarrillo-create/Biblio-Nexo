@@ -18,10 +18,9 @@
 // los métodos de todas las vistas en el mismo prototipo: `this.foo()` no le
 // importa en qué archivo se declaró `foo`.
 
-import { PrestamoRepository } from '../repositorios/PrestamoRepository.js';
-import { LectorRepository } from '../repositorios/LectorRepository.js';
-import { ReservaRepository } from '../repositorios/ReservaRepository.js';
 import { html, crudo, escapeHtml } from '../modules/utilidades.js';
+import { db } from '../modules/db.js';
+
 
 export default {
   async renderLoans() {
@@ -35,7 +34,7 @@ export default {
     // El filtrado y los conteos los hace la base de datos: contarlos aquí sobre
     // una lista truncada daba números falsos.
     const { prestamos: visibles, total, conteos } =
-      await PrestamoRepository.obtenerPrestamos(filtro, this.loanPage, porPagina, diasAviso);
+      await db.obtenerPrestamos(filtro, this.loanPage, porPagina, diasAviso);
     if (this.currentView !== 'loans') return;
 
     // Si se devolvió el último de la página final, se retrocede una
@@ -138,7 +137,7 @@ export default {
       btn.disabled = true;
       try {
         // Se pide la lista completa: la página visible es solo una parte
-        const pendientesTodos = await PrestamoRepository.obtenerPendientesDeAviso(diasAviso);
+        const pendientesTodos = await db.obtenerPendientesDeAviso(diasAviso);
         this.showBulkNotifyModal(pendientesTodos);
       } catch (err) {
         this.showToast(err.message || 'No se pudo cargar la lista de avisos.', 'error');
@@ -151,7 +150,7 @@ export default {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const r = await PrestamoRepository.renovarPrestamo(btn.dataset.id);
+          const r = await db.renovarPrestamo(btn.dataset.id);
           // Fase 1.3: sin conexión, db.js encola la operación en vez de
           // lanzar — no hay "nueva fecha" que mostrar todavía, solo el
           // aviso de que quedó pendiente.
@@ -172,7 +171,7 @@ export default {
     container.querySelectorAll('.return-loan-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         try {
-          const r = await PrestamoRepository.devolverPrestamo(btn.dataset.id);
+          const r = await db.devolverPrestamo(btn.dataset.id);
           if (r?.encolado) {
             this.showToast(r.mensaje, 'info');
           } else {
@@ -348,7 +347,7 @@ export default {
         timer = setTimeout(async () => {
           resultsContainer.innerHTML = '<p class="text-xs text-stone-500 dark:text-stone-400 p-2"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Buscando...</p>';
           try {
-            const res = await LectorRepository.obtenerLectores(q, 0, 5);
+            const res = await db.obtenerLectores(q, 0, 5);
             if (res.lectores.length === 0) {
               resultsContainer.innerHTML = '<p class="text-xs text-stone-500 dark:text-stone-400 p-2">Ningún lector coincide. Escriba el RUT completo para registrarlo como nuevo.</p>';
             } else {
@@ -395,7 +394,7 @@ export default {
 
     let estado;
     try {
-      estado = await LectorRepository.estadoLector(this.formatRut(rut));
+      estado = await db.estadoLector(this.formatRut(rut));
     } catch (err) {
       this.showToast(err.message || 'No se pudo consultar el lector.', 'error');
       return;
@@ -466,7 +465,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const r = await PrestamoRepository.registrarPrestamo(libroId, rut);
+        const r = await db.registrarPrestamo(libroId, rut);
         cerrar();
         // Fase 1.3: sin conexión, db.js encoló el préstamo en vez de
         // lanzar — se avisa que quedó pendiente, no que ya se completó
@@ -488,7 +487,7 @@ export default {
       cerrar();
       this.showNuevoLectorModal(rut, async () => {
         // Tras registrarlo, se reintenta el préstamo con su situación ya actualizada
-        const nuevoEstado = await LectorRepository.estadoLector(rut);
+        const nuevoEstado = await db.estadoLector(rut);
         this.showConfirmarPrestamoModal(libroId, rut, nuevoEstado, alTerminar);
       });
     });
@@ -571,7 +570,7 @@ export default {
       try {
         const consent = this._datosConsentimiento('new');
         if (!consent) { btn.disabled = false; return; }
-        const r = await LectorRepository.agregarLector({
+        const r = await db.agregarLector({
           rut: this.formatRut(document.getElementById('new-user-id').value),
           nombre: document.getElementById('new-user-name').value.trim(),
           email: document.getElementById('new-user-email').value.trim().toLowerCase(),
@@ -613,7 +612,7 @@ export default {
 
     let estado;
     try {
-      estado = await LectorRepository.estadoLector(this.formatRut(rut));
+      estado = await db.estadoLector(this.formatRut(rut));
     } catch (err) {
       this.showToast(err.message || 'No se pudo consultar el lector.', 'error');
       return;
@@ -684,7 +683,7 @@ export default {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const r = await ReservaRepository.reservarLibro(libroId, rut);
+        const r = await db.reservarLibro(libroId, rut);
         cerrar();
         // Fase 1.3: sin conexión, db.js encoló la reserva en vez de lanzar.
         if (r?.encolado) {
@@ -703,7 +702,7 @@ export default {
     overlay.querySelector('[data-action="registrar"]')?.addEventListener('click', () => {
       cerrar();
       this.showNuevoLectorModal(rut, async () => {
-        const nuevoEstado = await LectorRepository.estadoLector(rut);
+        const nuevoEstado = await db.estadoLector(rut);
         this.showConfirmarReservaModal(libroId, rut, nuevoEstado, alTerminar);
       });
     });
@@ -718,7 +717,7 @@ export default {
   /** Consulta rápida de la situación de un lector por su RUT. */
   async showLectorModal(rut) {
     try {
-      const estado = await LectorRepository.estadoLector(rut);
+      const estado = await db.estadoLector(rut);
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-patrimonio-lago/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4';
       overlay.innerHTML = html`

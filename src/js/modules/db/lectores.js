@@ -53,24 +53,12 @@ export const lectores = {
     },
 
     async eliminarLector(id, motivo = 'Derecho de supresión (ARCO)') {
-        const { error } = await conTiempoLimite(supabase.from('lectores').delete().eq('id', id), ESPERA);
+        const { error } = await conTiempoLimite(supabase.rpc('eliminar_lector', {
+            p_id: id,
+            p_motivo: motivo
+        }), ESPERA);
         if (error) {
-            // Si viola la llave foránea (23503), es porque tiene historial (préstamos o reservas).
-            // En vez de rechazar, lo anonimizamos para no romper el historial.
-            if (error.code === '23503') {
-                const { error: errAnon } = await conTiempoLimite(supabase.from('lectores').update({
-                    nombre: 'Lector Eliminado',
-                    rut: 'Anonimizado-' + id + '-' + Date.now(),
-                    email: null,
-                    telefono: null,
-                    motivo_bloqueo: motivo, // Usamos este campo para dejar constancia
-                    bloqueado_manual: true
-                }).eq('id', id), ESPERA);
-                
-                if (errAnon) throw new Error('No se pudo borrar ni anonimizar al lector: ' + errAnon.message);
-                return; // Anonimizado exitosamente
-            }
-            throw new Error('No se puede eliminar. El lector tiene historial en el sistema.');
+            throw new Error(error.message || 'No se pudo eliminar al lector.');
         }
     },
 

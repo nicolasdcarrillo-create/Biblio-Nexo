@@ -1,6 +1,7 @@
 // Vista Reportes. Extraído mecánicamente de js/modules/ui.js (Fase 4).
-import { ReportesRepository } from '../repositorios/ReportesRepository.js';
 import { CONFIG } from '../config.js';
+import { db } from '../modules/db.js';
+
 import { html } from '../modules/utilidades.js';
 
 export default {
@@ -39,7 +40,7 @@ export default {
 
     let reporte;
     try {
-      reporte = await ReportesRepository.obtenerReporte(rango.desde, rango.hasta);
+      reporte = await db.obtenerReporte(rango.desde, rango.hasta);
     } catch (err) {
       if (this.currentView !== 'reports') return;
       container.innerHTML = html`<div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl border border-stone-300 dark:border-stone-600 p-6 text-center">
@@ -165,7 +166,7 @@ export default {
       btn.disabled = true;
       btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1.5"></i> Preparando…';
       try {
-        const respaldo = await ReportesRepository.exportarTodo();
+        const respaldo = await db.exportarTodo();
         const total = Object.values(respaldo.tablas).reduce((s, f) => s + f.length, 0);
         this._descargar(
           JSON.stringify(respaldo, null, 2),

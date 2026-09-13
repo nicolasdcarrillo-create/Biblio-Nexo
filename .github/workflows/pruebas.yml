@@ -7,7 +7,7 @@ name: Pruebas
 # devolver libros habría sido detectado por la comprobación de consolidación en
 # el momento de escribirlo, no meses después.
 #
-# Seis trabajos, del más rápido al más lento, para tener respuesta pronto:
+# Cinco trabajos, del más rápido al más lento, para tener respuesta pronto:
 #
 #   1. consolidacion  — lee archivos, tarda segundos
 #   2. interfaz       — DOM simulado (incluye probar-vistas.mjs y
@@ -77,6 +77,15 @@ jobs:
 
       - name: Probar la interfaz (Vitest)
         run: npm run test
+
+      - name: Probar la interfaz (Legacy - jsdom)
+        run: npm run test:legacy:interfaz
+
+      - name: Probar el estado offline (Legacy - indexdb/sync)
+        run: npm run test:legacy:offline
+
+      - name: Probar contraste (Legacy)
+        run: npm run test:legacy:contraste
 
   # ==========================================================================
   # 3. Migraciones contra un PostgreSQL embebido

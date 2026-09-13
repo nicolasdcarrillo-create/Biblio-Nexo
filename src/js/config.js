@@ -39,6 +39,7 @@ export const CONFIG = {
       { id: 'users', label: 'Lectores', icon: 'fa-users', section: 'Gestión' },
       { id: 'loans', label: 'Préstamos', icon: 'fa-right-left', section: 'Gestión' },
       { id: 'scanner', label: 'Mesón', icon: 'fa-barcode', section: 'Operación' },
+      { id: 'bibliomovil', label: 'Bibliomóvil', icon: 'fa-truck', section: 'Operación' },
       { id: 'admin', label: 'Administración', icon: 'fa-screwdriver-wrench', section: 'Sistema' },
       { id: 'profile', label: 'Mi perfil', icon: 'fa-id-card', section: 'Sistema' }
     ],
@@ -52,6 +53,7 @@ export const CONFIG = {
       { id: 'reports', label: 'Reportes', icon: 'fa-file-lines', section: 'Panel' },
       { id: 'scanner', label: 'Mesón', icon: 'fa-barcode', section: 'Operación' },
       { id: 'catalog', label: 'Catálogo', icon: 'fa-book', section: 'Operación' },
+      { id: 'bibliomovil', label: 'Bibliomóvil', icon: 'fa-truck', section: 'Operación' },
       { id: 'loans', label: 'Préstamos', icon: 'fa-right-left', section: 'Operación' },
       { id: 'users', label: 'Lectores', icon: 'fa-users', section: 'Operación' },
       { id: 'profile', label: 'Mi perfil', icon: 'fa-id-card', section: 'Sistema' }

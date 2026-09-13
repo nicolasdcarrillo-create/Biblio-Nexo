@@ -1,3 +1,4 @@
+import { supabase } from '../supabase-init.js';
 // Vista Catálogo. Extraído de js/modules/ui-base.js el 22 de agosto de 2026
 // (división por vista, ver pendientes-checklist.md y
 // claude/plan-division-ui-base-2026-08-22.md). El bloque venía marcado
@@ -17,72 +18,51 @@ import { LibroRepository } from '../repositorios/LibroRepository.js';
 import { html, crudo, escapeHtml } from '../modules/utilidades.js';
 
 export default {
-  async renderCatalog() {
+  // Bibliomóvil overrides
+  async renderBibliomovil() {
     const container = this._container();
     if (!container) return;
 
     const porPagina = this.param('filas_por_pagina');
-    const { libros, total } = await LibroRepository.obtenerLibros(this.catalogSearch || '', this.bookPage, porPagina);
+    let query = supabase.from('libros').select('*', { count: 'exact' }).ilike('ubicacion', '%bibliom%').order('titulo', { ascending: true }).range(this.bookPage * porPagina, (this.bookPage + 1) * porPagina - 1);
+if (this.bibliomovilSearch) query = query.or(`titulo.ilike.%${this.bibliomovilSearch}%,autor.ilike.%${this.bibliomovilSearch}%`);
+const { data: librosData, count: totalCount } = await query;
+const libros = librosData || [];
+const total = totalCount || 0;
     // Si el usuario ya cambió de vista mientras esperábamos la respuesta, no pintamos nada
-    if (this.currentView !== 'catalog') return;
+    if (this.currentView !== 'bibliomovil') return;
 
     // Si se borró el último elemento de la última página, se retrocede una
     if (libros.length === 0 && this.bookPage > 0) {
       this.bookPage = Math.max(0, Math.ceil(total / porPagina) - 1);
-      return this.renderCatalog();
+      return this.renderBibliomovil();
     }
 
     container.innerHTML = html`
-      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mb-6">
-        <div class="catalog-card-header">
-          <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Agregar libro</h3>
+      <div class="bibliomovil-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mb-6">
+        <div class="bibliomovil-card-header">
+          
         </div>
-        <form id="add-book-form" class="grid grid-cols-2 md:grid-cols-6 gap-3 p-5 items-end">
-          <div class="col-span-2 md:col-span-1">
-            <label for="new-book-isbn" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">ISBN</label>
-            <input id="new-book-isbn" aria-label="ISBN del libro" placeholder="978..." class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          </div>
-          <div class="col-span-2">
-            <label for="new-book-title" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Título</label>
-            <input id="new-book-title" aria-label="Título del libro" placeholder="Cien años de soledad" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          </div>
-          <div class="col-span-2">
-            <label for="new-book-author" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Autor</label>
-            <input id="new-book-author" aria-label="Autor del libro" placeholder="Gabriel García Márquez" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          </div>
-          <div>
-            <label for="new-book-genre" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Género</label>
-            <input id="new-book-genre" aria-label="Género del libro" placeholder="Opcional" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          </div>
-          <div>
-            <label for="new-book-location" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Ubicación</label>
-            <input id="new-book-location" aria-label="Ubicación en la biblioteca" placeholder="Estante 3" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          </div>
-          <div>
-            <label for="new-book-qty" class="text-[11px] font-black uppercase tracking-wide text-stone-600 dark:text-stone-300 mb-1 block">Ejemplares</label>
-            <input id="new-book-qty" aria-label="Cantidad de ejemplares" type="number" min="1" value="1" placeholder="1" class="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago text-sm" />
-          </div>
-          <button id="add-book-submit-btn" type="submit" class="btn-madera col-span-2 md:col-span-1 text-white font-sans font-medium rounded-xl shadow py-2 text-sm w-full h-[38px] flex items-center justify-center">Agregar</button>
-        </form>
+        
       </div>
-      <div class="catalog-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
-        <div class="catalog-card-header flex flex-col gap-3">
+      <div class="bibliomovil-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
+        <div class="bibliomovil-card-header flex flex-col gap-3">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h3 class="font-serif font-semibold text-lg text-stone-900 dark:text-stone-100">Catálogo de libros</h3>
           <div class="relative sm:w-64">
             <i aria-hidden="true" class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400 text-xs"></i>
-            <input id="catalog-search-input" aria-label="Buscar en el catálogo por título, autor o ISBN" type="text" placeholder="Buscar por título, autor o ISBN..." value="${this.catalogSearch || ''}"
+            <input id="bibliomovil-search-input" aria-label="Buscar en el catálogo por título, autor o ISBN" type="text" placeholder="Buscar por título, autor o ISBN..." value="${this.bibliomovilSearch || ''}"
               class="w-full pl-8 pr-3 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:outline-none focus:border-patrimonio-lago focus:ring-1 focus:ring-patrimonio-lago" />
           </div>
         </div>
         <div class="flex flex-wrap gap-2 mt-1">
-          <button class="catalog-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${(!this.catalogFilter || this.catalogFilter === 'todos') ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="todos">Todos</button>
-          <button class="catalog-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'disponibles' ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="disponibles">En estante</button>
-          <button class="catalog-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${this.catalogFilter === 'prestados' ? 'bg-amber-600 text-white dark:bg-amber-500 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="prestados">Agotados</button>
+          <button class="bibliomovil-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${(!this.bibliomovilFilter || this.bibliomovilFilter === 'todos') ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="todos">Todos</button>
+          <button class="bibliomovil-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${this.bibliomovilFilter === 'disponibles' ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="disponibles">En estante</button>
+          <button class="bibliomovil-filter-btn px-4 py-2 rounded-full text-xs uppercase tracking-wider font-bold transition-all ${this.bibliomovilFilter === 'prestados' ? 'bg-amber-600 text-white dark:bg-amber-500 dark:text-stone-900 shadow-md scale-105' : 'bg-stone-200 text-stone-600 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'}" data-filter="prestados">Agotados</button>
         </div>
       </div>
-        <div id="catalog-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(this._filtrarLibros(libros))}</div>
-        <div id="catalog-pagination">${crudo(this._paginacionHtml(this.bookPage, total, porPagina, 'catalog-page-btn'))}</div>
+        <div id="bibliomovil-tbody" class="flex flex-col gap-4 p-4">${this._renderBookRows(this._filtrarLibros(libros))}</div>
+        <div id="bibliomovil-pagination">${crudo(this._paginacionHtml(this.bookPage, total, porPagina, 'bibliomovil-page-btn'))}</div>
       </div>
     `;
 
@@ -111,11 +91,11 @@ export default {
         // optimista), pero conviene que la persona sepa que todavía no
         // llegó al servidor.
         this.showToast(r?.encolado ? r.mensaje : 'Libro agregado.', r?.encolado ? 'info' : 'success');
-        this.renderCatalog();
+        this.renderBibliomovil();
       } catch (err) {
         this.showToast(err.message || 'No se pudo agregar el libro.', 'error');
       } finally {
-        // En caso de éxito, renderCatalog recarga todo el DOM, por lo que reestablecer el botón
+        // En caso de éxito, renderBibliomovil recarga todo el DOM, por lo que reestablecer el botón
         // solo es visible en caso de error, pero es buena práctica.
         if (submitBtn) {
           submitBtn.disabled = false;
@@ -125,45 +105,49 @@ export default {
     });
 
     this._bindCatalogRowEvents(container);
-    this._bindPaginacion(container, '.catalog-page-btn', p => { this.bookPage = p; this.renderCatalog(); });
+    this._bindPaginacion(container, '.bibliomovil-page-btn', p => { this.bookPage = p; this.renderBibliomovil(); });
 
-    container.querySelectorAll('.catalog-filter-btn').forEach(btn => {
+    container.querySelectorAll('.bibliomovil-filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        this.catalogFilter = btn.dataset.filter;
+        this.bibliomovilFilter = btn.dataset.filter;
         this.bookPage = 0;
-        this.renderCatalog();
+        this.renderBibliomovil();
       });
     });
 
     // Buscador con debounce: espera 350ms sin escribir antes de consultar la BD.
     // Al buscar se vuelve a la primera página, porque el total de resultados cambió.
-    const searchInput = document.getElementById('catalog-search-input');
+    const searchInput = document.getElementById('bibliomovil-search-input');
     searchInput.addEventListener('input', () => {
-      clearTimeout(this._catalogSearchTimer);
-      this._catalogSearchTimer = setTimeout(async () => {
-        this.catalogSearch = searchInput.value.trim();
+      clearTimeout(this._bibliomovilSearchTimer);
+      this._bibliomovilSearchTimer = setTimeout(async () => {
+        this.bibliomovilSearch = searchInput.value.trim();
         this.bookPage = 0;
-        const { libros: resultados, total: totalNuevo } = await LibroRepository.obtenerLibros(this.catalogSearch, 0, porPagina);
-        const tbody = document.getElementById('catalog-tbody');
-        if (this.currentView !== 'catalog' || !tbody) return;
+        let queryRes = supabase.from('libros').select('*', { count: 'exact' }).ilike('ubicacion', '%bibliom%').order('titulo', { ascending: true }).range(0, porPagina - 1);
+if (this.bibliomovilSearch) queryRes = queryRes.or(`titulo.ilike.%${this.bibliomovilSearch}%,autor.ilike.%${this.bibliomovilSearch}%`);
+const { data: resData, count: resCount } = await queryRes;
+const resultados = resData || [];
+const totalNuevo = resCount || 0;
+        const tbody = document.getElementById('bibliomovil-tbody');
+        if (this.currentView !== 'bibliomovil' || !tbody) return;
         this._booksCache = resultados;
         // _renderBookRows siempre devuelve HtmlSeguro — llamar .toString() es suficiente
         tbody.innerHTML = this._renderBookRows(this._filtrarLibros(resultados)).toString();
-        const paginacion = document.getElementById('catalog-pagination');
+        const paginacion = document.getElementById('bibliomovil-pagination');
         if (paginacion) {
-          paginacion.innerHTML = this._paginacionHtml(0, totalNuevo, porPagina, 'catalog-page-btn');
-          this._bindPaginacion(container, '.catalog-page-btn', p => { this.bookPage = p; this.renderCatalog(); });
+          paginacion.innerHTML = this._paginacionHtml(0, totalNuevo, porPagina, 'bibliomovil-page-btn');
+          this._bindPaginacion(container, '.bibliomovil-page-btn', p => { this.bookPage = p; this.renderBibliomovil(); });
         }
         this._bindCatalogRowEvents(container);
       }, 350);
     });
   },
 
-  // HTML de las filas del catálogo. Separado de renderCatalog para poder
+  // HTML de las filas del catálogo. Separado de renderBibliomovil para poder
   // refrescar solo el <tbody> cuando se busca, sin recrear todo el formulario.
   
   _filtrarLibros(libros) {
-    const f = this.catalogFilter || 'todos';
+    const f = this.bibliomovilFilter || 'todos';
     if (f === 'disponibles') return libros.filter(b => b.stock > 0);
     if (f === 'prestados') return libros.filter(b => b.stock === 0);
     return libros;
@@ -223,7 +207,7 @@ export default {
         try {
           await LibroRepository.eliminarLibro(btn.dataset.id);
           this.showToast('Libro eliminado.', 'success');
-          this.renderCatalog();
+          this.renderBibliomovil();
         } catch (err) {
           this.showToast(err.message || 'No se pudo eliminar.', 'error');
         }
@@ -327,7 +311,7 @@ export default {
 
         cerrar();
         this.showToast('Libro actualizado.', 'success');
-        this.renderCatalog();
+        this.renderBibliomovil();
       } catch (err) {
         this.showToast(err.message || 'No se pudo guardar.', 'error');
         btn.disabled = false;
@@ -349,7 +333,7 @@ export default {
    */
   async promptCreateLoan(bookId) {
     await this.flujoPrestamo(bookId, () => {
-      if (this.currentView === 'catalog') this.renderCatalog();
+      if (this.currentView === 'catalog') this.renderBibliomovil();
     });
   },
 
@@ -361,7 +345,7 @@ export default {
    */
   async promptCreateReserva(bookId) {
     await this.flujoReserva(bookId, () => {
-      if (this.currentView === 'catalog') this.renderCatalog();
+      if (this.currentView === 'catalog') this.renderBibliomovil();
     });
   }
 };

@@ -16,7 +16,8 @@ import catalogo from '../vistas/catalogo.js';
 import lectores from '../vistas/lectores.js';
 import prestamos from '../vistas/prestamos.js';
 import mostrador from '../vistas/mostrador.js';
+import bibliomovil from '../vistas/bibliomovil.js';
 
-Object.assign(UIManager.prototype, UIModales, dashboard, reportes, perfil, admin, catalogo, lectores, prestamos, mostrador);
+Object.assign(UIManager.prototype, UIModales, dashboard, reportes, perfil, admin, catalogo, lectores, prestamos, mostrador, bibliomovil);
 
 export default new UIManager();

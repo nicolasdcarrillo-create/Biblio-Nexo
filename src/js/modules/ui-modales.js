@@ -17,7 +17,7 @@ export default {
         const bgColor = type === 'success' ? 'bg-[#10b981]' : type === 'error' ? 'bg-[#e11d48]' : 'bg-[#1B3B48]';
         const icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-triangle' : 'fa-info-circle';
 
-        toast.className = `\${bgColor} text-white px-5 py-4 rounded-2xl shadow-soft-xl border border-white/10  font-bold flex items-center gap-3 transform transition-all duration-300 translate-y-10 scale-95 opacity-0 z-50 text-sm`;
+        toast.className = `${bgColor} text-white px-5 py-4 rounded-2xl shadow-soft-xl border border-white/10  font-bold flex items-center gap-3 transform transition-all duration-300 translate-y-10 scale-95 opacity-0 z-50 text-sm`;
         toast.innerHTML = `<i aria-hidden="true" class="fas ${icon} text-lg"></i> <span>${escapeHtml(message)}</span>`;
 
         container.appendChild(toast);

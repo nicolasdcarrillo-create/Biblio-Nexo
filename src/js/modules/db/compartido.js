@@ -7,9 +7,9 @@
 // punto de entrada a lo compartido.
 
 import { supabase } from '../../supabase-init.js';
-import { conTiempoLimite } from '../utilidades.js';
+import { conTiempoLimite, MENSAJE_TIMEOUT } from '../utilidades.js';
 
-export { supabase, conTiempoLimite };
+export { supabase, conTiempoLimite, MENSAJE_TIMEOUT };
 
 // Límite normal para una consulta o RPC. Ver utilidades.js: sin esto, una
 // llamada colgada deja la pantalla esperando para siempre.

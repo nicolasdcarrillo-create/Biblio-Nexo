@@ -21,13 +21,20 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 'script' genera un archivo externo para registrar el SW en vez de un
+      // script en línea — necesario porque el CSP de index.html tiene
+      // script-src 'self' que bloquea scripts inline (fix crítico #2).
+      injectRegister: 'script',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf}'],
         // Excluir rutas de supabase si las hubiera, aunque el SW usualmente solo intercepta get
         navigateFallback: 'index.html',
       },
       manifest: {
+        // filename fuerza que el archivo generado sea manifest.json, que es lo
+        // que apunta el <link rel="manifest"> en index.html. Sin esto, vite-pwa
+        // genera manifest.webmanifest y la etiqueta devuelve 404 (fix crítico #3).
+        filename: 'manifest.json',
         name: "BiblioNexo",
         short_name: "BiblioNexo",
         start_url: "/",

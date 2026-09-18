@@ -12,10 +12,15 @@
  * esto, un cuelgue se convierte en un error como cualquier otro en vez de en
  * una pantalla congelada.
  */
+// Mensaje que lanza conTiempoLimite al agotar el tiempo. Se exporta para que
+// los bloques catch de db/libros.js, db/lectores.js, etc. puedan comparar
+// contra la misma cadena literal y activar el fallback a IndexedDB con certeza.
+export const MENSAJE_TIMEOUT = 'La operación tardó demasiado en responder. Intente nuevamente; si el problema persiste, recargue la página.';
+
 export function conTiempoLimite(
     promesa,
     ms = 15000,
-    mensaje = 'La operaci\u00f3n tard\u00f3 demasiado en responder. Intente nuevamente; si el problema persiste, recargue la p\u00e1gina.'
+    mensaje = MENSAJE_TIMEOUT
 ) {
     let idTemporizador;
     const temporizador = new Promise((_, rechazar) => {

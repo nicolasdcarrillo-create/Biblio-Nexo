@@ -11,7 +11,7 @@
 // final), cualquier clave repetida acá pisaría silenciosamente la versión
 // con soporte offline de db.js.
 
-import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente } from './compartido.js';
+import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente, MENSAJE_TIMEOUT } from './compartido.js';
 import persistencia from '../persistencia.js';
 
 export const lectores = {
@@ -35,7 +35,7 @@ export const lectores = {
             if (error) throw error;
             return { lectores: data || [], total: count || 0 };
         } catch (err) {
-            if (err.message === 'Timeout' || String(err).includes('fetch') || !navigator.onLine) {
+            if (err.message === MENSAJE_TIMEOUT || String(err).includes('fetch') || !navigator.onLine) {
                 return await persistencia.buscarLectoresLocales(busqueda, pagina, porPagina);
             }
             throw err;

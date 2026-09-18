@@ -7,7 +7,7 @@
 // sincronización sin conexión (SyncQueue), igual que reservarLibro()/
 // retirarReserva() en db/reservas.js (ver el comentario ahí).
 
-import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente } from './compartido.js';
+import { supabase, conTiempoLimite, ESPERA, limpiarBusqueda, esFuncionInexistente, MENSAJE_TIMEOUT } from './compartido.js';
 import persistencia from '../persistencia.js';
 
 export const libros = {
@@ -62,7 +62,7 @@ export const libros = {
             if (err2) throw err2;
             return { libros: filas || [], total: count || 0 };
         } catch (err) {
-            if (err.message === 'Timeout' || String(err).includes('fetch') || !navigator.onLine) {
+            if (err.message === MENSAJE_TIMEOUT || String(err).includes('fetch') || !navigator.onLine) {
                 return await persistencia.buscarLibrosLocales(busqueda, pagina, porPagina);
             }
             throw err;

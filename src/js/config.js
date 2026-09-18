@@ -1,6 +1,8 @@
 export const CONFIG = {
-  SUPABASE_URL: 'https://vcngmgzxjoorjhcgqzpk.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbmdtZ3p4am9vcmpoY2dxenBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1Mjk5MTcsImV4cCI6MjEwMDEwNTkxN30.FXiGK15kyT82jrKNIb4nodWWtW6I-s_YMV9rGZYfAxY',
+  // Se leen desde las variables de entorno inyectadas por Vite, con un fallback a vacío
+  // para no reventar inmediatamente si falta el .env (aunque Supabase fallará después).
+  SUPABASE_URL: import.meta.env?.VITE_SUPABASE_URL || '',
+  SUPABASE_ANON_KEY: import.meta.env?.VITE_SUPABASE_ANON_KEY || '',
 
   ADMIN_EMAILS: [],
 

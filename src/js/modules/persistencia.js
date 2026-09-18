@@ -302,7 +302,7 @@ class PersistentStorage {
      * estuviera la próxima vez que se consulte sin conexión.
      */
     async guardarLectorConsultado(estadoLector) {
-        if (!estadoLector || estadoLector.existe === false || estadoLector.lector_id == null) return;
+        if (!estadoLector || estadoLector.existe === false || estadoLector.lector_id === null || estadoLector.lector_id === undefined) return;
         try {
             const bd = await abrir();
             await conAlmacen(bd, 'lectores', 'readwrite', async almacen => {

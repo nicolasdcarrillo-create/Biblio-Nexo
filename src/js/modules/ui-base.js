@@ -472,7 +472,15 @@ class UIManager {
         await navigator.clipboard.writeText(textarea.value);
         this.showToast('Mensaje copiado.', 'success');
       } catch {
-        textarea.select(); // respaldo si el navegador bloquea el portapapeles
+        textarea.select(); // respaldo si el navegador bloquea el portapapeles moderno
+        try {
+          if (document.execCommand('copy')) {
+            this.showToast('Mensaje copiado.', 'success');
+            return;
+          }
+        } catch (e) {
+          // Si también falla, no hace nada y deja el texto seleccionado
+        }
         this.showToast('Selecciona y copia el mensaje manualmente.', 'error');
       }
     });
@@ -556,6 +564,14 @@ class UIManager {
         this.showToast('Mensaje copiado.', 'success');
       } catch {
         textarea.select();
+        try {
+          if (document.execCommand('copy')) {
+            this.showToast('Mensaje copiado.', 'success');
+            return;
+          }
+        } catch (e) {
+          // Ignorar error de fallback
+        }
         this.showToast('Selecciona y copia el mensaje manualmente.', 'error');
       }
     });

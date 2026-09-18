@@ -513,7 +513,7 @@ export const db = {
             copias_totales: f.copias_totales, stock: f.stock
         };
         // Las filas sin prestamo_id significan "no hay préstamos activos"
-        const prestamos = data.filter(r => r.prestamo_id != null).map(r => ({
+        const prestamos = data.filter(r => r.prestamo_id !== null && r.prestamo_id !== undefined).map(r => ({
             id: r.prestamo_id,
             fecha_prestamo: r.fecha_prestamo,
             fecha_devolucion_esperada: r.fecha_devolucion_esperada,

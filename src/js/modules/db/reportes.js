@@ -135,7 +135,7 @@ export const reportes = {
             const mapa = new Map();
             items.forEach(i => {
                 const clave = claveFn(i);
-                if (clave == null) return;
+                if (clave === null || clave === undefined) return;
                 const actual = mapa.get(clave) || { etiqueta: etiquetaFn(i), total: 0 };
                 actual.total++;
                 mapa.set(clave, actual);

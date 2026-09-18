@@ -1,5 +1,6 @@
 import { supabase } from '../supabase-init.js';
 import { db } from '../modules/db.js';
+import persistencia from '../modules/persistencia.js';
 
 // Vista Catálogo. Extraído de js/modules/ui-base.js el 22 de agosto de 2026
 // (división por vista, ver pendientes-checklist.md y
@@ -41,10 +42,19 @@ const total = totalCount || 0;
 
     container.innerHTML = html`
       <div class="bibliomovil-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 mb-6">
-        <div class="bibliomovil-card-header">
-          
+        <div class="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 class="font-serif font-bold text-xl text-stone-900 dark:text-stone-100 flex items-center gap-2">
+              <i aria-hidden="true" class="fas fa-truck text-patrimonio-lago"></i> Modo Ruta
+            </h2>
+            <p class="text-sm text-stone-500 dark:text-stone-400 mt-1">
+              Última preparación: <span id="bibliomovil-sync-status" class="font-semibold text-stone-700 dark:text-stone-300">Desconocida</span>
+            </p>
+          </div>
+          <button id="btn-preparar-ruta" class="bg-patrimonio-madera text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:bg-[#5E3214] transition-all flex items-center gap-2">
+            <i aria-hidden="true" class="fas fa-cloud-arrow-down"></i> <span id="btn-preparar-ruta-texto">Preparar ruta de hoy</span>
+          </button>
         </div>
-        
       </div>
       <div class="bibliomovil-card bg-patrimonio-card dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-300 dark:border-stone-600 overflow-x-auto">
         <div class="bibliomovil-card-header flex flex-col gap-3">
@@ -106,6 +116,46 @@ const totalNuevo = resCount || 0;
         this._bindCatalogRowEvents(container);
       }, 350);
     });
+
+    // Indicador de última preparación de ruta
+    this._actualizarIndicadorRuta();
+
+    // Botón "Preparar ruta de hoy"
+    const btnPreparar = document.getElementById('btn-preparar-ruta');
+    if (btnPreparar) {
+      btnPreparar.addEventListener('click', async () => {
+        const textoBtn = document.getElementById('btn-preparar-ruta-texto');
+        btnPreparar.disabled = true;
+        const actualizar = ({ mensaje }) => {
+          if (textoBtn) textoBtn.textContent = mensaje;
+        };
+        actualizar({ mensaje: 'Iniciando descarga...' });
+        try {
+          await persistencia.sincronizarTodo(actualizar);
+          localStorage.setItem('biblionexo_ultima_preparacion_ruta', Date.now());
+          this._actualizarIndicadorRuta();
+          this.showToast('¡Ruta preparada! Los datos están listos para trabajar sin conexión.', 'success');
+        } catch (err) {
+          this.showToast('Error al preparar la ruta: ' + (err.message || 'Inténtalo de nuevo.'), 'error');
+        } finally {
+          btnPreparar.disabled = false;
+          if (textoBtn) textoBtn.textContent = 'Preparar ruta de hoy';
+        }
+      });
+    }
+  },
+
+  /** Actualiza el texto "Última preparación: ..." en la tarjeta Modo Ruta. */
+  _actualizarIndicadorRuta() {
+    const el = document.getElementById('bibliomovil-sync-status');
+    if (!el) return;
+    const ts = localStorage.getItem('biblionexo_ultima_preparacion_ruta');
+    if (!ts) { el.textContent = 'Nunca'; return; }
+    const hace = Math.round((Date.now() - Number(ts)) / 60000);
+    if (hace < 1)        el.textContent = 'Hace menos de un minuto';
+    else if (hace < 60)  el.textContent = `Hace ${hace} min`;
+    else if (hace < 1440) el.textContent = `Hace ${Math.round(hace / 60)} h`;
+    else                 el.textContent = `Hace ${Math.round(hace / 1440)} día(s)`;
   },
 
   // HTML de las filas del catálogo. Separado de renderBibliomovil para poder

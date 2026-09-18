@@ -188,10 +188,11 @@ async function obtenerTodos(nombreAlmacen) {
 
 /** Trae, en páginas, todo lo de `tabla` con `actualizado_en` posterior a
  *  `marca` (o toda la tabla si `marca` es null: primera sincronización). */
-async function libroLotesDesde(marca) {
+async function libroLotesDesde(marca, onProgress) {
     const filas = [];
     let ultimaMarca = marca;
     for (let pagina = 0; pagina < TOPE_PAGINAS; pagina++) {
+        if (onProgress) onProgress({ mensaje: `Descargando catálogo (página ${pagina + 1})...` });
         let consulta = supabase.from('libros').select('*').order('actualizado_en', { ascending: true }).limit(TAMANO_PAGINA);
         // BUG-04: Se usa gte (≥) en lugar de gt (>) para no excluir libros con
         // el mismo valor de actualizado_en (posible en inserts masivos). Sin esto
@@ -263,10 +264,11 @@ class PersistentStorage {
      * conserva la copia que ya había y se reintenta en la próxima llamada.
      * Es sincronización en segundo plano — no debe interrumpir nada.
      */
-    async sincronizarLibros() {
+    async sincronizarLibros(onProgress) {
         try {
             const marcaCambios = await leerMeta('libros_ultima_sync');
-            const { filas, marca } = await libroLotesDesde(marcaCambios);
+            const { filas, marca } = await libroLotesDesde(marcaCambios, onProgress);
+            if (onProgress && filas.length) onProgress({ mensaje: `Guardando ${filas.length} libros actualizados...` });
             await ponerVarios('libros', filas);
             if (marca) await escribirMeta('libros_ultima_sync', marca);
 
@@ -427,11 +429,14 @@ class PersistentStorage {
      * cada paso ya atrapa sus propios errores; esto solo los junta para que
      * quien llama pueda registrar un resumen si quiere.
      */
-    async sincronizarTodo() {
-        const libros = await this.sincronizarLibros();
+    async sincronizarTodo(onProgress) {
+        const libros = await this.sincronizarLibros(onProgress);
+        if (onProgress) onProgress({ mensaje: 'Actualizando lectores activos...' });
         const activos = await this.sincronizarLectoresActivos();
+        if (onProgress) onProgress({ mensaje: 'Purgando lectores inactivos...' });
         const bajasLectores = await this.purgarLectoresEliminados();
         const purgados = await this.purgarLectoresAntiguos();
+        if (onProgress) onProgress({ mensaje: 'Sincronización completada.' });
         return { libros, activos, bajasLectores, purgados };
     }
 

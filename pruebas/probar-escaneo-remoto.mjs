@@ -155,6 +155,10 @@ try {
 fs.cpSync(RAIZ, tmp, { recursive: true });
 const importDesdeTmp = ruta => import(pathToFileURL(path.join(tmp, ruta)));
 const { CONFIG } = await importDesdeTmp('src/js/config.js');
+if (!CONFIG.SUPABASE_URL) {
+  CONFIG.SUPABASE_URL = 'https://mock.supabase.co';
+  CONFIG.SUPABASE_ANON_KEY = 'mock-key';
+}
 
 function crearDom(query) {
   const dom = new JSDOM(

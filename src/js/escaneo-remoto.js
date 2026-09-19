@@ -89,8 +89,10 @@ async function rpc(nombre, parametros = {}) {
 
     const datos = await respuesta.json().catch(() => null);
     if (!respuesta.ok) {
-        throw new Error((datos && (datos.message || datos.error_description || datos.hint)) ||
-            'No se pudo completar la operación.');
+        const errorMsg = (datos && (datos.message || datos.error_description || datos.hint)) || 'No se pudo completar la operación.';
+        const err = new Error(errorMsg);
+        if (datos && datos.code) err.code = String(datos.code);
+        throw err;
     }
     return datos;
 }
@@ -383,10 +385,20 @@ async function manejarCodigo(codigo) {
             return;
         }
     } catch (err) {
-        // Se deja caer al camino de agregar_libro_remoto de abajo: esa
-        // también revalida el token por su cuenta y da el mismo tipo de
-        // error (enlace vencido/revocado), así la persona no se queda sin
-        // ningún mensaje solo porque falló la consulta de solo lectura.
+        // Se deja caer al camino de agregar_libro_remoto de abajo SOLO si el error
+        // no parece ser un fallo de red o del servidor. Si es un 404/not found, o
+        // la función no devolvió nada, pasamos al bloque inferior para crearlo.
+        // Pero si es un error interno o timeout, paramos aquí para no intentar
+        // crearlo repetidamente si el servidor está caído (Fix prioridad ALTA #4).
+        const msg = String(err.message || '').toLowerCase();
+        if (msg.includes('timeout') || msg.includes('fetch') || !navigator.onLine) {
+             resultado.innerHTML = `<p class="text-rose-700 text-sm font-bold"><i aria-hidden="true" class="fas fa-wifi mr-1.5"></i>Error de conexión al consultar.</p>`;
+             return;
+        }
+        if (err.code && err.code !== 'PGRST116') { // PGRST116 = result contains no rows
+             resultado.innerHTML = `<p class="text-rose-700 text-sm font-bold"><i aria-hidden="true" class="fas fa-server mr-1.5"></i>Fallo del servidor: ${escapeHtml(err.message)}</p>`;
+             return;
+        }
     }
 
     try {
